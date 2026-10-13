@@ -401,6 +401,7 @@ dependencies {
     implementation(libs.mcp.kotlin.sdk.server)
     testImplementation(libs.junit)
     testImplementation("org.mockito:mockito-core:5.20.0")
+    testImplementation("org.robolectric:robolectric:4.17")
     testImplementation(libs.okhttp.mockwebserver)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest )

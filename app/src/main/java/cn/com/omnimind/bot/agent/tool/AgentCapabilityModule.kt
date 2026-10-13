@@ -1,6 +1,7 @@
 package cn.com.omnimind.bot.agent.tool
 
 import android.content.Context
+import cn.com.omnimind.bot.agent.personal.PersonalContextCapabilityModule
 import cn.com.omnimind.bot.agent.AgentScheduleToolBridge
 import cn.com.omnimind.bot.agent.AgentWorkspaceManager
 import cn.com.omnimind.bot.agent.SubagentDispatcher
@@ -64,7 +65,7 @@ class BuiltInAgentCapabilityModule(
         terminalHandler,
     )
 
-    override val handlers: List<ToolHandler> = listOfNotNull(
+    override val handlers: List<ToolHandler> = PersonalContextCapabilityModule(context).handlers + listOfNotNull(
         ContextToolHandler(helper),
         VlmToolHandler(context).takeIf { includeVlmTool },
         privilegedHandler,

@@ -1,6 +1,7 @@
 package cn.com.omnimind.bot.agent
 
 import cn.com.omnimind.baselib.shizuku.ShizukuBackend
+import cn.com.omnimind.bot.agent.personal.PersonalContextTools
 import cn.com.omnimind.baselib.i18n.AppLocaleManager
 import cn.com.omnimind.baselib.i18n.PromptLocale
 import com.rk.terminal.runtime.TerminalDistribution
@@ -1831,7 +1832,10 @@ object AgentToolDefinitions {
                         put("type", "string")
                         put("description", "可选 IANA 时区，未传默认系统时区。")
                     }
-                    putJsonObject("allDay") { put("type", "boolean") }
+                    putJsonObject("allDay") {
+                        put("type", "boolean")
+                        put("description", "全天事件使用日期：startAt 为首日，endAt 为不包含的结束日；同日输入代表一天。")
+                    }
                     putJsonObject("reminderMinutes") {
                         put("type", "array")
                         put("description", "提醒分钟列表，例如 [10, 30]。")
@@ -1872,6 +1876,11 @@ object AgentToolDefinitions {
                     putJsonObject("query") {
                         put("type", "string")
                         put("description", "可选关键词，匹配标题或地点。")
+                    }
+                    putJsonObject("offset") {
+                        put("type", "integer")
+                        put("minimum", 0)
+                        put("description", "分页偏移，默认 0；使用上次结果中的 nextOffset。")
                     }
                     putJsonObject("limit") {
                         put("type", "integer")
@@ -2276,7 +2285,7 @@ object AgentToolDefinitions {
         includeVlmTool: Boolean = true,
     ): List<JsonObject> =
         builtinTools(locale, terminalDistribution, includeVlmTool) +
-        scheduleTools(locale) + alarmTools(locale) + calendarTools(locale) + musicTools(locale)
+        scheduleTools(locale) + alarmTools(locale) + PersonalContextTools.definitions(locale) + musicTools(locale)
 
     fun reservedToolNames(): Set<String> {
         val locale = PromptLocale.EN_US

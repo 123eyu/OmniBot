@@ -41,6 +41,7 @@ OmniBot is an on-device AI agent built with native Android Kotlin and Flutter. I
 
 - **Extensible tool ecosystem**: Skills, Alpine environment, browser access, MCP, and Android system-level tools.
 - **System-level actions**: Supports scheduled tasks, alarms, calendar creation/query/update, and audio playback control.
+- **Personal context**: Query authorized calendars, contacts, notifications, app usage, location, media, documents, SMS and call history without root, and manage calendar events and contacts.
 - **Memory system**: Short-term and long-term memory with embedding support.
 - **Productivity tools**: Read and write files, browse the workspace, use the browser, and access the terminal.
 
@@ -76,6 +77,16 @@ Note: `Memory embedding` requires an embedding model. For the best overall exper
 The app usually initializes the Alpine environment automatically on startup, and you can also manage that environment from the same settings area.
 
 <h2 id="use-cases">Use Cases</h2>
+
+### Personal context
+
+Enable individual sources in **Settings → App permissions → Personal context**. AI queries shared device tools on demand; results may be sent to your configured model and are not automatically added to long-term memory. Calendar and contact read/write permissions are separate. Background location needs its own “Allow all the time” grant. Approximate location and selected-only photo access are supported.
+
+Notification access is separate from receiving Omnibot notifications. Observed notifications are cached locally for up to 7 days and 10,000 records, excluded from system backups, and can be cleared manually. Previously dismissed notifications and system-redacted content cannot be recovered. Revocation stops recording and querying without deleting conversations.
+
+File queries return metadata first; requested contents are imported into the existing file inbox. Files and folders can be selected and access removed through the system-picker entry. SMS and call history are read-only and depend on installer/system eligibility; Omnibot does not request default SMS, phone or assistant roles. These features require neither root, Shizuku nor accessibility and do not access other apps' private databases.
+
+Device MCP and the built-in Agent share tool definitions and execution. `context_capabilities` reports actual access; missing permissions do not open dialogs or terminate ordinary chat. Contact mutations use `rawContactId` and `version` from queries and affect only the selected account record. Calendar queries accept an `offset`; all-day dates use UTC and an exclusive end date.
 
 ### Skills
 

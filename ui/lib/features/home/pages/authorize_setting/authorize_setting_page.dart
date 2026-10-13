@@ -4,6 +4,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/authorize/accessibility_permission_prompt.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/services/special_permission.dart';
+import 'package:ui/services/personal_context_service.dart';
+import 'package:ui/features/home/pages/authorize_setting/personal_context_labels.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/cache_util.dart';
 import 'package:ui/utils/ui.dart';
@@ -29,6 +31,9 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
   bool _installedAppsPermission = false;
   bool _publicStoragePermission = false;
   ShizukuStatusSnapshot _shizukuStatus = ShizukuStatusSnapshot.fallback();
+  Map<String, PersonalContextCapability> _personalContext = {};
+  bool _personalContextLoaded = false;
+  bool _personalContextFailed = false;
 
   Color get _pageBackground => context.omniPalette.pageBackground;
   Color get _titleColor => context.omniPalette.textPrimary;
@@ -233,10 +238,203 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
           ),
         ],
       ),
+      _buildPersonalContextSection(),
     ];
   }
 
+  _AuthorizeSettingSection _buildPersonalContextSection() {
+    return _AuthorizeSettingSection(
+      label: _localeText(zh: '个人上下文', en: 'Personal context'),
+      subtitle: _localeText(
+        zh: '逐项选择您愿意提供的信息。AI 按需查询，查询结果可能提供给您配置的模型；不会自动整理为长期记忆。',
+        en: 'Choose what to share. AI queries data when needed and may send results to your configured model. Data is not automatically saved as long-term memory.',
+      ),
+      items: [
+        for (final item in personalContextLabels)
+          _AuthorizeSettingItem(
+            icon: item.icon,
+            title: _localeText(zh: item.zh, en: item.en),
+            subtitle: _localeText(zh: item.zhDetail, en: item.enDetail),
+            trailing: _buildPermissionTrailing(
+              label: _personalContextStatus(item.id),
+              color:
+                  _personalContext[item.id]?.status ==
+                      PersonalContextAccessStatus.granted
+                  ? _tertiaryTextColor
+                  : _accentColor,
+            ),
+            onTap: () => _openPersonalContext(item.id),
+          ),
+        _AuthorizeSettingItem(
+          icon: LucideIcons.trash2,
+          title: _localeText(zh: '清空通知历史', en: 'Clear notification history'),
+          subtitle: _localeText(
+            zh: '删除本地通知缓存，不删除系统通知或聊天记录。',
+            en: 'Delete the local notification cache. System notifications and conversations are preserved.',
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _personalContextAction(
+            PersonalContextService.clearNotifications,
+            _localeText(zh: '通知历史已清空', en: 'Notification history cleared'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _personalContextStatus(String id) {
+    if (!_personalContextLoaded) return _localeText(zh: '检查中', en: 'Checking');
+    if (_personalContextFailed) return _localeText(zh: '点击重试', en: 'Retry');
+    final status =
+        _personalContext[id]?.status ?? PersonalContextAccessStatus.unavailable;
+    return switch (status) {
+      PersonalContextAccessStatus.granted => _localeText(
+        zh: id == 'environment' ? '可用' : '已开启',
+        en: id == 'environment' ? 'Available' : 'Enabled',
+      ),
+      PersonalContextAccessStatus.partial => _localeText(
+        zh: id == 'location' ? '大致位置' : '部分授权',
+        en: id == 'location' ? 'Approximate' : 'Partial access',
+      ),
+      PersonalContextAccessStatus.denied => _localeText(
+        zh: id == 'documents' ? '去选择' : '去开启',
+        en: id == 'documents' ? 'Select' : 'Enable',
+      ),
+      PersonalContextAccessStatus.restricted => _localeText(
+        zh: '系统受限',
+        en: 'Restricted',
+      ),
+      PersonalContextAccessStatus.disconnected => _localeText(
+        zh: '服务未连接',
+        en: 'Disconnected',
+      ),
+      PersonalContextAccessStatus.unavailable => _localeText(
+        zh: '不可用',
+        en: 'Unavailable',
+      ),
+    };
+  }
+
+  Future<void> _refreshPersonalContext() async {
+    try {
+      final capabilities = await PersonalContextService.capabilities();
+      if (mounted) {
+        setState(() {
+          _personalContext = capabilities;
+          _personalContextLoaded = true;
+          _personalContextFailed = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _personalContextLoaded = true;
+          _personalContextFailed = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _personalContextAction(
+    Future<void> Function() action, [
+    String? message,
+  ]) async {
+    try {
+      await action();
+      await _refreshPersonalContext();
+      if (mounted && message != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _localeText(
+                zh: '暂时无法完成，请检查系统设置后重试。',
+                en: 'Unable to complete this action. Check system settings and try again.',
+              ),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openPersonalContext(String id) async {
+    if (_personalContextFailed || !_personalContextLoaded) {
+      await _refreshPersonalContext();
+      return;
+    }
+    if (id == 'environment' ||
+        _personalContext[id]?.status ==
+            PersonalContextAccessStatus.unavailable) {
+      return;
+    }
+    if (id == 'background_location' &&
+        ![
+          PersonalContextAccessStatus.granted,
+          PersonalContextAccessStatus.partial,
+        ].contains(_personalContext['location']?.status)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _localeText(
+              zh: '请先开启上方的位置信息。',
+              en: 'Enable location access above first.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    if (id == 'documents') {
+      final action = await showModalBottomSheet<String>(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text(_localeText(zh: '选择文件', en: 'Select files')),
+                onTap: () => Navigator.pop(sheetContext, 'files'),
+              ),
+              ListTile(
+                title: Text(_localeText(zh: '选择文件夹', en: 'Select a folder')),
+                onTap: () => Navigator.pop(sheetContext, 'directory'),
+              ),
+              ListTile(
+                title: Text(
+                  _localeText(
+                    zh: '取消已选文件与文件夹的授权',
+                    en: 'Remove selected file and folder access',
+                  ),
+                ),
+                onTap: () => Navigator.pop(sheetContext, 'revoke'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (action == null || !mounted) return;
+      if (action == 'revoke') {
+        await _personalContextAction(PersonalContextService.revokeDocuments);
+        return;
+      }
+      await _personalContextAction(
+        () => PersonalContextService.request(
+          id,
+          directory: action == 'directory',
+        ),
+      );
+      return;
+    }
+    await _personalContextAction(() => PersonalContextService.request(id));
+  }
+
   Future<void> _checkPermissions() async {
+    await _refreshPersonalContext();
     try {
       final backgroundRunning = await isBackgroundRunAllowed();
       final accessibilityReady =

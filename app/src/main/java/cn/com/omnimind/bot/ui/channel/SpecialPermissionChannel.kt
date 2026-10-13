@@ -1,6 +1,7 @@
 package cn.com.omnimind.bot.ui.channel
 
 import cn.com.omnimind.bot.manager.SpecialPermissionManager
+import cn.com.omnimind.bot.agent.personal.PersonalContextPermissionActions
 import cn.com.omnimind.bot.terminal.EmbeddedTerminalInitCoordinator
 import android.annotation.SuppressLint
 import android.content.Context
@@ -19,9 +20,12 @@ class SpecialPermissionChannel {
     private var eventChannel: EventChannel? = null
     private var eventSink: EventChannel.EventSink? = null
     private var embeddedTerminalInitListener: ((Map<String, Any?>) -> Unit)? = null
+    private var personalContextActions: PersonalContextPermissionActions? = null
 
     fun onCreate(context: Context) {
         specialPermissionManager = SpecialPermissionManager(context)
+        personalContextActions?.close()
+        personalContextActions = PersonalContextPermissionActions(context)
     }
 
     fun setChannel(flutterEngine: FlutterEngine) {
@@ -51,6 +55,7 @@ class SpecialPermissionChannel {
             EmbeddedTerminalInitCoordinator.addListener(it)
         }
         methodChannel?.setMethodCallHandler { call, result ->
+                if (personalContextActions?.handle(call, result) == true) return@setMethodCallHandler
                 when (call.method) {
                     "isIgnoringBatteryOptimizations" -> specialPermissionManager!!.isIgnoringBatteryOptimizations(
                         result
@@ -190,6 +195,8 @@ class SpecialPermissionChannel {
     }
 
     fun clear() {
+        personalContextActions?.close()
+        personalContextActions = null
         embeddedTerminalInitListener?.let {
             EmbeddedTerminalInitCoordinator.removeListener(it)
         }

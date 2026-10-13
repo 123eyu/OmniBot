@@ -6,6 +6,9 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
+    <exclude domain="database" path="personal_context_notifications.db" />
+    <exclude domain="sharedpref" path="personal_context_documents.xml" />
+    <exclude domain="sharedpref" path="personal_context_permissions.xml" />
     <!-- Account tokens are encrypted with a device-bound Android Keystore key. -->
     <exclude domain="sharedpref" path="omni_account_tokens.xml" />
     <!-- User-supplied provider credentials are device-bound and must not be backed up. -->
