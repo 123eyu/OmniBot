@@ -13,12 +13,19 @@ class AgentAdapterCatalogTest {
         val profiles = AcpAgentCatalog.parse(File("src/main/assets/acp/agents.json").readText()) {
             File("src/main/assets/$it").readText()
         }.agents
-        assertEquals(6, profiles.size)
+        assertEquals(7, profiles.size)
         for (profile in profiles) {
             val runtime = requireNotNull(AcpAgentProfileStore.officialRuntime(profile))
             val adapter = runtime.harnessAdapter
-            if (profile.id == AcpAgentProfileStore.XIAOWAN_AGENT_ID) {
-                assertNull(adapter.configAdapterId) // In-process Provider execution, no deployment file.
+            if (profile.id == AcpAgentProfileStore.XIAOWAN_AGENT_ID || profile.id == NA_AGENT_ID) {
+                // Embedded agents own configuration in-process (Xiaowan) or in the cloud (Na).
+                assertTrue(profile.id, runtime.embedded)
+                assertNull(profile.id, adapter.configAdapterId)
+                assertEquals(
+                    profile.id,
+                    profile.id == AcpAgentProfileStore.XIAOWAN_AGENT_ID,
+                    runtime.usesSharedProvider,
+                )
                 continue
             }
             assertNotNull(profile.id, adapter.configAdapterId)

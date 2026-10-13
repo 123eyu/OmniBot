@@ -4,16 +4,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_switch/flutter_switch.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/features/my/pages/about/about_page.dart';
+import 'package:ui/features/my/pages/feedback/feedback_page.dart';
+import 'package:ui/features/my/router_config.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/services/app_update_service.dart';
+import 'package:ui/services/storage_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const deviceChannel = MethodChannel('device_info');
   const updateChannel = MethodChannel('cn.com.omnimind.bot/app_update');
-  const urlChannel = MethodChannel('plugins.flutter.io/url_launcher');
+  const accountChannel = MethodChannel('cn.com.omnimind.bot/account');
+
+  setUp(() async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await StorageService.init();
+  });
 
   tearDown(() async {
     AppUpdateService.betaOptInNotifier.value = false;
@@ -25,7 +36,7 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(updateChannel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(urlChannel, null);
+        .setMockMethodCallHandler(accountChannel, null);
   });
 
   testWidgets('renders version and update hint from services', (tester) async {
@@ -149,7 +160,9 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('does not render always-up-to-date hint on page', (tester) async {
+  testWidgets('hides up-to-date hint and opens the in-app feedback form', (
+    tester,
+  ) async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(deviceChannel, (call) async {
           if (call.method == 'getAppVersion') {
@@ -181,12 +194,26 @@ void main() {
           return null;
         });
 
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(accountChannel, (call) async => '');
+    final router = GoRouter(
+      navigatorKey: GoRouterManager.rootNavigatorKey,
+      initialLocation: '/my/about',
+      routes: myRoutes
+          .where(
+            (route) =>
+                route.path == '/my/about' || route.path == '/my/feedback',
+          )
+          .toList(),
+    );
+    addTearDown(router.dispose);
+
     await tester.pumpWidget(
-      const MaterialApp(
-        locale: Locale('zh'),
+      MaterialApp.router(
+        routerConfig: router,
+        locale: const Locale('zh'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: AboutPage(),
       ),
     );
     await tester.pumpAndSettle();
@@ -198,23 +225,18 @@ void main() {
     expect(find.text('使用手册'), findsOneWidget);
     expect(find.text('我要反馈'), findsOneWidget);
 
-    MethodCall? launchCall;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(urlChannel, (call) async {
-          launchCall = call;
-          return true;
-        });
     final feedbackButton = find.text('我要反馈');
     await tester.ensureVisible(feedbackButton);
     await tester.tap(feedbackButton);
     await tester.pumpAndSettle();
-    expect(launchCall?.method, 'launch');
-    final args = launchCall!.arguments as Map;
-    final feedbackUri = Uri.parse(args['url'] as String);
-    expect(feedbackUri.host, 'omnibot.omnimind.com.cn');
-    expect(feedbackUri.path, '/feedback/');
-    expect(feedbackUri.queryParameters['source'], 'android');
-    expect(feedbackUri.queryParameters['versionName'], '0.0.1');
-    expect(args['useWebView'], false);
+    expect(router.state.uri.path, '/my/feedback');
+    expect(find.byType(FeedbackPage), findsOneWidget);
+    expect(find.byKey(const ValueKey('feedback-title')), findsOneWidget);
+    expect(router.canPop(), isTrue);
+
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(router.state.uri.path, '/my/about');
+    expect(find.byType(AboutPage), findsOneWidget);
   });
 }
