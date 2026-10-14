@@ -9,6 +9,8 @@ import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/settings_detail_sheet.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 const String _kOfficialSkillsDownloadAsset =
     'assets/home/hard_drive_download.svg';
@@ -207,19 +209,23 @@ class _SkillStorePageState extends State<SkillStorePage> {
   }
 
   Future<void> _deleteSkill(AgentSkillItem item) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showSettingsDetailSheet<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.l10n.skillDeleteTitle),
-        content: Text(context.l10n.skillDeleteConfirmMsg(item.name)),
+      builder: (sheetContext) => SettingsDetailSheet(
+        title: context.l10n.skillDeleteTitle,
+        body: Text(context.l10n.skillDeleteConfirmMsg(item.name)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            style: settingsDetailSheetActionStyle(sheetContext),
+            onPressed: () => Navigator.of(sheetContext).pop(false),
             child: Text(context.trLegacy('取消')),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.alertRed),
+            style: settingsDetailSheetActionStyle(
+              sheetContext,
+              foregroundColor: AppColors.alertRed,
+            ),
+            onPressed: () => Navigator.of(sheetContext).pop(true),
             child: Text(context.l10n.skillDelete),
           ),
         ],
@@ -326,27 +332,20 @@ class _SkillStorePageState extends State<SkillStorePage> {
     if (visibleSkills.isEmpty) {
       return _buildStateList(child: _buildSearchEmpty());
     }
-    final palette = context.omniPalette;
-    return ListView.separated(
+    return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: edgeToEdgeScrollPadding(
         context,
-        const EdgeInsets.fromLTRB(18, 4, 18, 24),
+        const EdgeInsets.fromLTRB(16, 6, 16, 28),
       ),
-      itemCount: visibleSkills.length,
-      separatorBuilder: (context, index) {
-        return Padding(
-          padding: const EdgeInsets.only(left: 28),
-          child: Divider(
-            height: 1,
-            thickness: 1,
-            color: palette.borderSubtle.withValues(
-              alpha: context.isDarkTheme ? 0.5 : 0.78,
-            ),
-          ),
-        );
-      },
-      itemBuilder: (context, index) => _buildSkillTile(visibleSkills[index]),
+      children: [
+        OmniSettingsGroup(
+          dividerIndent: 16,
+          children: [
+            for (final skill in visibleSkills) _buildSkillTile(skill),
+          ],
+        ),
+      ],
     );
   }
 
@@ -369,19 +368,15 @@ class _SkillStorePageState extends State<SkillStorePage> {
         children: [
           Icon(
             Icons.extension_outlined,
-            size: 48,
-            color: context.isDarkTheme
-                ? palette.textTertiary
-                : AppColors.text50,
+            size: 40,
+            color: palette.textTertiary,
           ),
           const SizedBox(height: 12),
           Text(
             context.l10n.skillEmpty,
             style: TextStyle(
-              fontSize: 16,
-              color: context.isDarkTheme
-                  ? palette.textSecondary
-                  : AppColors.text70,
+              fontSize: 15,
+              color: palette.textSecondary,
             ),
           ),
         ],
@@ -398,7 +393,7 @@ class _SkillStorePageState extends State<SkillStorePage> {
     final statusSummary = _buildStatusSummary(item);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 14, 2, 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -407,29 +402,27 @@ class _SkillStorePageState extends State<SkillStorePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildSkillTitle(item),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   description,
                   style: TextStyle(
                     color: palette.textSecondary,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w400,
-                    height: 1.55,
-                    fontFamily: 'PingFang SC',
+                    height: 1.48,
                   ),
                 ),
                 if (statusSummary.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 5),
                   Text(
                     statusSummary,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w500,
                       color: item.installed && item.enabled
                           ? palette.accentPrimary
                           : palette.textTertiary,
-                      height: 1.45,
-                      fontFamily: 'PingFang SC',
+                      height: 1.4,
                     ),
                   ),
                 ],
@@ -438,10 +431,9 @@ class _SkillStorePageState extends State<SkillStorePage> {
                   Text(
                     context.l10n.skillBuiltinRemovedDesc,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 11.5,
                       color: palette.textTertiary,
-                      height: 1.5,
-                      fontFamily: 'PingFang SC',
+                      height: 1.45,
                     ),
                   ),
                 ],
@@ -457,8 +449,7 @@ class _SkillStorePageState extends State<SkillStorePage> {
                           style: TextStyle(
                             fontSize: 11,
                             color: palette.textTertiary,
-                            height: 1.45,
-                            fontFamily: 'PingFang SC',
+                            height: 1.4,
                           ),
                         ),
                       ),
@@ -501,11 +492,10 @@ class _SkillStorePageState extends State<SkillStorePage> {
   Widget _buildSkillTitle(AgentSkillItem item) {
     final palette = context.omniPalette;
     final titleStyle = TextStyle(
-      fontSize: 14,
+      fontSize: 14.5,
       fontWeight: FontWeight.w500,
       color: palette.textPrimary,
-      height: 1.5,
-      fontFamily: 'PingFang SC',
+      height: 1.38,
     );
 
     if (!item.isBuiltin && !item.isOfficial) {
@@ -577,13 +567,16 @@ class _SkillStorePageState extends State<SkillStorePage> {
                   curve: Curves.easeOutCubic,
                   opacity: busy ? 0.4 : 1,
                   child: FlutterSwitch(
-                    width: 32,
-                    height: 18.67,
-                    toggleSize: 11.3,
+                    width: 40,
+                    height: 22,
+                    toggleSize: 16,
                     padding: 3,
                     activeColor: palette.accentPrimary,
-                    inactiveColor: palette.borderStrong,
-                    borderRadius: 28.75,
+                    inactiveColor: context.isDarkTheme
+                        ? palette.borderStrong
+                        : const Color(0xFFD5DFEC),
+                    toggleColor: Colors.white,
+                    borderRadius: 999,
                     value: item.enabled,
                     onToggle: (_) {},
                   ),

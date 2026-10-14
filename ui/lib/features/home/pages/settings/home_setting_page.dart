@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_switch/flutter_switch.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/widgets/home_quick_prompt_icon.dart';
 import 'package:ui/l10n/l10n.dart';
@@ -9,6 +8,9 @@ import 'package:ui/services/home_greeting_settings_service.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/settings_detail_sheet.dart';
+import 'package:ui/widgets/settings_section_title.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 class HomeSettingPage extends StatefulWidget {
   const HomeSettingPage({super.key});
@@ -44,19 +46,24 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
   }
 
   Future<void> _deletePrompt(HomeQuickPrompt prompt) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showSettingsDetailSheet<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(context.trLegacy('删除快捷指令')),
-          content: Text(context.trLegacy('删除后该快捷指令将不再显示在首页问候语下方。')),
+      builder: (sheetContext) {
+        return SettingsDetailSheet(
+          title: context.trLegacy('删除快捷指令'),
+          body: Text(context.trLegacy('删除后该快捷指令将不再显示在首页问候语下方。')),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
+              style: settingsDetailSheetActionStyle(sheetContext),
+              onPressed: () => Navigator.of(sheetContext).pop(false),
               child: Text(context.trLegacy('取消')),
             ),
             TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
+              style: settingsDetailSheetActionStyle(
+                sheetContext,
+                foregroundColor: const Color(0xFFE05252),
+              ),
+              onPressed: () => Navigator.of(sheetContext).pop(true),
               child: Text(context.trLegacy('删除')),
             ),
           ],
@@ -149,129 +156,60 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
         child: ListView(
           padding: edgeToEdgeScrollPadding(
             context,
-            const EdgeInsets.fromLTRB(18, 10, 18, 28),
+            const EdgeInsets.fromLTRB(16, 12, 16, 32),
           ),
           children: [
-            _buildSectionTitle(context.trLegacy('首页问候')),
-            _SettingSurface(
-              child: _buildGreetingSwitch(settings.greetingEnabled),
+            OmniSettingsGroup(
+              title: context.trLegacy('首页问候'),
+              children: [
+                OmniSettingsTile(
+                  icon: LucideIcons.hand,
+                  title: context.trLegacy('显示问候语'),
+                  subtitle: context.trLegacy('关闭后，聊天首页不再显示问候语和快捷指令'),
+                  trailing: OmniSettingsSwitch(
+                    value: settings.greetingEnabled,
+                    onToggle: _setGreetingEnabled,
+                  ),
+                  onTap: () => _setGreetingEnabled(!settings.greetingEnabled),
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-            _buildPromptHeader(),
-            const SizedBox(height: 8),
-            _SettingSurface(
-              child: settings.quickPrompts.isEmpty
-                  ? _buildEmptyPrompts()
-                  : Column(
-                      children: List.generate(settings.quickPrompts.length, (
-                        index,
-                      ) {
-                        final prompt = settings.quickPrompts[index];
-                        final isLast =
-                            index == settings.quickPrompts.length - 1;
-                        return Column(
-                          children: [
-                            _buildPromptTile(prompt, settings),
-                            if (!isLast)
-                              Divider(
-                                height: 1,
-                                thickness: 1,
-                                color: palette.borderSubtle.withValues(
-                                  alpha: context.isDarkTheme ? 0.5 : 0.78,
-                                ),
-                              ),
-                          ],
-                        );
-                      }),
-                    ),
+            const SizedBox(height: 22),
+            SettingsSectionTitle(
+              label: context.trLegacy('快捷指令'),
+              bottomPadding: 8,
+              trailing: TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: palette.accentPrimary,
+                  minimumSize: const Size(0, 30),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: _resetPrompts,
+                child: Text(
+                  context.trLegacy('恢复默认'),
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
             ),
+            if (settings.quickPrompts.isEmpty)
+              OmniSettingsCard(child: _buildEmptyPrompts())
+            else
+              OmniSettingsGroup(
+                dividerIndent: 56,
+                children: [
+                  for (final prompt in settings.quickPrompts)
+                    _buildPromptTile(prompt, settings),
+                ],
+              ),
             const SizedBox(height: 14),
             _buildAddButton(),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSectionTitle(String label) {
-    final palette = context.omniPalette;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0,
-              color: palette.textTertiary,
-              fontFamily: 'PingFang SC',
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              height: 1,
-              color: palette.borderSubtle.withValues(
-                alpha: context.isDarkTheme ? 0.56 : 0.8,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGreetingSwitch(bool value) {
-    final palette = context.omniPalette;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 14, 2, 14),
-      child: Row(
-        children: [
-          Icon(LucideIcons.hand, size: 18, color: palette.textPrimary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.trLegacy('显示问候语'),
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: palette.textPrimary,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  context.trLegacy('关闭后，聊天首页不再显示问候语和快捷指令'),
-                  style: TextStyle(
-                    color: palette.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    height: 1.55,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _buildSwitchTrailing(value: value, onToggle: _setGreetingEnabled),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPromptHeader() {
-    return Row(
-      children: [
-        Expanded(child: _buildSectionTitle(context.trLegacy('快捷指令'))),
-        TextButton(
-          onPressed: _resetPrompts,
-          child: Text(context.trLegacy('恢复默认')),
-        ),
-      ],
     );
   }
 
@@ -283,22 +221,20 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
     final pinnedIndex = settings.pinnedQuickPromptIds.indexOf(prompt.id);
     final isPinned = pinnedIndex >= 0;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 13, 0, 13),
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
       child: Row(
         children: [
           Container(
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: palette.accentPrimary.withValues(
-                alpha: context.isDarkTheme ? 0.16 : 0.1,
-              ),
-              shape: BoxShape.circle,
+              color: palette.surfaceSecondary,
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               homeQuickPromptIcon(prompt.iconKey),
-              size: 17,
-              color: palette.accentPrimary,
+              size: 16,
+              color: palette.textPrimary.withValues(alpha: 0.78),
             ),
           ),
           const SizedBox(width: 10),
@@ -314,7 +250,7 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 14.5,
                           fontWeight: FontWeight.w500,
                           color: palette.textPrimary,
                           height: 1.35,
@@ -336,20 +272,20 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: palette.textSecondary,
-                    fontSize: 11,
+                    fontSize: 12,
                     height: 1.45,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           IconButton(
             tooltip: context.trLegacy(isPinned ? '取消固定' : '固定到首页'),
             onPressed: () => _togglePinnedPrompt(prompt, settings),
             icon: Icon(
               isPinned ? LucideIcons.pinOff : LucideIcons.pin,
-              size: 18,
+              size: 17,
               color: isPinned ? palette.accentPrimary : palette.textTertiary,
             ),
           ),
@@ -359,7 +295,7 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
               onPressed: () => _showPromptEditor(prompt: prompt),
               icon: Icon(
                 LucideIcons.pencil,
-                size: 18,
+                size: 17,
                 color: palette.textTertiary,
               ),
             ),
@@ -368,7 +304,7 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
             onPressed: () => _deletePrompt(prompt),
             icon: Icon(
               LucideIcons.trash2,
-              size: 18,
+              size: 17,
               color: palette.textTertiary,
             ),
           ),
@@ -380,7 +316,7 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
   Widget _buildEmptyPrompts() {
     final palette = context.omniPalette;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
+      padding: const EdgeInsets.symmetric(vertical: 20),
       child: Center(
         child: Text(
           context.trLegacy('暂无快捷指令'),
@@ -393,60 +329,26 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
   Widget _buildAddButton() {
     final palette = context.omniPalette;
     return SizedBox(
-      height: 42,
+      height: 44,
       child: OutlinedButton.icon(
         onPressed: () => _showPromptEditor(),
-        icon: const Icon(LucideIcons.plus, size: 18),
+        icon: const Icon(LucideIcons.plus, size: 17),
         label: Text(context.trLegacy('新增快捷指令')),
         style: OutlinedButton.styleFrom(
           foregroundColor: palette.accentPrimary,
+          backgroundColor: palette.surfacePrimary,
           side: BorderSide(
-            color: palette.accentPrimary.withValues(alpha: 0.35),
+            color: palette.borderSubtle.withValues(
+              alpha: context.isDarkTheme ? 0.65 : 0.85,
+            ),
+            width: 0.75,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(14),
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildSwitchTrailing({
-    required bool value,
-    required ValueChanged<bool> onToggle,
-  }) {
-    final palette = context.omniPalette;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => onToggle(!value),
-      child: Padding(
-        padding: const EdgeInsets.only(left: 12),
-        child: AbsorbPointer(
-          child: FlutterSwitch(
-            width: 32,
-            height: 18.67,
-            toggleSize: 11.3,
-            padding: 3,
-            activeColor: palette.accentPrimary,
-            inactiveColor: palette.borderStrong,
-            borderRadius: 28.75,
-            value: value,
-            onToggle: onToggle,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingSurface extends StatelessWidget {
-  final Widget child;
-
-  const _SettingSurface({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return child;
   }
 }
 
@@ -526,19 +428,30 @@ class _PromptEditorSheet extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Material(
-        color: palette.pageBackground,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        color: palette.surfacePrimary,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: palette.borderStrong.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
               Text(
                 context.trLegacy(editing ? '编辑快捷指令' : '新增快捷指令'),
                 style: TextStyle(
                   color: palette.textPrimary,
-                  fontSize: 17,
+                  fontSize: 16.5,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -546,20 +459,22 @@ class _PromptEditorSheet extends StatelessWidget {
               TextField(
                 controller: titleController,
                 maxLength: 12,
-                decoration: InputDecoration(
+                style: TextStyle(fontSize: 14, color: palette.textPrimary),
+                decoration: omniSettingsInputDecoration(
+                  context,
                   labelText: context.trLegacy('指令名称'),
-                  isDense: true,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               TextField(
                 controller: promptController,
                 minLines: 3,
                 maxLines: 5,
                 maxLength: 160,
-                decoration: InputDecoration(
+                style: TextStyle(fontSize: 14, color: palette.textPrimary),
+                decoration: omniSettingsInputDecoration(
+                  context,
                   labelText: context.trLegacy('填充文本'),
-                  alignLabelWithHint: true,
                 ),
               ),
               const SizedBox(height: 14),
@@ -568,6 +483,12 @@ class _PromptEditorSheet extends StatelessWidget {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(44),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                       child: Text(context.trLegacy('取消')),
                     ),
                   ),
@@ -588,6 +509,13 @@ class _PromptEditorSheet extends StatelessWidget {
                           _PromptEditorResult(title: title, prompt: prompt),
                         );
                       },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: palette.accentPrimary,
+                        minimumSize: const Size.fromHeight(44),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                       child: Text(context.trLegacy('保存')),
                     ),
                   ),

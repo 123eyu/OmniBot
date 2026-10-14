@@ -13,6 +13,7 @@ import 'package:ui/widgets/agent_avatar.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/widgets/settings_section_title.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 const double _kSceneSelectionPopupMaxHeight = 420;
 
@@ -730,7 +731,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
   }
 
   Widget _buildCard({required Widget child}) {
-    return SizedBox(width: double.infinity, child: child);
+    return OmniSettingsCard(child: child);
   }
 
   String _selectionLabel(SceneCatalogItem scene) {
@@ -763,8 +764,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
               style: TextStyle(
                 color: _primaryTextColor,
                 fontSize: 14,
-                fontWeight: FontWeight.w600,
-                fontFamily: 'PingFang SC',
+                fontWeight: FontWeight.w500,
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -784,6 +784,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
     SceneCatalogItem scene, {
     required bool isSaving,
   }) {
+    final palette = context.omniPalette;
     return Builder(
       builder: (fieldContext) {
         return InkWell(
@@ -791,12 +792,18 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
           onTap: isSaving
               ? null
               : () => _openSceneSelector(scene, fieldContext),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
             decoration: BoxDecoration(
-              color: _cardColor,
-              borderRadius: BorderRadius.circular(8),
+              color: palette.surfaceSecondary,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: palette.borderSubtle.withValues(
+                  alpha: _isDarkTheme ? 0.55 : 0.75,
+                ),
+                width: 0.65,
+              ),
             ),
             child: Row(
               children: [
@@ -807,15 +814,15 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: _primaryTextColor,
-                      fontSize: 13,
-                      fontFamily: 'PingFang SC',
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Icon(
-                  LucideIcons.chevronDown,
-                  size: 18,
+                  LucideIcons.chevronsUpDown,
+                  size: 15,
                   color: _tertiaryTextColor,
                 ),
               ],
@@ -832,7 +839,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
     final isBusy = isSaving || isLoadingModels;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Expanded(flex: 4, child: _buildSceneLabel(scene)),
@@ -865,83 +872,61 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
       animation: coordinator,
       builder: (context, _) {
         final bound = coordinator.isVoiceSceneBound;
-        final statusColor = bound ? Colors.green.shade600 : _tertiaryTextColor;
+        final statusColor = bound
+            ? const Color(0xFF2EAF67)
+            : _tertiaryTextColor;
         final status = bound ? '已连接' : '未连接模型';
         return _buildCard(
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-            decoration: BoxDecoration(
-              color: _cardColor,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.volume_up_outlined,
-                      size: 18,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    LucideIcons.volume2,
+                    size: 18,
+                    color: _primaryTextColor.withValues(alpha: 0.78),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    context.trLegacy('语音回复'),
+                    style: TextStyle(
                       color: _primaryTextColor,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w500,
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      context.trLegacy('语音回复'),
-                      style: TextStyle(
-                        color: _primaryTextColor,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        status,
-                        style: TextStyle(color: statusColor, fontSize: 11),
-                      ),
-                    ),
-                    const Spacer(),
-                    Switch.adaptive(
-                      key: const Key('scene-voice-autoplay-switch'),
-                      value: _voiceConfig.autoPlay,
-                      onChanged: bound
-                          ? (value) => _saveVoiceConfig(
-                              _voiceConfig.copyWith(autoPlay: value),
-                            )
-                          : null,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  bound
-                      ? context.trLegacy('开启后，助手回复会在当前消息旁显示播放按钮，并可自动朗读。')
-                      : context.trLegacy(
-                          '请先在上方“语音合成”中绑定 Provider 和模型，绑定后即可播放。',
-                        ),
-                  style: TextStyle(
-                    color: secondary,
-                    fontSize: 12,
-                    height: 1.45,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  context.trLegacy(
-                    '声音：${_voiceConfig.voiceId}  ·  风格：${_voiceConfig.stylePreset}',
+                  const SizedBox(width: 10),
+                  OmniSettingsStatusBadge(label: status, color: statusColor),
+                  const Spacer(),
+                  Switch.adaptive(
+                    key: const Key('scene-voice-autoplay-switch'),
+                    value: _voiceConfig.autoPlay,
+                    onChanged: bound
+                        ? (value) => _saveVoiceConfig(
+                            _voiceConfig.copyWith(autoPlay: value),
+                          )
+                        : null,
                   ),
-                  style: TextStyle(color: secondary, fontSize: 12),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                bound
+                    ? context.trLegacy('开启后，助手回复会在当前消息旁显示播放按钮，并可自动朗读。')
+                    : context.trLegacy(
+                        '请先在上方“语音合成”中绑定 Provider 和模型，绑定后即可播放。',
+                      ),
+                style: TextStyle(color: secondary, fontSize: 12, height: 1.48),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.trLegacy(
+                  '声音：${_voiceConfig.voiceId}  ·  风格：${_voiceConfig.stylePreset}',
                 ),
-              ],
-            ),
+                style: TextStyle(color: secondary, fontSize: 12),
+              ),
+            ],
           ),
         );
       },

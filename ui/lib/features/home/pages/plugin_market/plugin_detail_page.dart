@@ -9,6 +9,7 @@ import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 class PluginDetailPage extends StatefulWidget {
   const PluginDetailPage({
@@ -185,9 +186,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
       // poppable so Android can hand gesture progress to that transition.
       canPop: true,
       child: Scaffold(
-        backgroundColor: context.isDarkTheme
-            ? palette.pageBackground
-            : AppColors.background,
+        backgroundColor: palette.pageBackground,
         appBar: CommonAppBar(
           title: context.l10n.pluginDetailTitle,
           primary: true,
@@ -236,140 +235,164 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
     final capabilities = plugin.capabilities;
     final usageItems = _usageItems(plugin);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: palette.accentPrimary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Icon(
-                Icons.extension_rounded,
-                size: 29,
-                color: palette.accentPrimary,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
+        OmniSettingsCard(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    plugin.name,
-                    style: TextStyle(
-                      color: palette.textPrimary,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      height: 1.3,
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: palette.surfaceSecondary,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.extension_rounded,
+                      size: 24,
+                      color: palette.textPrimary.withValues(alpha: 0.78),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${plugin.publisher} · v${plugin.version}',
-                    style: TextStyle(
-                      color: palette.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Text(
-                    _statusLabel(plugin),
-                    style: TextStyle(
-                      color: plugin.enabled
-                          ? palette.accentPrimary
-                          : palette.textTertiary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          plugin.name,
+                          style: TextStyle(
+                            color: palette.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${plugin.publisher} · v${plugin.version}',
+                          style: TextStyle(
+                            color: palette.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _statusLabel(plugin),
+                          style: TextStyle(
+                            color: plugin.enabled
+                                ? palette.accentPrimary
+                                : palette.textTertiary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        Text(
-          _pluginDescription(plugin),
-          style: TextStyle(
-            color: palette.textSecondary,
-            fontSize: 14,
-            height: 1.7,
-          ),
-        ),
-        const SizedBox(height: 26),
-        Divider(color: palette.borderSubtle, height: 1),
-        const SizedBox(height: 26),
-        _buildReadmeHeading(_text('核心功能', 'Core capabilities')),
-        const SizedBox(height: 12),
-        if (capabilities.isEmpty)
-          Text(
-            context.l10n.pluginNoCapabilities,
-            style: TextStyle(color: palette.textTertiary, fontSize: 13),
-          )
-        else
-          ...capabilities.map(
-            (capability) =>
-                _buildCapabilityRow(_capabilityLabel(plugin, capability)),
-          ),
-        if (usageItems.isNotEmpty) ...[
-          const SizedBox(height: 28),
-          _buildReadmeHeading(_text('工作方式', 'How it works')),
-          const SizedBox(height: 10),
-          ...usageItems.map(
-            (item) => _buildUsageRow(
-              _presentationIcon(item['icon']),
-              _localized(item['title']),
-              _localized(item['description']),
-            ),
-          ),
-          if (plugin.installed && plugin.enabled) ...[
-            const SizedBox(height: 24),
-            _buildReadmeHeading(_text('开始使用', 'Get started')),
-            const SizedBox(height: 12),
-            _buildReadyGuide(plugin),
-          ],
-        ],
-        const SizedBox(height: 24),
-        Divider(color: palette.borderSubtle, height: 1),
-        Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            key: const ValueKey('plugin-technical-information'),
-            tilePadding: EdgeInsets.zero,
-            childrenPadding: EdgeInsets.zero,
-            title: Text(
-              context.l10n.pluginInformationTitle,
-              style: TextStyle(
-                color: palette.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            children: [
-              _buildInfoRow(
-                context.l10n.pluginPublisherLabel,
-                plugin.publisher,
-              ),
-              _buildInfoRow(context.l10n.pluginVersionLabel, plugin.version),
-              _buildInfoRow(
-                context.l10n.pluginTypeLabel,
-                _kindLabel(plugin.kind),
-              ),
-              if (plugin.downloadSizeBytes > 0)
-                _buildInfoRow(
-                  context.l10n.pluginDownloadSizeLabel,
-                  _formatBytes(plugin.downloadSizeBytes),
+              const SizedBox(height: 16),
+              Text(
+                _pluginDescription(plugin),
+                style: TextStyle(
+                  color: palette.textSecondary,
+                  fontSize: 13.5,
+                  height: 1.65,
                 ),
-              _buildInfoRow(
-                context.l10n.pluginInterfaceVersionLabel,
-                plugin.interfaceVersion.toString(),
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        OmniSettingsCard(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildReadmeHeading(_text('核心功能', 'Core capabilities')),
+              const SizedBox(height: 10),
+              if (capabilities.isEmpty)
+                Text(
+                  context.l10n.pluginNoCapabilities,
+                  style: TextStyle(color: palette.textTertiary, fontSize: 13),
+                )
+              else
+                ...capabilities.map(
+                  (capability) =>
+                      _buildCapabilityRow(_capabilityLabel(plugin, capability)),
+                ),
+            ],
+          ),
+        ),
+        if (usageItems.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          OmniSettingsCard(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildReadmeHeading(_text('工作方式', 'How it works')),
+                const SizedBox(height: 10),
+                ...usageItems.map(
+                  (item) => _buildUsageRow(
+                    _presentationIcon(item['icon']),
+                    _localized(item['title']),
+                    _localized(item['description']),
+                  ),
+                ),
+                if (plugin.installed && plugin.enabled) ...[
+                  const SizedBox(height: 20),
+                  _buildReadmeHeading(_text('开始使用', 'Get started')),
+                  const SizedBox(height: 12),
+                  _buildReadyGuide(plugin),
+                ],
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        OmniSettingsCard(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+          child: Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              key: const ValueKey('plugin-technical-information'),
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(bottom: 10),
+              title: Text(
+                context.l10n.pluginInformationTitle,
+                style: TextStyle(
+                  color: palette.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              children: [
+                _buildInfoRow(
+                  context.l10n.pluginPublisherLabel,
+                  plugin.publisher,
+                ),
+                _buildInfoRow(context.l10n.pluginVersionLabel, plugin.version),
+                _buildInfoRow(
+                  context.l10n.pluginTypeLabel,
+                  _kindLabel(plugin.kind),
+                ),
+                if (plugin.downloadSizeBytes > 0)
+                  _buildInfoRow(
+                    context.l10n.pluginDownloadSizeLabel,
+                    _formatBytes(plugin.downloadSizeBytes),
+                  ),
+                _buildInfoRow(
+                  context.l10n.pluginInterfaceVersionLabel,
+                  plugin.interfaceVersion.toString(),
+                ),
+              ],
+            ),
           ),
         ),
         if (!plugin.compatible ||

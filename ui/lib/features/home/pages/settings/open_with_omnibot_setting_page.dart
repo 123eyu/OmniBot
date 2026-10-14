@@ -5,6 +5,7 @@ import 'package:ui/services/app_state_service.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 class OpenWithOmnibotSettingPage extends StatefulWidget {
   const OpenWithOmnibotSettingPage({super.key});
@@ -154,10 +155,10 @@ class _OpenWithOmnibotSettingPageState
         child: ListView.separated(
           padding: edgeToEdgeScrollPadding(
             context,
-            const EdgeInsets.fromLTRB(18, 10, 18, 28),
+            const EdgeInsets.fromLTRB(16, 12, 16, 32),
           ),
           itemCount: sections.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 24),
+          separatorBuilder: (_, __) => const SizedBox(height: 22),
           itemBuilder: (context, index) {
             return _buildSettingsSection(sections[index]);
           },
@@ -173,55 +174,29 @@ class _OpenWithOmnibotSettingPageState
   }) {
     final palette = context.omniPalette;
     if (!_sharedOpenModesLoaded) {
-      return Padding(
-        padding: const EdgeInsets.only(left: 12),
-        child: SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: palette.accentPrimary,
-          ),
+      return SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: palette.accentPrimary,
         ),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.only(left: 12),
-      child: SizedBox(
-        width: 132,
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: value,
-            isDense: true,
-            isExpanded: true,
-            borderRadius: BorderRadius.circular(10),
-            dropdownColor: palette.surfacePrimary,
-            style: TextStyle(
-              color: palette.textPrimary,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-            icon: Icon(
-              LucideIcons.chevronDown,
-              size: 18,
-              color: palette.textTertiary,
-            ),
-            items: [
-              DropdownMenuItem(
-                value: _sharedOpenModeDefault,
-                child: _buildDropdownText(_defaultModeLabel(target)),
-              ),
-              DropdownMenuItem(
-                value: _sharedOpenModeWorkspace,
-                child: _buildDropdownText(
-                  context.trLegacy('存入 workspace 并发送路径'),
-                ),
-              ),
-            ],
-            onChanged: onChanged,
-          ),
+    return OmniSettingsDropdown<String>(
+      value: value,
+      maxWidth: 148,
+      items: [
+        DropdownMenuItem(
+          value: _sharedOpenModeDefault,
+          child: _buildDropdownText(_defaultModeLabel(target)),
         ),
-      ),
+        DropdownMenuItem(
+          value: _sharedOpenModeWorkspace,
+          child: _buildDropdownText(context.trLegacy('存入 workspace 并发送路径')),
+        ),
+      ],
+      onChanged: onChanged,
     );
   }
 
@@ -230,122 +205,17 @@ class _OpenWithOmnibotSettingPageState
   }
 
   Widget _buildSettingsSection(_SettingSection section) {
-    final palette = context.omniPalette;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return OmniSettingsGroup(
+      title: section.label,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
-          child: Row(
-            children: [
-              Text(
-                context.trLegacy(section.label),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0,
-                  color: palette.textTertiary,
-                  fontFamily: 'PingFang SC',
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Container(
-                  height: 1,
-                  color: palette.borderSubtle.withValues(
-                    alpha: context.isDarkTheme ? 0.56 : 0.8,
-                  ),
-                ),
-              ),
-            ],
+        for (final item in section.items)
+          OmniSettingsTile(
+            icon: item.icon,
+            title: item.title,
+            subtitle: item.subtitle,
+            trailing: item.trailing,
           ),
-        ),
-        Column(
-          children: List.generate(section.items.length, (index) {
-            final isLast = index == section.items.length - 1;
-            return Column(
-              children: [
-                _buildSettingTile(section.items[index], isLast: isLast),
-                if (!isLast)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 30),
-                    child: Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: palette.borderSubtle.withValues(
-                        alpha: context.isDarkTheme ? 0.5 : 0.78,
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          }),
-        ),
       ],
-    );
-  }
-
-  Widget _buildSettingTile(_SettingItem item, {required bool isLast}) {
-    final palette = context.omniPalette;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        splashColor: palette.accentPrimary.withValues(alpha: 0.08),
-        highlightColor: Colors.transparent,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(4, 14, 2, isLast ? 14 : 13),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _buildLeadingIcon(item),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.trLegacy(item.title),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: palette.textPrimary,
-                        height: 1.5,
-                        fontFamily: 'PingFang SC',
-                      ),
-                    ),
-                    if (item.subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        context.trLegacy(item.subtitle!),
-                        style: TextStyle(
-                          color: palette.textSecondary,
-                          fontSize: 11,
-                          fontFamily: 'PingFang SC',
-                          fontWeight: FontWeight.w400,
-                          height: 1.55,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (item.trailing != null) item.trailing!,
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLeadingIcon(_SettingItem item) {
-    final palette = context.omniPalette;
-    return SizedBox(
-      width: 18,
-      height: 18,
-      child: item.icon != null
-          ? Icon(item.icon, size: 18, color: palette.textPrimary)
-          : const SizedBox.shrink(),
     );
   }
 }

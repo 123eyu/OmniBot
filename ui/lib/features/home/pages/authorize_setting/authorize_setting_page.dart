@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_switch/flutter_switch.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/authorize/accessibility_permission_prompt.dart';
 import 'package:ui/l10n/l10n.dart';
@@ -10,7 +9,7 @@ import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/cache_util.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
-import 'package:ui/widgets/settings_section_title.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 /// 应用权限授权页面
 class AuthorizeSettingPage extends StatefulWidget {
@@ -40,7 +39,6 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
   Color get _subtitleColor => context.omniPalette.textSecondary;
   Color get _tertiaryTextColor => context.omniPalette.textTertiary;
   Color get _accentColor => context.omniPalette.accentPrimary;
-  Color get _switchInactiveColor => context.omniPalette.borderStrong;
   int get _corePermissionCount => 4;
   int get _readyCorePermissionCount => <bool>[
     _backgroundRunning,
@@ -483,10 +481,10 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
         child: ListView.separated(
           padding: edgeToEdgeScrollPadding(
             context,
-            const EdgeInsets.fromLTRB(18, 12, 18, 28),
+            const EdgeInsets.fromLTRB(16, 12, 16, 32),
           ),
           itemCount: sections.length + 1,
-          separatorBuilder: (_, __) => const SizedBox(height: 24),
+          separatorBuilder: (_, __) => const SizedBox(height: 22),
           itemBuilder: (context, index) {
             if (index == 0) {
               return _buildOverview();
@@ -502,195 +500,106 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
     final palette = context.omniPalette;
     final progress = _corePermissionProgress.clamp(0.0, 1.0);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          child: Text(
+    return OmniSettingsCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: Text(
+              _localeText(
+                zh: '$_readyCorePermissionCount / $_corePermissionCount 项核心授权已就绪',
+                en: '$_readyCorePermissionCount of $_corePermissionCount core permissions ready',
+              ),
+              key: ValueKey<int>(_readyCorePermissionCount),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: _titleColor,
+                height: 1.35,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
             _localeText(
-              zh: '$_readyCorePermissionCount / $_corePermissionCount 项核心授权已就绪',
-              en: '$_readyCorePermissionCount of $_corePermissionCount core permissions ready',
+              zh: '建议优先完成与任务执行直接相关的授权，缺失时可能影响悬浮交互和后台任务。',
+              en: 'Enable task-critical access first. Missing permissions can interrupt floating assist and background tasks.',
             ),
-            key: ValueKey<int>(_readyCorePermissionCount),
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: _titleColor,
-              height: 1.4,
-              fontFamily: 'PingFang SC',
-            ),
+            style: TextStyle(fontSize: 12, height: 1.5, color: _subtitleColor),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          _localeText(
-            zh: '建议优先完成与任务执行直接相关的授权，缺失时可能影响悬浮交互和后台任务。',
-            en: 'Enable task-critical access first. Missing permissions can interrupt floating assist and background tasks.',
-          ),
-          style: TextStyle(
-            fontSize: 12,
-            height: 1.6,
-            color: _subtitleColor,
-            fontFamily: 'PingFang SC',
-          ),
-        ),
-        const SizedBox(height: 14),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            return Container(
-              height: 6,
-              decoration: BoxDecoration(
-                color: palette.borderSubtle.withValues(
-                  alpha: context.isDarkTheme ? 0.9 : 0.72,
-                ),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 240),
-                  curve: Curves.easeOutCubic,
-                  width: constraints.maxWidth * progress,
-                  decoration: BoxDecoration(
-                    color: palette.accentPrimary,
-                    borderRadius: BorderRadius.circular(999),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return Container(
+                height: 6,
+                decoration: BoxDecoration(
+                  color: palette.borderSubtle.withValues(
+                    alpha: context.isDarkTheme ? 0.9 : 0.72,
                   ),
+                  borderRadius: BorderRadius.circular(999),
                 ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 180),
-          child: Text(
-            _allCorePermissionsEnabled
-                ? _localeText(
-                    zh: '核心权限已齐备，可以继续按需配置扩展能力。',
-                    en: 'Core permissions are ready. You can configure advanced access if needed.',
-                  )
-                : _localeText(
-                    zh: '建议先补齐核心权限，再执行需要悬浮交互或后台运行的任务。',
-                    en: 'Finish the core permissions first before running tasks that need floating interaction or background execution.',
-                  ),
-            key: ValueKey<bool>(_allCorePermissionsEnabled),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: _allCorePermissionsEnabled ? _accentColor : _subtitleColor,
-              height: 1.5,
-              fontFamily: 'PingFang SC',
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSettingsSection(_AuthorizeSettingSection section) {
-    final palette = context.omniPalette;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SettingsSectionTitle(
-          label: section.label,
-          subtitle: section.subtitle,
-          bottomPadding: 8,
-        ),
-        Column(
-          children: List.generate(section.items.length, (index) {
-            final isLast = index == section.items.length - 1;
-            return Column(
-              children: [
-                _buildSettingTile(section.items[index], isLast: isLast),
-                if (!isLast)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 30),
-                    child: Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: palette.borderSubtle.withValues(
-                        alpha: context.isDarkTheme ? 0.5 : 0.78,
-                      ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOutCubic,
+                    width: constraints.maxWidth * progress,
+                    decoration: BoxDecoration(
+                      color: palette.accentPrimary,
+                      borderRadius: BorderRadius.circular(999),
                     ),
                   ),
-              ],
-            );
-          }),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSettingTile(_AuthorizeSettingItem item, {required bool isLast}) {
-    final palette = context.omniPalette;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: item.onTap,
-        borderRadius: BorderRadius.circular(14),
-        splashColor: palette.accentPrimary.withValues(alpha: 0.08),
-        highlightColor: Colors.transparent,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(4, 14, 2, isLast ? 14 : 13),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _buildLeadingIcon(item),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: _titleColor,
-                        height: 1.5,
-                        fontFamily: 'PingFang SC',
-                      ),
-                    ),
-                    if (item.subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        item.subtitle!,
-                        style: TextStyle(
-                          fontSize: 11,
-                          height: 1.55,
-                          color: _subtitleColor,
-                          fontFamily: 'PingFang SC',
-                        ),
-                      ),
-                    ],
-                  ],
                 ),
-              ),
-              if (item.trailing != null)
-                item.trailing!
-              else if (item.onTap != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: Icon(
-                    LucideIcons.chevronRight,
-                    size: 18,
-                    color: _tertiaryTextColor,
-                  ),
-                ),
-            ],
+              );
+            },
           ),
-        ),
+          const SizedBox(height: 10),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            child: Text(
+              _allCorePermissionsEnabled
+                  ? _localeText(
+                      zh: '核心权限已齐备，可以继续按需配置扩展能力。',
+                      en: 'Core permissions are ready. You can configure advanced access if needed.',
+                    )
+                  : _localeText(
+                      zh: '建议先补齐核心权限，再执行需要悬浮交互或后台运行的任务。',
+                      en: 'Finish the core permissions first before running tasks that need floating interaction or background execution.',
+                    ),
+              key: ValueKey<bool>(_allCorePermissionsEnabled),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: _allCorePermissionsEnabled
+                    ? _accentColor
+                    : _subtitleColor,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildLeadingIcon(_AuthorizeSettingItem item) {
-    return SizedBox(
-      width: 18,
-      height: 18,
-      child: Icon(item.icon, size: 18, color: _titleColor),
+  Widget _buildSettingsSection(_AuthorizeSettingSection section) {
+    return OmniSettingsGroup(
+      title: section.label,
+      subtitle: section.subtitle,
+      translateTitle: false,
+      children: [
+        for (final item in section.items)
+          OmniSettingsTile(
+            icon: item.icon,
+            title: item.title,
+            subtitle: item.subtitle,
+            trailing: item.trailing,
+            onTap: item.onTap,
+            translateText: false,
+          ),
+      ],
     );
   }
 
@@ -698,24 +607,20 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
     required String label,
     required Color color,
   }) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 12),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: color,
-              fontFamily: 'PingFang SC',
-            ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w500,
+            color: color,
           ),
-          const SizedBox(width: 4),
-          Icon(LucideIcons.chevronRight, size: 18, color: _tertiaryTextColor),
-        ],
-      ),
+        ),
+        const SizedBox(width: 4),
+        Icon(LucideIcons.chevronRight, size: 16, color: _tertiaryTextColor),
+      ],
     );
   }
 
@@ -723,26 +628,7 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
     required bool value,
     required ValueChanged<bool> onToggle,
   }) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => onToggle(!value),
-      child: Padding(
-        padding: const EdgeInsets.only(left: 12),
-        child: AbsorbPointer(
-          child: FlutterSwitch(
-            width: 32,
-            height: 18.67,
-            toggleSize: 11.3,
-            padding: 3,
-            activeColor: _accentColor,
-            inactiveColor: _switchInactiveColor,
-            borderRadius: 28.75,
-            value: value,
-            onToggle: onToggle,
-          ),
-        ),
-      ),
-    );
+    return OmniSettingsSwitch(value: value, onToggle: onToggle);
   }
 }
 

@@ -17,6 +17,10 @@ Future<T?> showSettingsDetailSheet<T>({
   return showModalBottomSheet<T>(
     context: context,
     backgroundColor: context.omniPalette.surfacePrimary,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    clipBehavior: Clip.antiAlias,
     isScrollControlled: isScrollControlled,
     isDismissible: isDismissible,
     enableDrag: enableDrag,
@@ -32,7 +36,8 @@ ButtonStyle settingsDetailSheetActionStyle(
   return TextButton.styleFrom(
     foregroundColor: foregroundColor ?? context.omniPalette.accentPrimary,
     minimumSize: const Size(0, 40),
-    padding: const EdgeInsets.symmetric(horizontal: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
   );
 }
 
@@ -71,9 +76,10 @@ class SettingsDetailSheet extends StatelessWidget {
         Text(
           title,
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 16.5,
             fontWeight: FontWeight.w600,
             color: palette.textPrimary,
+            height: 1.35,
           ),
         ),
         if (subtitle != null) ...[
@@ -81,8 +87,8 @@ class SettingsDetailSheet extends StatelessWidget {
           Text(
             subtitle!,
             style: TextStyle(
-              fontSize: 12,
-              height: 1.45,
+              fontSize: 12.5,
+              height: 1.48,
               color: palette.textSecondary,
             ),
           ),
@@ -101,6 +107,17 @@ class SettingsDetailSheet extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: palette.borderStrong.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
                   if (headerAction == null)
                     heading
                   else
@@ -112,21 +129,21 @@ class SettingsDetailSheet extends StatelessWidget {
                         headerAction!,
                       ],
                     ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   body,
                   if (actions.isNotEmpty) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     Wrap(
                       key: actionsKey,
-                      spacing: 4,
-                      runSpacing: 4,
+                      spacing: 6,
+                      runSpacing: 6,
                       alignment: WrapAlignment.start,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: actions,
                     ),
                   ],
-                  if (footer != null) ...[const SizedBox(height: 8), footer!],
-                  const SizedBox(height: 8),
+                  if (footer != null) ...[const SizedBox(height: 10), footer!],
+                  const SizedBox(height: 4),
                 ],
               ),
             );

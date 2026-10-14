@@ -16,6 +16,7 @@ import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/omni_segmented_slider.dart';
 import 'package:ui/widgets/settings_detail_sheet.dart';
 import 'package:ui/widgets/settings_section_title.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 enum _AgentFilter { all, available, unavailable }
 
@@ -485,19 +486,25 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                   ),
                   if (managed.isNotEmpty) ...[
                     const SizedBox(height: 20),
-                    _buildSectionLabel(_text('预置 Agent', 'Built-in Agents')),
-                    for (var i = 0; i < managed.length; i++) ...[
-                      _buildAgentTile(managed[i]),
-                      if (i < managed.length - 1) _buildRowDivider(),
-                    ],
+                    OmniSettingsGroup(
+                      title: _text('预置 Agent', 'Built-in Agents'),
+                      translateTitle: false,
+                      dividerIndent: 46,
+                      children: [
+                        for (final agent in managed) _buildAgentTile(agent),
+                      ],
+                    ),
                   ],
                   if (custom.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    _buildSectionLabel(_text('自定义 Agent', 'Custom Agents')),
-                    for (var i = 0; i < custom.length; i++) ...[
-                      _buildAgentTile(custom[i]),
-                      if (i < custom.length - 1) _buildRowDivider(),
-                    ],
+                    const SizedBox(height: 22),
+                    OmniSettingsGroup(
+                      title: _text('自定义 Agent', 'Custom Agents'),
+                      translateTitle: false,
+                      dividerIndent: 46,
+                      children: [
+                        for (final agent in custom) _buildAgentTile(agent),
+                      ],
+                    ),
                   ],
                   if (agents.isEmpty) ...[
                     const SizedBox(height: 48),
@@ -532,43 +539,51 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                     ),
                   ],
                   if (_pluginActions.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    _buildSectionLabel(
-                      _text('本地 Web 界面', 'Local Web interfaces'),
+                    const SizedBox(height: 22),
+                    OmniSettingsGroup(
+                      title: _text('本地 Web 界面', 'Local Web interfaces'),
+                      translateTitle: false,
+                      dividerIndent: 46,
+                      children: [
+                        for (final action in _pluginActions)
+                          _buildPluginActionTile(action),
+                      ],
                     ),
-                    for (var i = 0; i < _pluginActions.length; i++) ...[
-                      _buildPluginActionTile(_pluginActions[i]),
-                      if (i < _pluginActions.length - 1) _buildRowDivider(),
-                    ],
                   ],
                   // 远程 PC Bridge：全局共享配置入口（仅配置远程 ACP 连接）。
-                  const SizedBox(height: 24),
-                  _buildSectionLabel(_text('远程运行', 'Remote runtime')),
-                  _FlatTile(
-                    leading: Icon(
-                      LucideIcons.monitorSmartphone,
-                      size: 18,
-                      color: palette.accentPrimary,
-                    ),
-                    title: _text('远程 PC Bridge', 'Remote PC Bridge'),
-                    statusColor: _remoteBridgeEnabled
-                        ? const Color(0xFF2EAF67)
-                        : const Color(0xFF98A2B3),
-                    statusLabel: _remoteBridgeEnabled
-                        ? _text('已启用', 'Enabled')
-                        : _text('未启用', 'Not enabled'),
-                    subtitle: _remoteBridgeEnabled
-                        ? _text(
-                            'Agent 聊天使用远程 ACP',
-                            'Agent chat runs on the remote ACP runtime',
-                          )
-                        : _text(
-                            '配置远程 ACP 连接',
-                            'Configure a remote ACP connection',
-                          ),
-                    onTap: () {
-                      GoRouterManager.push('/home/remote_codex_setting');
-                    },
+                  const SizedBox(height: 22),
+                  OmniSettingsGroup(
+                    title: _text('远程运行', 'Remote runtime'),
+                    translateTitle: false,
+                    dividerIndent: 46,
+                    children: [
+                      _FlatTile(
+                        leading: Icon(
+                          LucideIcons.monitorSmartphone,
+                          size: 18,
+                          color: palette.textPrimary.withValues(alpha: 0.78),
+                        ),
+                        title: _text('远程 PC Bridge', 'Remote PC Bridge'),
+                        statusColor: _remoteBridgeEnabled
+                            ? const Color(0xFF2EAF67)
+                            : const Color(0xFF98A2B3),
+                        statusLabel: _remoteBridgeEnabled
+                            ? _text('已启用', 'Enabled')
+                            : _text('未启用', 'Not enabled'),
+                        subtitle: _remoteBridgeEnabled
+                            ? _text(
+                                'Agent 聊天使用远程 ACP',
+                                'Agent chat runs on the remote ACP runtime',
+                              )
+                            : _text(
+                                '配置远程 ACP 连接',
+                                'Configure a remote ACP connection',
+                              ),
+                        onTap: () {
+                          GoRouterManager.push('/home/remote_codex_setting');
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -581,15 +596,16 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
     final label = _sharedModelLabel.isEmpty
         ? _text('尚未配置统一模型', 'No shared model configured')
         : _sharedModelLabel;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(14),
-      ),
+    return OmniSettingsCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      color: card,
       child: Row(
         children: [
-          Icon(LucideIcons.bot, size: 18, color: palette.accentPrimary),
+          Icon(
+            LucideIcons.bot,
+            size: 18,
+            color: palette.textPrimary.withValues(alpha: 0.78),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -641,38 +657,6 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
         ),
       ),
       onChanged: (value) => setState(() => _query = value),
-    );
-  }
-
-  /// 与设置主页一致的分组小标题。
-  Widget _buildSectionLabel(String label) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.6,
-          color: context.omniPalette.textTertiary,
-          fontFamily: 'PingFang SC',
-        ),
-      ),
-    );
-  }
-
-  /// 与设置主页一致的行间隔细分隔线（左侧缩进对齐标题文字）。
-  Widget _buildRowDivider() {
-    final palette = context.omniPalette;
-    return Padding(
-      padding: const EdgeInsets.only(left: 30),
-      child: Divider(
-        height: 1,
-        thickness: 1,
-        color: palette.borderSubtle.withValues(
-          alpha: context.isDarkTheme ? 0.5 : 0.78,
-        ),
-      ),
     );
   }
 
@@ -970,15 +954,14 @@ class _FlatTile extends StatelessWidget {
       child: InkWell(
         key: tileKey,
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        splashColor: palette.accentPrimary.withValues(alpha: 0.08),
-        highlightColor: Colors.transparent,
+        splashColor: palette.accentPrimary.withValues(alpha: 0.06),
+        highlightColor: palette.accentPrimary.withValues(alpha: 0.03),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 13, 2, 13),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13.5),
           child: Row(
             children: [
-              SizedBox(width: 18, height: 18, child: Center(child: leading)),
-              const SizedBox(width: 10),
+              SizedBox(width: 20, height: 20, child: Center(child: leading)),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -988,11 +971,10 @@ class _FlatTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w500,
                         color: palette.textPrimary,
-                        height: 1.5,
-                        fontFamily: 'PingFang SC',
+                        height: 1.38,
                       ),
                     ),
                     if (hasStatus || hasSubtitle) ...[

@@ -8,11 +8,11 @@ import 'package:ui/l10n/l10n.dart';
 import 'package:ui/services/omnibot_resource_service.dart';
 import 'package:ui/services/special_permission.dart';
 import 'package:ui/services/workspace_mount_service.dart';
-import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/settings_section_title.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 class _EnvironmentDefinition {
   const _EnvironmentDefinition({
@@ -200,19 +200,11 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
 
   bool get _isDarkTheme => context.isDarkTheme;
   bool get _isEnglish => Localizations.localeOf(context).languageCode == 'en';
-  Color get _pageBackground => _isDarkTheme
-      ? context.omniPalette.pageBackground
-      : const Color(0xFFF6F8FA);
-  Color get _primaryTextColor =>
-      _isDarkTheme ? context.omniPalette.textPrimary : AppColors.text;
-  Color get _secondaryTextColor => _isDarkTheme
-      ? context.omniPalette.textSecondary
-      : const Color(0xFF64748B);
-  Color get _tertiaryTextColor =>
-      _isDarkTheme ? context.omniPalette.textTertiary : const Color(0xFF475569);
-  Color get _mutedSurfaceColor => _isDarkTheme
-      ? context.omniPalette.surfaceSecondary
-      : const Color(0xFFF8FAFC);
+  Color get _pageBackground => context.omniPalette.pageBackground;
+  Color get _primaryTextColor => context.omniPalette.textPrimary;
+  Color get _secondaryTextColor => context.omniPalette.textSecondary;
+  Color get _tertiaryTextColor => context.omniPalette.textTertiary;
+  Color get _mutedSurfaceColor => context.omniPalette.surfaceSecondary;
 
   String get _workspaceMountSectionTitle =>
       _isEnglish ? 'Workspace mounts' : 'Workspace 挂载';
@@ -1638,8 +1630,8 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SettingsSectionTitle(label: title, bottomPadding: 10),
-          child,
+          SettingsSectionTitle(label: title, bottomPadding: 8),
+          OmniSettingsCard(child: child),
         ],
       ),
     );
