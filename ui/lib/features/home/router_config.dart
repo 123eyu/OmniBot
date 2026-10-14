@@ -12,6 +12,7 @@ import 'package:ui/features/home/pages/agent/agent_config_page.dart';
 import 'package:ui/features/home/pages/chat_history/chat_history_page.dart';
 import 'package:ui/features/home/pages/permission_guide/permission_guide_detail_page.dart';
 import 'package:ui/features/home/pages/permission_guide/permission_guide_page.dart';
+
 import 'pages/authorize/authorize_page.dart';
 import 'pages/authorize/authorize_page_args.dart';
 import 'pages/chat/chat_page.dart';
@@ -27,14 +28,18 @@ import 'pages/omnibot_workspace/omnibot_artifact_preview_page.dart';
 import 'pages/omnibot_workspace/omnibot_workspace_page.dart';
 import 'pages/webview/webview_page.dart';
 import 'pages/settings/settings_page.dart';
+import 'pages/tools/tools_page.dart';
 import 'pages/mcp/remote_mcp_servers_page.dart';
 import 'pages/skill_store/skill_store_page.dart';
 import 'pages/plugin_market/plugin_market_page.dart';
 import 'pages/plugin_market/plugin_detail_page.dart';
+
 import 'package:ui/models/omni_plugin_item.dart';
+
 import 'pages/termux_setting/termux_setting_page.dart';
 import 'pages/scene_model_setting/scene_model_setting_page.dart';
 import 'pages/model_provider_setting/model_provider_setting_page.dart';
+
 import 'package:ui/features/welcome/pages/onboarding/onboarding_choice_page.dart';
 
 /// Home模块路由配置
@@ -322,6 +327,16 @@ List<GoRoute> homeRoutes = [
       key: state.pageKey,
       name: 'home/alarm_setting',
       child: const AlarmSettingPage(),
+    ),
+  ),
+
+  GoRoute(
+    path: '/home/tools',
+    name: 'home/tools',
+    pageBuilder: (context, state) => GoRouterManager.buildActivitySlidePage(
+      key: state.pageKey,
+      name: 'home/tools',
+      child: const ToolsPage(),
     ),
   ),
 

@@ -9,6 +9,11 @@ import cn.com.omnimind.bot.mcp.RemoteMcpDiscoveryRegistry
 import cn.com.omnimind.bot.mcp.RemoteMcpServerConfig
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -30,6 +35,39 @@ class RemoteMcpConfigChannel {
             scope.launch {
                 try {
                     when (call.method) {
+                        "listToolCatalog" -> {
+                            val rows = coroutineScope {
+                                RemoteMcpConfigStore.listServers().map { config -> async {
+                                    val discovered = if (!config.enabled) null else try {
+                                        withTimeoutOrNull(10_000) {
+                                            RemoteMcpDiscoveryRegistry.discoverServer(config)
+                                        }
+                                    } catch (error: CancellationException) {
+                                        throw error
+                                    } catch (_: Exception) { null }
+                                    // Only return presentation metadata, never credentials or headers.
+                                    mapOf(
+                                        "source" to config.name,
+                                        "status" to when {
+                                            !config.enabled -> "disabled"
+                                            discovered == null -> "unavailable"
+                                            else -> "discovered"
+                                        },
+                                        "tools" to discovered?.tools.orEmpty().map { tool ->
+                                            mapOf(
+                                                "name" to tool.encodedToolName,
+                                                "displayName" to tool.toolName,
+                                                "description" to tool.description,
+                                                "group" to "mcp",
+                                                "source" to config.name,
+                                                "status" to "discovered",
+                                            )
+                                        },
+                                    )
+                                } }.awaitAll()
+                            }
+                            respondSuccess(result, rows)
+                        }
                         "listServers" -> {
                             respondSuccess(result, RemoteMcpConfigStore.listServers().map { it.toMap() })
                         }

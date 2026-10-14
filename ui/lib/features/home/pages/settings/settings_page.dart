@@ -318,6 +318,14 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
           _SettingItem(
+            icon: LucideIcons.wrench,
+            title: isEnglish ? 'Tools' : '工具',
+            subtitle: isEnglish
+                ? 'Explore tools available to agents'
+                : '查看 Agent 可调用的工具',
+            onTap: () => GoRouterManager.push('/home/tools'),
+          ),
+          _SettingItem(
             icon: LucideIcons.squareTerminal,
             iconColor: AppColors.buttonPrimary,
             title: context.l10n.settingsAlpineTitle,
