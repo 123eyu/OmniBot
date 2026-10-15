@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:ui/features/home/widgets/home_drawer_search_field.dart';
 import 'package:ui/services/tool_catalog_service.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
@@ -136,12 +135,10 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
-              child: HomeDrawerSearchField(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: OmniSettingsSearchField(
                 controller: _search,
                 focusNode: _focus,
-                isSearching: false,
-                textColor: palette.textPrimary,
                 hintText: _text('搜索名称、用途或来源', 'Search name, purpose or source'),
               ),
             ),
@@ -272,7 +269,7 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
       ],
     ];
     if (rows.isEmpty) return const SizedBox.shrink();
-    return OmniSettingsGroup(dividerIndent: 46, children: rows);
+    return OmniSettingsGroup(dividerIndent: 16, children: rows);
   }
 
   Widget _heading(String group, int count) => Padding(
@@ -350,42 +347,71 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
 
   Widget _toolRow(CatalogTool tool) {
     final palette = context.omniPalette;
+    final hasSource = tool.source.trim().isNotEmpty;
+    final hasNonDefaultStatus =
+        tool.status != 'registered' && tool.status != 'discovered';
+    final metaParts = <String>[
+      if (hasSource) tool.source.trim(),
+      if (hasNonDefaultStatus) _status(tool.status),
+    ];
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () => _showDetail(tool),
+        splashColor: palette.accentPrimary.withValues(alpha: 0.06),
+        highlightColor: palette.accentPrimary.withValues(alpha: 0.03),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13.5),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Icon(
-                  switch (tool.group) {
-                    'plugin' => LucideIcons.puzzle,
-                    'mcp' => LucideIcons.globe,
-                    _ => LucideIcons.wrench,
-                  },
-                  size: 18,
-                  color: palette.textPrimary.withValues(alpha: 0.78),
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      tool.displayName,
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w500,
-                        color: palette.textPrimary,
-                        height: 1.35,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            tool.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w500,
+                              color: palette.textPrimary,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                        if (metaParts.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6.5,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: palette.surfaceSecondary,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              metaParts.join(' · '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w500,
+                                color: palette.textTertiary,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 3.5),
                     Text(
                       tool.description.isEmpty ? tool.name : tool.description,
                       maxLines: 2,
@@ -396,28 +422,14 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
                         color: palette.textSecondary,
                       ),
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      [
-                        if (tool.source.isNotEmpty) tool.source,
-                        _status(tool.status),
-                      ].join(' · '),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: palette.textTertiary,
-                      ),
-                    ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Icon(
-                  LucideIcons.chevronRight,
-                  size: 16,
-                  color: palette.textTertiary,
-                ),
+              const SizedBox(width: 10),
+              Icon(
+                LucideIcons.chevronRight,
+                size: 16,
+                color: palette.textTertiary,
               ),
             ],
           ),
@@ -430,68 +442,97 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
     final path = await showSettingsDetailSheet<String>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) => SettingsDetailSheet(
-        title: tool.displayName,
-        subtitle:
-            '${_groupName(tool.group)} · ${tool.source.isEmpty ? _text('内置 Agent', 'Built-in agent') : tool.source} · ${_status(tool.status)}',
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SelectableText(
-              tool.name,
-              style: TextStyle(
-                fontSize: 12,
-                color: context.omniPalette.textTertiary,
+      builder: (sheetContext) {
+        final palette = sheetContext.omniPalette;
+        return SettingsDetailSheet(
+          title: tool.displayName,
+          subtitle:
+              '${_groupName(tool.group)} · ${tool.source.isEmpty ? _text('内置 Agent', 'Built-in agent') : tool.source} · ${_status(tool.status)}',
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: palette.surfaceSecondary,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: SelectableText(
+                  tool.name,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    color: palette.textSecondary,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            SelectableText(
-              tool.description.isEmpty
-                  ? _text('暂无工具说明', 'No description provided')
-                  : tool.description,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.6,
-                color: context.omniPalette.textPrimary,
+              const SizedBox(height: 14),
+              SelectableText(
+                tool.description.isEmpty
+                    ? _text('暂无工具说明', 'No description provided')
+                    : tool.description,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  height: 1.6,
+                  color: palette.textPrimary,
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              _text('使用条件', 'Requirements'),
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _text(
-                '工具由 Agent 在对话中调用。已注册或已发现表示目录中存在此工具，不代表权限、模型或运行环境已就绪；具体要求见工具说明。远程结果可能来自最近的发现缓存。',
-                'Tools are invoked by agents in a conversation. Registered or discovered tools may still require permissions, a model or runtime setup; see the description for requirements. Remote results may use the recent discovery cache.',
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: palette.surfaceSecondary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _text('使用条件', 'Requirements'),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: palette.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _text(
+                        '工具由 Agent 在对话中调用。已注册或已发现表示目录中存在此工具，不代表权限、模型或运行环境已就绪；具体要求见工具说明。远程结果可能来自最近的发现缓存。',
+                        'Tools are invoked by agents in a conversation. Registered or discovered tools may still require permissions, a model or runtime setup; see the description for requirements. Remote results may use the recent discovery cache.',
+                      ),
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.55,
+                        color: palette.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.6,
-                color: context.omniPalette.textSecondary,
+            ],
+          ),
+          actions: [
+            TextButton(
+              style: settingsDetailSheetActionStyle(sheetContext),
+              onPressed: () => Navigator.pop(
+                sheetContext,
+                tool.group == 'plugin'
+                    ? '/home/plugin_market'
+                    : tool.group == 'mcp'
+                    ? '/home/mcp_tools'
+                    : '/home/authorize_setting',
+              ),
+              child: Text(
+                tool.group == 'builtin'
+                    ? _text('权限设置', 'Permissions')
+                    : _text('管理来源', 'Manage source'),
               ),
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(
-              sheetContext,
-              tool.group == 'plugin'
-                  ? '/home/plugin_market'
-                  : tool.group == 'mcp'
-                  ? '/home/mcp_tools'
-                  : '/home/authorize_setting',
-            ),
-            child: Text(
-              tool.group == 'builtin'
-                  ? _text('权限设置', 'Permissions')
-                  : _text('管理来源', 'Manage source'),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
     if (mounted && path != null) await _configure(path);
   }

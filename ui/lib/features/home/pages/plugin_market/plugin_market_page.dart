@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:ui/features/home/widgets/home_drawer_search_field.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/models/omni_plugin_item.dart';
 import 'package:ui/services/omni_plugin_service.dart';
@@ -103,12 +102,10 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-                    child: HomeDrawerSearchField(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                    child: OmniSettingsSearchField(
                       controller: _searchController,
                       focusNode: _searchFocusNode,
-                      isSearching: false,
-                      textColor: palette.textPrimary,
                       hintText: context.l10n.pluginSearchHint,
                     ),
                   ),

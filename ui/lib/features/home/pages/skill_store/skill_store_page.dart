@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_switch/flutter_switch.dart';
-import 'package:ui/features/home/widgets/home_drawer_search_field.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/models/agent_skill_item.dart';
 import 'package:ui/services/agent_skill_store_service.dart';
@@ -302,14 +301,10 @@ class _SkillStorePageState extends State<SkillStorePage> {
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-                    child: HomeDrawerSearchField(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                    child: OmniSettingsSearchField(
                       controller: _searchController,
                       focusNode: _searchFocusNode,
-                      isSearching: false,
-                      textColor: context.isDarkTheme
-                          ? palette.textPrimary
-                          : AppColors.text,
                       hintText: context.trLegacy('搜索技能名称或描述'),
                     ),
                   ),

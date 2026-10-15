@@ -887,6 +887,121 @@ class _OmniSettingsPopoverCard<T> extends StatelessWidget {
   }
 }
 
+/// Clean, theme-consistent search input field for settings and catalog pages.
+class OmniSettingsSearchField extends StatelessWidget {
+  const OmniSettingsSearchField({
+    super.key,
+    required this.controller,
+    this.focusNode,
+    required this.hintText,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final FocusNode? focusNode;
+  final String hintText;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final listenable = focusNode != null
+        ? Listenable.merge([controller, focusNode!])
+        : controller;
+    return ListenableBuilder(
+      listenable: listenable,
+      builder: (context, _) {
+        final palette = context.omniPalette;
+        final isDark = context.isDarkTheme;
+        final hasFocus = focusNode?.hasFocus ?? false;
+        final hasQuery = controller.text.trim().isNotEmpty;
+
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          height: 40,
+          decoration: BoxDecoration(
+            color: palette.surfacePrimary,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: hasFocus
+                  ? palette.accentPrimary.withValues(alpha: 0.65)
+                  : palette.borderSubtle.withValues(
+                      alpha: isDark ? 0.65 : 0.85,
+                    ),
+              width: hasFocus ? 1.1 : 0.75,
+            ),
+          ),
+          child: TextField(
+            controller: controller,
+            focusNode: focusNode,
+            onChanged: onChanged,
+            onTapOutside: (_) {
+              if (focusNode != null) {
+                focusNode!.unfocus();
+              } else {
+                FocusScope.of(context).unfocus();
+              }
+            },
+            textInputAction: TextInputAction.search,
+            style: TextStyle(
+              fontSize: 13.5,
+              color: palette.textPrimary,
+              fontWeight: FontWeight.w400,
+              height: 1.25,
+            ),
+            cursorColor: palette.accentPrimary,
+            decoration: InputDecoration(
+              hintText: hintText,
+              hintStyle: TextStyle(
+                fontSize: 13,
+                color: palette.textTertiary,
+                fontWeight: FontWeight.w400,
+              ),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              focusedErrorBorder: InputBorder.none,
+              filled: false,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              prefixIconConstraints: const BoxConstraints(
+                minWidth: 38,
+                minHeight: 40,
+              ),
+              suffixIconConstraints: const BoxConstraints(
+                minWidth: 36,
+                minHeight: 40,
+              ),
+              prefixIcon: Icon(
+                LucideIcons.search,
+                size: 16.5,
+                color: hasFocus ? palette.accentPrimary : palette.textTertiary,
+              ),
+              suffixIcon: hasQuery
+                  ? IconButton(
+                      padding: EdgeInsets.zero,
+                      splashRadius: 16,
+                      onPressed: () {
+                        controller.clear();
+                        onChanged?.call('');
+                      },
+                      icon: Icon(
+                        LucideIcons.x,
+                        size: 15,
+                        color: palette.textTertiary,
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// Consistent input decoration for text fields inside settings cards.
 InputDecoration omniSettingsInputDecoration(
   BuildContext context, {
