@@ -2,6 +2,8 @@
 
 part of 'home_drawer.dart';
 
+enum _ConversationContextAction { pin, rename, copy, archive, delete }
+
 extension _HomeDrawerActions on HomeDrawerState {
   bool get _shouldCloseOnNavigate => widget.closeOnNavigate && !widget.embedded;
 
@@ -414,95 +416,260 @@ extension _HomeDrawerActions on HomeDrawerState {
     );
   }
 
-  List<ConversationSlideAction> _buildDrawerActions(
+  Future<void> _showConversationContextMenu(
+    BuildContext rowContext,
     ConversationModel conversation, {
     bool includePinAction = true,
-  }) {
-    final actions = <ConversationSlideAction>[
-      ConversationSlideAction(
-        onPressed: () => _deleteConversation(conversation),
-        backgroundColor: AppColors.alertRed,
-        child: Center(
-          child: SvgPicture.asset(
-            'assets/memory/memory_delete.svg',
-            width: HomeDrawerState._conversationActionIconSize,
-            height: HomeDrawerState._conversationActionIconSize,
-            colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-          ),
-        ),
-      ),
-      if (includePinAction)
-        ConversationSlideAction(
-          onPressed: () => _setConversationPinned(
-            conversation,
-            pinned: !conversation.isPinned,
-          ),
-          backgroundColor: context.isDarkTheme
-              ? Color.lerp(
-                  context.omniPalette.surfaceElevated,
-                  context.omniPalette.accentPrimary,
-                  0.18,
-                )!
-              : AppColors.text.withValues(alpha: 0.72),
-          child: Center(
-            child: SvgPicture.asset(
-              conversation.isPinned
-                  ? 'assets/home/pin_off_icon.svg'
-                  : 'assets/home/pin_icon.svg',
-              width: HomeDrawerState._conversationActionIconSize,
-              height: HomeDrawerState._conversationActionIconSize,
-              colorFilter: const ColorFilter.mode(
-                Colors.white,
-                BlendMode.srcIn,
-              ),
-            ),
-          ),
-        ),
-      ConversationSlideAction(
-        onPressed: () => _copyConversation(conversation),
-        backgroundColor: context.isDarkTheme
-            ? context.omniPalette.surfaceElevated
-            : AppColors.text.withValues(alpha: 0.62),
-        child: const Center(
-          child: Icon(
-            Icons.content_copy_rounded,
-            size: HomeDrawerState._conversationActionIconSize,
-            color: Colors.white,
-          ),
-        ),
-      ),
-      ConversationSlideAction(
-        onPressed: () => conversation.isArchived
-            ? _unarchiveConversation(conversation)
-            : _archiveConversation(conversation),
-        backgroundColor: context.isDarkTheme
-            ? Color.lerp(
-                context.omniPalette.surfaceElevated,
-                context.omniPalette.accentPrimary,
-                0.3,
-              )!
-            : AppColors.buttonPrimary,
-        borderRadius: HomeDrawerState._drawerTrailingActionRadius,
-        child: Center(
-          child: conversation.isArchived
-              ? Icon(
-                  Icons.unarchive_outlined,
-                  size: HomeDrawerState._conversationActionIconSize,
-                  color: Colors.white,
-                )
-              : SvgPicture.asset(
-                  'assets/home/archive_icon.svg',
-                  width: HomeDrawerState._conversationActionIconSize,
-                  height: HomeDrawerState._conversationActionIconSize,
-                  colorFilter: const ColorFilter.mode(
-                    Colors.white,
-                    BlendMode.srcIn,
+  }) async {
+    if (_busyConversationKeys.contains(conversation.threadKey)) {
+      return;
+    }
+    performOmniSelectionHaptic();
+
+    final box = rowContext.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.maybeOf(rowContext)?.context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize || overlay == null || !overlay.hasSize) {
+      return;
+    }
+
+    final rowTopLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
+    final rowBottomRight = box.localToGlobal(
+      box.size.bottomRight(Offset.zero),
+      ancestor: overlay,
+    );
+    final overlaySize = overlay.size;
+    final mediaPadding = MediaQuery.paddingOf(rowContext);
+    const estimatedMenuHeight = 236.0;
+    final spaceBelow =
+        overlaySize.height - mediaPadding.bottom - rowBottomRight.dy - 16.0;
+    final openUpward =
+        spaceBelow < estimatedMenuHeight &&
+        (rowTopLeft.dy - mediaPadding.top) > estimatedMenuHeight;
+
+    setState(() {
+      _activeContextMenuThreadKey = conversation.threadKey;
+    });
+
+    final selectedAction = await showGeneralDialog<_ConversationContextAction>(
+      context: rowContext,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(
+        rowContext,
+      ).modalBarrierDismissLabel,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 170),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        final palette = dialogContext.omniPalette;
+        final isDark = dialogContext.isDarkTheme;
+        final isEnglish =
+            Localizations.localeOf(dialogContext).languageCode == 'en';
+        String tr(String zh, String en) => isEnglish ? en : zh;
+        final surface = isDark
+            ? palette.surfaceElevated
+            : palette.surfacePrimary;
+        final dividerColor = palette.borderSubtle.withValues(
+          alpha: isDark ? 0.55 : 0.75,
+        );
+
+        return Stack(
+          children: [
+            Positioned(
+              left: (rowTopLeft.dx + 4).clamp(16.0, overlaySize.width - 216.0),
+              top: openUpward ? null : rowBottomRight.dy + 4,
+              bottom: openUpward
+                  ? overlaySize.height - rowTopLeft.dy + 4
+                  : null,
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 196,
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: palette.borderSubtle.withValues(
+                        alpha: isDark ? 0.8 : 0.9,
+                      ),
+                      width: 0.75,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: palette.shadowColor.withValues(
+                          alpha: isDark ? 0.36 : 0.09,
+                        ),
+                        blurRadius: 22,
+                        spreadRadius: -2,
+                        offset: const Offset(0, 8),
+                      ),
+                      BoxShadow(
+                        color: palette.shadowColor.withValues(
+                          alpha: isDark ? 0.18 : 0.04,
+                        ),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (includePinAction)
+                        _buildConversationMenuOption(
+                          dialogContext,
+                          action: _ConversationContextAction.pin,
+                          icon: conversation.isPinned
+                              ? LucideIcons.pinOff
+                              : LucideIcons.pin,
+                          label: conversation.isPinned
+                              ? tr('取消置顶', 'Unpin')
+                              : tr('置顶对话', 'Pin'),
+                        ),
+                      _buildConversationMenuOption(
+                        dialogContext,
+                        action: _ConversationContextAction.rename,
+                        icon: LucideIcons.pencil,
+                        label: tr('重命名', 'Rename'),
+                      ),
+                      _buildConversationMenuOption(
+                        dialogContext,
+                        action: _ConversationContextAction.copy,
+                        icon: LucideIcons.copy,
+                        label: tr('复制对话', 'Copy'),
+                      ),
+                      _buildConversationMenuOption(
+                        dialogContext,
+                        action: _ConversationContextAction.archive,
+                        icon: conversation.isArchived
+                            ? LucideIcons.archiveRestore
+                            : LucideIcons.archive,
+                        label: conversation.isArchived
+                            ? tr('取消归档', 'Unarchive')
+                            : tr('归档对话', 'Archive'),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        child: Divider(
+                          height: 1,
+                          thickness: 0.65,
+                          color: dividerColor,
+                        ),
+                      ),
+                      _buildConversationMenuOption(
+                        dialogContext,
+                        action: _ConversationContextAction.delete,
+                        icon: LucideIcons.trash2,
+                        label: tr('删除对话', 'Delete'),
+                        isDestructive: true,
+                      ),
+                    ],
                   ),
                 ),
+              ),
+            ),
+          ],
+        );
+      },
+      transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            alignment: openUpward ? Alignment.bottomLeft : Alignment.topLeft,
+            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+
+    if (mounted) {
+      setState(() {
+        if (_activeContextMenuThreadKey == conversation.threadKey) {
+          _activeContextMenuThreadKey = null;
+        }
+      });
+    }
+
+    if (!mounted || selectedAction == null) return;
+    switch (selectedAction) {
+      case _ConversationContextAction.pin:
+        await _setConversationPinned(
+          conversation,
+          pinned: !conversation.isPinned,
+        );
+      case _ConversationContextAction.rename:
+        _startEditingTitle(conversation);
+      case _ConversationContextAction.copy:
+        await _copyConversation(conversation);
+      case _ConversationContextAction.archive:
+        if (conversation.isArchived) {
+          await _unarchiveConversation(conversation);
+        } else {
+          await _archiveConversation(conversation);
+        }
+      case _ConversationContextAction.delete:
+        await _deleteConversation(conversation);
+    }
+  }
+
+  Widget _buildConversationMenuOption(
+    BuildContext dialogContext, {
+    required _ConversationContextAction action,
+    required IconData icon,
+    required String label,
+    bool isDestructive = false,
+  }) {
+    final palette = dialogContext.omniPalette;
+    final color = isDestructive ? const Color(0xFFE05252) : palette.textPrimary;
+    final iconColor = isDestructive
+        ? const Color(0xFFE05252)
+        : palette.textPrimary.withValues(alpha: 0.78);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('home-drawer-context-${action.name}'),
+        borderRadius: BorderRadius.circular(9.5),
+        onTap: () {
+          performOmniSelectionHaptic();
+          Navigator.of(dialogContext).pop(action);
+        },
+        splashColor: color.withValues(alpha: 0.08),
+        highlightColor: color.withValues(alpha: 0.04),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9.5),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: iconColor),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w500,
+                    color: color,
+                    height: 1.25,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ];
-    return actions;
+    );
   }
 
   String _resolveConversationTitle(ConversationModel conversation) {
