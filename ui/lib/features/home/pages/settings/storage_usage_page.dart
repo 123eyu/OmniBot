@@ -9,6 +9,7 @@ import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/settings_section_title.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 class StorageUsagePage extends StatefulWidget {
   const StorageUsagePage({super.key});
@@ -356,7 +357,7 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
               child: ListView(
                 padding: edgeToEdgeScrollPadding(
                   context,
-                  const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                  const EdgeInsets.fromLTRB(16, 12, 16, 32),
                 ),
                 children: [
                   SettingsSectionTitle(
@@ -367,9 +368,9 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
                       'Review total usage, cleanable space, and recent changes',
                     ),
                   ),
-                  _buildOverviewSection(summary),
+                  OmniSettingsCard(child: _buildOverviewSection(summary)),
                   if (summary.strategyPresets.isNotEmpty) ...[
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 22),
                     SettingsSectionTitle(
                       label: _t(context, '清理建议', 'Cleanup suggestions'),
                       subtitle: _t(
@@ -378,9 +379,9 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
                         'Run recommended cleanup actions based on current usage',
                       ),
                     ),
-                    _buildStrategySection(summary),
+                    OmniSettingsCard(child: _buildStrategySection(summary)),
                   ],
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 22),
                   SettingsSectionTitle(
                     label: _t(context, '分类占用', 'Usage by category'),
                     subtitle: _t(
@@ -389,7 +390,7 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
                       'Review occupied categories and clean removable data',
                     ),
                   ),
-                  _buildCategorySection(summary),
+                  OmniSettingsCard(child: _buildCategorySection(summary)),
                 ],
               ),
             ),

@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/services/workspace_memory_service.dart';
-import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/settings_section_title.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 class WorkspaceMemorySettingPage extends StatefulWidget {
   const WorkspaceMemorySettingPage({super.key});
@@ -211,44 +212,64 @@ class _WorkspaceMemorySettingPageState
           : ListView(
               padding: edgeToEdgeScrollPadding(
                 context,
-                const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                const EdgeInsets.fromLTRB(16, 12, 16, 32),
               ),
               children: [
                 SettingsSectionTitle(
                   label: context.l10n.workspaceMemoryCapability,
                 ),
-                _buildSwitchCard(
-                  title: context.l10n.workspaceEmbeddingRetrieval,
-                  subtitle: _embeddingConfig?.configured == true
-                      ? context.l10n.workspaceEmbeddingReady
-                      : context.l10n.workspaceEmbeddingNotReady,
-                  value: _embeddingEnabled,
-                  onChanged: _toggleEmbedding,
-                  footer: _embeddingConfig?.usesPlatform == true
-                      ? null
-                      : TextButton(
-                          onPressed: () {
-                            GoRouterManager.push('/home/scene_model_setting');
-                          },
-                          child: Text(context.l10n.workspaceGoToConfig),
-                        ),
-                ),
-                const Divider(height: 24),
-                _buildSwitchCard(
-                  title: context.l10n.workspaceNightlyRollup,
-                  subtitle:
-                      '${context.l10n.workspaceLastRun(_formatTime(_rollupStatus?.lastRunAtMillis))}\n${context.l10n.workspaceNextRun(_formatTime(_rollupStatus?.nextRunAtMillis))}',
-                  value: _rollupEnabled,
-                  onChanged: _toggleRollup,
-                  footer: Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed: _runRollupNow,
-                      child: Text(context.l10n.workspaceRollupNow),
+                OmniSettingsGroup(
+                  dividerIndent: 16,
+                  children: [
+                    _buildSwitchCard(
+                      icon: LucideIcons.sparkles,
+                      title: context.l10n.workspaceEmbeddingRetrieval,
+                      subtitle: _embeddingConfig?.configured == true
+                          ? context.l10n.workspaceEmbeddingReady
+                          : context.l10n.workspaceEmbeddingNotReady,
+                      value: _embeddingEnabled,
+                      onChanged: _toggleEmbedding,
+                      footer: _embeddingConfig?.usesPlatform == true
+                          ? null
+                          : TextButton(
+                              style: TextButton.styleFrom(
+                                foregroundColor: palette.accentPrimary,
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(0, 30),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              onPressed: () {
+                                GoRouterManager.push(
+                                  '/home/scene_model_setting',
+                                );
+                              },
+                              child: Text(context.l10n.workspaceGoToConfig),
+                            ),
                     ),
-                  ),
+                    _buildSwitchCard(
+                      icon: LucideIcons.moonStar,
+                      title: context.l10n.workspaceNightlyRollup,
+                      subtitle:
+                          '${context.l10n.workspaceLastRun(_formatTime(_rollupStatus?.lastRunAtMillis))}\n${context.l10n.workspaceNextRun(_formatTime(_rollupStatus?.nextRunAtMillis))}',
+                      value: _rollupEnabled,
+                      onChanged: _toggleRollup,
+                      footer: Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            foregroundColor: palette.accentPrimary,
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(0, 30),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: _runRollupNow,
+                          child: Text(context.l10n.workspaceRollupNow),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 22),
                 SettingsSectionTitle(
                   label: context.l10n.workspaceSettingsAndMemory,
                 ),
@@ -258,14 +279,14 @@ class _WorkspaceMemorySettingPageState
                   saving: _savingSoul,
                   onSave: _saveSoul,
                 ),
-                const Divider(height: 24),
+                const SizedBox(height: 14),
                 _buildEditorCard(
                   title: context.l10n.chatPromptSetting,
                   controller: _chatController,
                   saving: _savingChat,
                   onSave: _saveChatPrompt,
                 ),
-                const Divider(height: 24),
+                const SizedBox(height: 14),
                 _buildEditorCard(
                   title: context.l10n.workspaceMemoryMd,
                   controller: _memoryController,
@@ -278,6 +299,7 @@ class _WorkspaceMemorySettingPageState
   }
 
   Widget _buildSwitchCard({
+    required IconData icon,
     required String title,
     required String subtitle,
     required bool value,
@@ -286,38 +308,49 @@ class _WorkspaceMemorySettingPageState
   }) {
     final palette = context.omniPalette;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Icon(
+                icon,
+                size: 18,
+                color: palette.textPrimary.withValues(alpha: 0.78),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   title,
                   style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: context.isDarkTheme
-                        ? palette.textPrimary
-                        : AppColors.text,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w500,
+                    color: palette.textPrimary,
                   ),
                 ),
               ),
-              Switch(value: value, onChanged: onChanged),
+              OmniSettingsSwitch(value: value, onToggle: onChanged),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 12,
-              color: context.isDarkTheme
-                  ? palette.textSecondary
-                  : AppColors.text70,
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.48,
+                    color: palette.textSecondary,
+                  ),
+                ),
+                if (footer != null) ...[const SizedBox(height: 6), footer],
+              ],
             ),
           ),
-          if (footer != null) ...[const SizedBox(height: 8), footer],
         ],
       ),
     );
@@ -330,40 +363,54 @@ class _WorkspaceMemorySettingPageState
     required Future<void> Function() onSave,
   }) {
     final palette = context.omniPalette;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+    return OmniSettingsCard(
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
             style: TextStyle(
-              fontSize: 15,
+              fontSize: 14.5,
               fontWeight: FontWeight.w600,
-              color: context.isDarkTheme ? palette.textPrimary : AppColors.text,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: controller,
-            maxLines: 12,
-            minLines: 8,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+              color: palette.textPrimary,
             ),
           ),
           const SizedBox(height: 10),
+          TextField(
+            controller: controller,
+            maxLines: 12,
+            minLines: 7,
+            style: TextStyle(
+              fontSize: 13.5,
+              height: 1.5,
+              color: palette.textPrimary,
+            ),
+            decoration: omniSettingsInputDecoration(context),
+          ),
+          const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton(
               onPressed: saving ? null : onSave,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: palette.accentPrimary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                minimumSize: const Size(84, 38),
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
               child: saving
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : Text(context.trLegacy('保存')),
             ),

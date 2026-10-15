@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_switch/flutter_switch.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 import '../onboarding_l10n.dart';
 import '../onboarding_permission_controller.dart';
@@ -385,24 +385,9 @@ class _NotificationRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => controller.setNotificationEnabled(
-                  !controller.notificationEnabled,
-                ),
-                child: AbsorbPointer(
-                  child: FlutterSwitch(
-                    width: 32,
-                    height: 18.67,
-                    toggleSize: 11.3,
-                    padding: 3,
-                    activeColor: palette.accentPrimary,
-                    inactiveColor: palette.borderStrong,
-                    borderRadius: 28.75,
-                    value: controller.notificationEnabled,
-                    onToggle: controller.setNotificationEnabled,
-                  ),
-                ),
+              OmniSettingsSwitch(
+                value: controller.notificationEnabled,
+                onToggle: controller.setNotificationEnabled,
               ),
             ],
           ),

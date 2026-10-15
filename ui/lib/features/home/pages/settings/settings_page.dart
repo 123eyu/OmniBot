@@ -2,18 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_switch/flutter_switch.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/services/mcp_server_service.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/services/workspace_memory_service.dart';
-import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/settings_detail_sheet.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -150,15 +149,35 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (sheetContext) {
         final sheetPalette = sheetContext.omniPalette;
         final labelStyle = TextStyle(
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: FontWeight.w500,
-          color: sheetPalette.textSecondary,
+          color: sheetPalette.textTertiary,
         );
         final valueStyle = TextStyle(
           fontSize: 13,
           color: sheetPalette.textPrimary,
+          height: 1.4,
         );
         final actionStyle = settingsDetailSheetActionStyle(sheetContext);
+
+        Widget buildInfoBox(String label, String value) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: sheetPalette.surfaceSecondary,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: labelStyle),
+                const SizedBox(height: 4),
+                SelectableText(value, style: valueStyle),
+              ],
+            ),
+          );
+        }
 
         return SettingsDetailSheet(
           key: const ValueKey('local-service-sheet'),
@@ -167,13 +186,11 @@ class _SettingsPageState extends State<SettingsPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.settingsMcpAddress, style: labelStyle),
-              SelectableText(info.endpoint, style: valueStyle),
+              buildInfoBox(l10n.settingsMcpAddress, info.endpoint),
               const SizedBox(height: 8),
-              Text(l10n.settingsMcpToken, style: labelStyle),
-              SelectableText(
+              buildInfoBox(
+                l10n.settingsMcpToken,
                 info.token.isEmpty ? l10n.settingsNotGenerated : info.token,
-                style: valueStyle,
               ),
             ],
           ),
@@ -244,10 +261,10 @@ class _SettingsPageState extends State<SettingsPage> {
         child: ListView.separated(
           padding: edgeToEdgeScrollPadding(
             context,
-            const EdgeInsets.fromLTRB(18, 10, 18, 28),
+            const EdgeInsets.fromLTRB(16, 12, 16, 32),
           ),
           itemCount: sections.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 24),
+          separatorBuilder: (_, __) => const SizedBox(height: 22),
           itemBuilder: (context, index) {
             return _buildSettingsSection(sections[index]);
           },
@@ -327,7 +344,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           _SettingItem(
             icon: LucideIcons.squareTerminal,
-            iconColor: AppColors.buttonPrimary,
             title: context.l10n.settingsAlpineTitle,
             subtitle: context.l10n.settingsAlpineSubtitle,
             onTap: () {
@@ -338,7 +354,7 @@ class _SettingsPageState extends State<SettingsPage> {
             icon: LucideIcons.monitorSmartphone,
             title: context.l10n.settingsLocalServiceTitle,
             subtitle: context.l10n.settingsLocalServiceSubtitle,
-            trailing: _buildSwitchTrailing(
+            trailing: OmniSettingsSwitch(
               value: _mcpEnabled,
               enabled: !_mcpBusy,
               onToggle: (val) async {
@@ -410,152 +426,18 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildSettingsSection(_SettingSection section) {
-    final palette = context.omniPalette;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return OmniSettingsGroup(
+      title: section.label,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
-          child: Text(
-            context.trLegacy(section.label),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.6,
-              color: palette.textTertiary,
-              fontFamily: 'PingFang SC',
-            ),
+        for (final item in section.items)
+          OmniSettingsTile(
+            icon: item.icon,
+            title: item.title,
+            subtitle: item.subtitle,
+            trailing: item.trailing,
+            onTap: item.onTap,
           ),
-        ),
-        Column(
-          children: List.generate(section.items.length, (index) {
-            final isLast = index == section.items.length - 1;
-            return Column(
-              children: [
-                _buildSettingTile(section.items[index], isLast: isLast),
-                if (!isLast)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 30),
-                    child: Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: palette.borderSubtle.withValues(
-                        alpha: context.isDarkTheme ? 0.5 : 0.78,
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          }),
-        ),
       ],
-    );
-  }
-
-  Widget _buildSettingTile(_SettingItem item, {required bool isLast}) {
-    final palette = context.omniPalette;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: item.onTap,
-        borderRadius: BorderRadius.circular(14),
-        splashColor: palette.accentPrimary.withValues(alpha: 0.08),
-        highlightColor: Colors.transparent,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(4, 14, 2, isLast ? 14 : 13),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _buildLeadingIcon(item),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.trLegacy(item.title),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: palette.textPrimary,
-                        height: 1.5,
-                        fontFamily: 'PingFang SC',
-                      ),
-                    ),
-                    if (item.subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        context.trLegacy(item.subtitle!),
-                        style: TextStyle(
-                          color: palette.textSecondary,
-                          fontSize: 11,
-                          fontFamily: 'PingFang SC',
-                          fontWeight: FontWeight.w400,
-                          height: 1.55,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (item.trailing != null)
-                item.trailing!
-              else if (item.onTap != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: Icon(
-                    LucideIcons.chevronRight,
-                    size: 18,
-                    color: palette.textTertiary,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLeadingIcon(_SettingItem item) {
-    final palette = context.omniPalette;
-    final iconColor = item.iconColor ?? palette.textPrimary;
-    return SizedBox(
-      width: 18,
-      height: 18,
-      child: item.icon != null
-          ? Icon(item.icon, size: 18, color: iconColor)
-          : const SizedBox.shrink(),
-    );
-  }
-
-  Widget _buildSwitchTrailing({
-    required bool value,
-    required ValueChanged<bool> onToggle,
-    bool enabled = true,
-  }) {
-    final palette = context.omniPalette;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: enabled ? () => onToggle(!value) : null,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 12),
-        child: AbsorbPointer(
-          child: Opacity(
-            opacity: enabled ? 1 : 0.5,
-            child: FlutterSwitch(
-              width: 32,
-              height: 18.67,
-              toggleSize: 11.3,
-              padding: 3,
-              activeColor: palette.accentPrimary,
-              inactiveColor: palette.borderStrong,
-              borderRadius: 28.75,
-              value: value,
-              onToggle: onToggle,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -569,7 +451,6 @@ class _SettingSection {
 
 class _SettingItem {
   final IconData? icon;
-  final Color? iconColor;
   final String title;
   final String? subtitle;
   final Widget? trailing;
@@ -577,7 +458,6 @@ class _SettingItem {
 
   const _SettingItem({
     this.icon,
-    this.iconColor,
     required this.title,
     this.subtitle,
     this.trailing,

@@ -29,25 +29,24 @@ class HomeDrawerSearchField extends StatelessWidget {
     final palette = context.omniPalette;
     final hasFocus = focusNode.hasFocus;
     final iconColor = hasFocus ? palette.accentPrimary : palette.textSecondary;
-    final backgroundColor = context.isDarkTheme
+    final isDark = context.isDarkTheme;
+    final backgroundColor = isDark
         ? hasFocus
-              ? Color.lerp(
-                  palette.surfaceSecondary,
-                  palette.surfaceElevated,
-                  0.9,
-                )!
-              : palette.surfaceSecondary
-        : hasFocus
-        ? Colors.white
-        : palette.previewFallback;
+              ? palette.surfaceElevated
+              : palette.surfacePrimary
+        : Colors.white;
+    final borderColor = hasFocus
+        ? palette.accentPrimary.withValues(alpha: 0.65)
+        : palette.borderSubtle.withValues(alpha: isDark ? 0.65 : 0.85);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
-      height: 36,
+      height: 38,
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor, width: hasFocus ? 1.1 : 0.75),
       ),
       child: TextField(
         controller: controller,
@@ -78,14 +77,14 @@ class HomeDrawerSearchField extends StatelessWidget {
           focusedErrorBorder: InputBorder.none,
           filled: false,
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 9),
+          contentPadding: const EdgeInsets.symmetric(vertical: 10),
           prefixIconConstraints: const BoxConstraints(
-            minWidth: 38,
-            minHeight: 36,
+            minWidth: 36,
+            minHeight: 38,
           ),
           suffixIconConstraints: const BoxConstraints(
             minWidth: 34,
-            minHeight: 36,
+            minHeight: 38,
           ),
           prefixIcon: Icon(Icons.search_rounded, size: 18, color: iconColor),
           suffixIcon: isSearching

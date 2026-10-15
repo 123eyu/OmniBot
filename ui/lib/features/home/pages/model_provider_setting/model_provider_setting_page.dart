@@ -16,6 +16,7 @@ import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
 import 'package:ui/widgets/settings_section_title.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 const double _kProviderSwitchPopupMaxHeight = 320;
 const double _kProviderTypePopupMinWidth = 200;
@@ -1758,7 +1759,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
   }
 
   Widget _buildCard({required Widget child}) {
-    return SizedBox(width: double.infinity, child: child);
+    return OmniSettingsCard(child: child);
   }
 
   InputDecoration _buildInputDecoration({
@@ -1766,7 +1767,8 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     String? hint,
     Widget? suffixIcon,
   }) {
-    return InputDecoration(
+    return omniSettingsInputDecoration(
+      context,
       labelText: label,
       hintText: hint,
       suffixIcon: suffixIcon,

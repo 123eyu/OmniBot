@@ -7,13 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/features/home/pages/chat/chat_page_models.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
-import 'package:ui/features/home/widgets/conversation_slidable.dart';
 import 'package:ui/features/home/widgets/home_drawer_search_field.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
@@ -33,9 +31,9 @@ import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/cache_util.dart';
-import 'package:ui/utils/popup_menu_anchor_position.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 part 'home_drawer_actions.dart';
 part 'home_drawer_conversation_list.dart';
@@ -132,15 +130,10 @@ class HomeDrawer extends ConsumerStatefulWidget {
 }
 
 class HomeDrawerState extends ConsumerState<HomeDrawer> {
-  static const double _conversationActionIconSize = 18;
   static const Duration _searchDebounceDuration = Duration(milliseconds: 220);
   static const Duration _sectionToggleDuration = Duration(milliseconds: 260);
   static const Duration _imagePreviewStripTransitionDuration = Duration(
     milliseconds: 180,
-  );
-  static const BorderRadius _drawerTrailingActionRadius = BorderRadius.only(
-    topRight: Radius.circular(4),
-    bottomRight: Radius.circular(4),
   );
   static bool _hasConversationSnapshotCache = false;
   static List<ConversationModel> _conversationSnapshotCache =
@@ -178,6 +171,7 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
   int _searchGeneration = 0;
   Timer? _searchDebounceTimer;
   String? _editingThreadKey;
+  String? _activeContextMenuThreadKey;
   List<ScheduledTask> _scheduledTasks = <ScheduledTask>[];
   // 分组结果缓存：_allConversations/_scheduledTasks 只会被整体替换（不会原地
   // 修改），因此按列表 identity 判断是否需要重算，避免每次 build 重复
@@ -419,7 +413,6 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
           children: [
             const SizedBox(height: 16),
             Expanded(child: _buildConversationSection()),
-            if (_webQuickActions.isNotEmpty) _buildWebQuickLaunchBar(),
             _buildFooterShortcutBar(),
             // Aligns this row's bottom edge with the chat composer's bottom
             // edge (both sit this far above the shared SafeArea bottom).

@@ -17,13 +17,13 @@ import 'package:ui/services/app_background_service.dart';
 import 'package:ui/services/overlay_service.dart';
 import 'package:ui/services/pet_package_service.dart';
 import 'package:ui/services/storage_service.dart';
-import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/app_background_widgets.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/omni_segmented_slider.dart';
 import 'package:ui/widgets/settings_section_title.dart';
+import 'package:ui/widgets/settings_ui.dart';
 import 'package:ui/widgets/theme_mode_setting_card.dart';
 
 const bool _showPetAppearanceSettings = true;
@@ -550,6 +550,38 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
     );
   }
 
+  Widget _buildChoicePill({
+    required Key key,
+    required String label,
+    required bool selected,
+    required VoidCallback onSelected,
+  }) {
+    final palette = context.omniPalette;
+    return ChoiceChip(
+      key: key,
+      label: Text(label),
+      selected: selected,
+      showCheckmark: false,
+      backgroundColor: palette.surfaceSecondary,
+      selectedColor: palette.accentPrimary.withValues(
+        alpha: context.isDarkTheme ? 0.22 : 0.12,
+      ),
+      side: BorderSide(
+        color: selected
+            ? palette.accentPrimary.withValues(alpha: 0.6)
+            : palette.borderSubtle.withValues(alpha: 0.7),
+        width: 0.75,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      labelStyle: TextStyle(
+        fontSize: 12.5,
+        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+        color: selected ? palette.accentPrimary : palette.textSecondary,
+      ),
+      onSelected: (_) => onSelected(),
+    );
+  }
+
   Widget _buildPreviewCard() {
     return _buildCard(
       child: Column(
@@ -562,11 +594,11 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
               final label = kind == BackgroundPreviewKind.chat
                   ? context.l10n.appearancePreviewChat
                   : context.l10n.appearancePreviewWorkspace;
-              return ChoiceChip(
+              return _buildChoicePill(
                 key: ValueKey('background-preview-kind-${kind.name}'),
-                label: Text(label),
+                label: label,
                 selected: selected,
-                onSelected: (_) {
+                onSelected: () {
                   setState(() => _previewKind = kind);
                 },
               );
@@ -649,44 +681,70 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SwitchListTile.adaptive(
+          InkWell(
             key: const ValueKey('appearance-background-enable-switch'),
-            contentPadding: EdgeInsets.zero,
-            secondary: _buildGlobalSettingLeadingIcon(icon: LucideIcons.image),
-            title: Text(
-              context.l10n.appearanceEnableBackground,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: palette.textPrimary,
+            borderRadius: BorderRadius.circular(10),
+            onTap: () {
+              _applyDraftConfig(
+                _draftConfig.copyWith(enabled: !_draftConfig.enabled),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  _buildGlobalSettingLeadingIcon(icon: LucideIcons.image),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.l10n.appearanceEnableBackground,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: palette.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          context.l10n.appearanceEnableBackgroundSubtitle,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: palette.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  OmniSettingsSwitch(
+                    value: _draftConfig.enabled,
+                    onToggle: (value) {
+                      _applyDraftConfig(_draftConfig.copyWith(enabled: value));
+                    },
+                  ),
+                ],
               ),
             ),
-            subtitle: Text(
-              context.l10n.appearanceEnableBackgroundSubtitle,
-              style: TextStyle(fontSize: 12, color: palette.textSecondary),
-            ),
-            value: _draftConfig.enabled,
-            onChanged: (value) {
-              _applyDraftConfig(_draftConfig.copyWith(enabled: value));
-            },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              ChoiceChip(
+              _buildChoicePill(
                 key: const ValueKey('background-source-local'),
-                label: Text(context.l10n.appearanceSourceLocal),
+                label: context.l10n.appearanceSourceLocal,
                 selected: sourceType == AppBackgroundSourceType.local,
-                onSelected: (_) =>
-                    _setSourceType(AppBackgroundSourceType.local),
+                onSelected: () => _setSourceType(AppBackgroundSourceType.local),
               ),
-              ChoiceChip(
+              _buildChoicePill(
                 key: const ValueKey('background-source-remote'),
-                label: Text(context.l10n.appearanceSourceRemote),
+                label: context.l10n.appearanceSourceRemote,
                 selected: sourceType == AppBackgroundSourceType.remote,
-                onSelected: (_) =>
+                onSelected: () =>
                     _setSourceType(AppBackgroundSourceType.remote),
               ),
             ],
@@ -705,7 +763,16 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
             OutlinedButton.icon(
               key: const ValueKey('background-pick-local-image'),
               onPressed: _pickLocalImage,
-              icon: const Icon(LucideIcons.images),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: palette.accentPrimary,
+                side: BorderSide(
+                  color: palette.accentPrimary.withValues(alpha: 0.45),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              icon: const Icon(LucideIcons.images, size: 17),
               label: Text(
                 localPath.isEmpty
                     ? context.l10n.appearancePickImage
@@ -718,10 +785,11 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
             TextField(
               key: const ValueKey('background-remote-url-field'),
               controller: _remoteUrlController,
-              decoration: InputDecoration(
+              style: TextStyle(fontSize: 13.5, color: palette.textPrimary),
+              decoration: omniSettingsInputDecoration(
+                context,
                 labelText: context.l10n.appearanceRemoteImageUrl,
                 hintText: context.l10n.appearanceRemoteImageUrlHint,
-                border: OutlineInputBorder(),
                 errorText: _remoteUrlErrorText,
               ),
             ),
@@ -2115,84 +2183,83 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
     );
     return DecoratedBox(
       key: const ValueKey('appearance-pet-card'),
-      decoration: BoxDecoration(
-        color: palette.surfacePrimary,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: palette.borderSubtle),
-      ),
-      child: Column(
-        children: [
-          InkWell(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-            onTap: () {
-              final willExpand = !_petExpanded;
-              setState(() => _petExpanded = willExpand);
-              if (willExpand) {
-                unawaited(_loadPetSettings());
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.trLegacy('宠物'),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: palette.textPrimary,
+      decoration: omniSettingsSurfaceDecoration(context),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            InkWell(
+              onTap: () {
+                final willExpand = !_petExpanded;
+                setState(() => _petExpanded = willExpand);
+                if (willExpand) {
+                  unawaited(_loadPetSettings());
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.trLegacy('宠物'),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: palette.textPrimary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${context.trLegacy('已选')}：${selectedOption.name}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: palette.textSecondary,
+                          const SizedBox(height: 3),
+                          Text(
+                            '${context.trLegacy('已选')}：${selectedOption.name}',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: palette.textSecondary,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Tooltip(
-                    message: context.trLegacy('刷新'),
-                    child: IconButton(
-                      onPressed: _petBusy ? null : _refreshPetOptions,
-                      icon: const Icon(LucideIcons.refreshCw),
-                      color: palette.textSecondary,
+                    const SizedBox(width: 8),
+                    Tooltip(
+                      message: context.trLegacy('刷新'),
+                      child: IconButton(
+                        onPressed: _petBusy ? null : _refreshPetOptions,
+                        icon: const Icon(LucideIcons.refreshCw, size: 18),
+                        color: palette.textSecondary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    _petExpanded
-                        ? LucideIcons.chevronUp
-                        : LucideIcons.chevronDown,
-                    color: palette.textSecondary,
-                  ),
-                ],
+                    const SizedBox(width: 2),
+                    Icon(
+                      _petExpanded
+                          ? LucideIcons.chevronUp
+                          : LucideIcons.chevronDown,
+                      size: 18,
+                      color: palette.textTertiary,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox.shrink(),
-            secondChild: Column(
-              children: [
-                Divider(height: 1, color: palette.borderSubtle),
-                _buildPetImportTile(),
-                ..._petOptions.map(_buildPetOptionTile),
-              ],
+            AnimatedCrossFade(
+              firstChild: const SizedBox.shrink(),
+              secondChild: Column(
+                children: [
+                  Divider(height: 1, color: palette.borderSubtle),
+                  _buildPetImportTile(),
+                  ..._petOptions.map(_buildPetOptionTile),
+                ],
+              ),
+              crossFadeState: _petExpanded
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              duration: const Duration(milliseconds: 180),
             ),
-            crossFadeState: _petExpanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 180),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2355,7 +2422,7 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
   }) {
     final palette = context.omniPalette;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2365,14 +2432,25 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
                 context.trLegacy(label),
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
                   color: palette.textPrimary,
                 ),
               ),
               const Spacer(),
-              Text(
-                valueFormatter?.call(value) ?? value.toStringAsFixed(2),
-                style: TextStyle(fontSize: 12, color: palette.textSecondary),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: palette.surfaceSecondary,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  valueFormatter?.call(value) ?? value.toStringAsFixed(2),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                    color: palette.textSecondary,
+                  ),
+                ),
               ),
             ],
           ),
@@ -2381,7 +2459,16 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
             context.trLegacy(subtitle),
             style: TextStyle(fontSize: 12, color: palette.textSecondary),
           ),
-          Slider(value: value, min: min, max: max, onChanged: onChanged),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: palette.accentPrimary,
+              inactiveTrackColor: palette.borderSubtle,
+              thumbColor: palette.accentPrimary,
+              overlayColor: palette.accentPrimary.withValues(alpha: 0.12),
+              trackHeight: 3,
+            ),
+            child: Slider(value: value, min: min, max: max, onChanged: onChanged),
+          ),
         ],
       ),
     );
@@ -2399,7 +2486,7 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
           context.l10n.appearanceTextColorTitle,
           style: TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w500,
             color: palette.textPrimary,
           ),
         ),
@@ -2412,14 +2499,15 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
         Wrap(
           spacing: 10,
           runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            ChoiceChip(
+            _buildChoicePill(
               key: const ValueKey('appearance-text-color-auto'),
-              label: Text(context.l10n.appearanceTextColorAuto),
+              label: context.l10n.appearanceTextColorAuto,
               selected:
                   _draftConfig.chatTextColorMode ==
                   AppBackgroundTextColorMode.auto,
-              onSelected: (_) {
+              onSelected: () {
                 _textColorController.text = '';
                 _applyDraftConfig(
                   _draftConfig.copyWith(
@@ -2448,26 +2536,17 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
                 borderRadius: BorderRadius.circular(999),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
-                  width: 34,
-                  height: 34,
+                  width: 30,
+                  height: 30,
                   decoration: BoxDecoration(
                     color: preset.color,
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: selected
-                          ? (context.isDarkTheme
-                                ? palette.accentPrimary
-                                : AppColors.primaryBlue)
+                          ? palette.accentPrimary
                           : palette.borderStrong,
-                      width: selected ? 3 : 1.5,
+                      width: selected ? 2.5 : 1.2,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
                 ),
               );
@@ -2478,10 +2557,11 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
         TextField(
           key: const ValueKey('appearance-text-color-field'),
           controller: _textColorController,
-          decoration: InputDecoration(
+          style: TextStyle(fontSize: 13.5, color: palette.textPrimary),
+          decoration: omniSettingsInputDecoration(
+            context,
             labelText: context.l10n.appearanceCustomColorLabel,
             hintText: context.l10n.appearanceCustomColorHint,
-            border: const OutlineInputBorder(),
             errorText: _textColorErrorText,
           ),
         ),
@@ -2490,7 +2570,7 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
   }
 
   Widget _buildCard({required Widget child}) {
-    return SizedBox(width: double.infinity, child: child);
+    return OmniSettingsCard(child: child);
   }
 
   void _scheduleDraftVisualProfileRefresh() {

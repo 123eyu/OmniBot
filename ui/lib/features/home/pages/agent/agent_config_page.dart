@@ -11,7 +11,9 @@ import 'package:ui/services/scene_model_config_service.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/settings_detail_sheet.dart';
 import 'package:ui/widgets/settings_section_title.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 class AgentConfigPage extends StatefulWidget {
   const AgentConfigPage({super.key, required this.agentId});
@@ -375,11 +377,11 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
   Future<void> _deleteCustomAgent() async {
     final agent = _agent;
     if (agent == null || agent.builtIn || _saving) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showSettingsDetailSheet<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(_text('删除 Agent？', 'Delete Agent?')),
-        content: Text(
+      builder: (sheetContext) => SettingsDetailSheet(
+        title: _text('删除 Agent？', 'Delete Agent?'),
+        body: Text(
           _text(
             '将删除“${agent.name}”的配置，不会卸载对应命令。',
             'This removes “${agent.name}” without uninstalling its command.',
@@ -387,11 +389,16 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
+            style: settingsDetailSheetActionStyle(sheetContext),
+            onPressed: () => Navigator.of(sheetContext).pop(false),
             child: Text(_text('取消', 'Cancel')),
           ),
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: settingsDetailSheetActionStyle(
+              sheetContext,
+              foregroundColor: const Color(0xFFE05252),
+            ),
+            onPressed: () => Navigator.of(sheetContext).pop(true),
             child: Text(_text('删除', 'Delete')),
           ),
         ],
@@ -420,7 +427,6 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    final card = context.isDarkTheme ? palette.surfacePrimary : Colors.white;
     return PopScope(
       // Built-in Agent configuration does not mutate the catalog entry, so it
       // does not need to intercept system back just to return `_changed`.
@@ -456,23 +462,16 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
               : ListView(
                   padding: edgeToEdgeScrollPadding(
                     context,
-                    const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                    const EdgeInsets.fromLTRB(16, 12, 16, 28),
                   ),
                   children: [
                     SettingsSectionTitle(
                       label: _pageTitle,
                       subtitle: _pageSubtitle,
                     ),
-                    Material(
-                      color: card,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: palette.borderSubtle),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: _buildEditor(),
-                      ),
+                    OmniSettingsCard(
+                      padding: const EdgeInsets.all(16),
+                      child: _buildEditor(),
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 12),
@@ -781,11 +780,24 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
             hintText: 'KEY=VALUE',
           ),
         ),
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          title: Text(_text('启用 Agent', 'Enable Agent')),
-          value: _enabled,
-          onChanged: (value) => setState(() => _enabled = value),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _text('启用 Agent', 'Enable Agent'),
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w500,
+                  color: context.omniPalette.textPrimary,
+                ),
+              ),
+            ),
+            OmniSettingsSwitch(
+              value: _enabled,
+              onToggle: (value) => setState(() => _enabled = value),
+            ),
+          ],
         ),
       ],
     );

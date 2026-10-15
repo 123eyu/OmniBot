@@ -10,6 +10,7 @@ import 'package:ui/widgets/app_update_dialog.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/settings_detail_sheet.dart';
 import 'package:ui/widgets/settings_section_title.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 String formatWeeklyQuotaResetCountdown(DateTime now, {required bool english}) {
   final startOfToday = DateTime(now.year, now.month, now.day);
@@ -1059,24 +1060,26 @@ class _AccountPageState extends State<AccountPage> {
       child: ListView(
         padding: edgeToEdgeScrollPadding(
           context,
-          const EdgeInsets.fromLTRB(18, 10, 18, 28),
+          const EdgeInsets.fromLTRB(16, 12, 16, 28),
         ),
         children: [
           SettingsSectionTitle(label: _text('账号', 'Account')),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+          OmniSettingsCard(
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   LucideIcons.cloudOff,
-                  size: 28,
+                  size: 26,
                   color: context.omniPalette.textSecondary,
                 ),
                 const SizedBox(height: 14),
                 Text(
                   _text('账号服务尚未配置', 'Account service is not configured'),
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -1084,7 +1087,10 @@ class _AccountPageState extends State<AccountPage> {
                     '当前安装包没有设置 OMNIBOT_BASE_URL。配置品牌域名并重新构建后即可登录。',
                     'This build has no OMNIBOT_BASE_URL. Configure the public service domain and rebuild.',
                   ),
-                  style: TextStyle(color: context.omniPalette.textSecondary),
+                  style: TextStyle(
+                    color: context.omniPalette.textSecondary,
+                    height: 1.5,
+                  ),
                 ),
               ],
             ),
@@ -1101,18 +1107,18 @@ class _AccountPageState extends State<AccountPage> {
       child: ListView(
         padding: edgeToEdgeScrollPadding(
           context,
-          const EdgeInsets.fromLTRB(18, 10, 18, 28),
+          const EdgeInsets.fromLTRB(16, 12, 16, 28),
         ),
         children: [
           SettingsSectionTitle(label: _text('账号', 'Account')),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+          OmniSettingsCard(
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   LucideIcons.lockKeyhole,
-                  size: 28,
+                  size: 26,
                   color: context.omniPalette.textSecondary,
                 ),
                 const SizedBox(height: 14),
@@ -1121,7 +1127,9 @@ class _AccountPageState extends State<AccountPage> {
                     '登录凭证暂时无法读取',
                     'Sign-in credentials are temporarily unavailable',
                   ),
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -1129,9 +1137,12 @@ class _AccountPageState extends State<AccountPage> {
                     '系统安全存储正在恢复，当前不会把你当作已退出登录。请稍后重试，必要时重启应用。',
                     'The secure storage is recovering. You are not being signed out. Try again shortly, or restart the app if needed.',
                   ),
-                  style: TextStyle(color: context.omniPalette.textSecondary),
+                  style: TextStyle(
+                    color: context.omniPalette.textSecondary,
+                    height: 1.5,
+                  ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
                 FilledButton.icon(
                   key: const ValueKey('account-credential-storage-retry'),
                   onPressed: _loading ? null : _loadAccount,
@@ -1170,7 +1181,7 @@ class _AccountPageState extends State<AccountPage> {
         key: const ValueKey('account-cloud-service-version-gate'),
         padding: edgeToEdgeScrollPadding(
           context,
-          const EdgeInsets.fromLTRB(18, 10, 18, 28),
+          const EdgeInsets.fromLTRB(16, 12, 16, 28),
         ),
         children: [
           SettingsSectionTitle(
@@ -1178,14 +1189,14 @@ class _AccountPageState extends State<AccountPage> {
                 ? _text('需要升级', 'Update required')
                 : _text('需要检查更新', 'Update check required'),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+          OmniSettingsCard(
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   LucideIcons.cloudOff,
-                  size: 28,
+                  size: 26,
                   color: context.omniPalette.textSecondary,
                 ),
                 const SizedBox(height: 14),
@@ -1206,9 +1217,12 @@ class _AccountPageState extends State<AccountPage> {
                     '账号注册、登录与官方 AI 已停用；返回后仍可继续使用自己的 API Key（BYOK）。',
                     'Account sign-up, sign-in, and official AI are disabled. You can go back and keep using your own API key (BYOK).',
                   ),
-                  style: TextStyle(color: context.omniPalette.textSecondary),
+                  style: TextStyle(
+                    color: context.omniPalette.textSecondary,
+                    height: 1.5,
+                  ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
                 FilledButton.icon(
                   key: const ValueKey('account-required-update-action'),
                   onPressed: _busy ? null : _checkRequiredUpdate,
@@ -1542,18 +1556,21 @@ class _AccountPageState extends State<AccountPage> {
     final isDark = context.isDarkTheme;
     return Container(
       key: const Key('account-auth-mode-selector'),
-      height: 40,
+      height: 38,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: isDark ? palette.segmentTrack : palette.surfacePrimary,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: palette.borderSubtle),
+        color: palette.segmentTrack,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: palette.borderSubtle.withValues(alpha: isDark ? 0.55 : 0.7),
+          width: 0.65,
+        ),
       ),
       child: Stack(
         children: [
           AnimatedAlign(
             key: const Key('account-auth-mode-thumb-align'),
-            duration: const Duration(milliseconds: 280),
+            duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             alignment: _registerMode
                 ? Alignment.centerRight
@@ -1564,41 +1581,23 @@ class _AccountPageState extends State<AccountPage> {
                 key: const Key('account-auth-mode-thumb'),
                 margin: const EdgeInsets.symmetric(horizontal: 1),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  gradient: isDark
-                      ? LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color.lerp(
-                              palette.surfaceElevated,
-                              palette.accentPrimary,
-                              0.18,
-                            )!,
-                            Color.lerp(
-                              palette.surfaceSecondary,
-                              palette.accentPrimary,
-                              0.30,
-                            )!,
-                          ],
-                        )
-                      : const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFF2DA5F0), Color(0xFF1930D9)],
-                        ),
-                  boxShadow: isDark
-                      ? null
-                      : const [
-                          BoxShadow(
-                            color: Color(0x1F1930D9),
-                            blurRadius: 10,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
-                  border: isDark
-                      ? Border.all(color: palette.borderSubtle)
-                      : null,
+                  color: palette.segmentThumb,
+                  borderRadius: BorderRadius.circular(9.5),
+                  border: Border.all(
+                    color: palette.borderSubtle.withValues(
+                      alpha: isDark ? 0.45 : 0.55,
+                    ),
+                    width: 0.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: palette.shadowColor.withValues(
+                        alpha: isDark ? 0.16 : 0.04,
+                      ),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1626,22 +1625,23 @@ class _AccountPageState extends State<AccountPage> {
             register ? 'account-auth-mode-register' : 'account-auth-mode-login',
           ),
           behavior: HitTestBehavior.opaque,
-          onTap: () => _selectAuthMode(register),
+          onTap: () {
+            if (_registerMode != register) {
+              performOmniSelectionHaptic();
+            }
+            _selectAuthMode(register);
+          },
           child: Center(
             child: AnimatedScale(
-              duration: const Duration(milliseconds: 220),
+              duration: const Duration(milliseconds: 180),
               curve: Curves.easeOutCubic,
               scale: selected ? 1 : 0.97,
               child: AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 220),
+                duration: const Duration(milliseconds: 180),
                 curve: Curves.easeOutCubic,
                 style: TextStyle(
-                  color: selected
-                      ? (context.isDarkTheme
-                            ? palette.textPrimary
-                            : Colors.white)
-                      : palette.textSecondary,
-                  fontSize: 13,
+                  color: selected ? palette.textPrimary : palette.textSecondary,
+                  fontSize: 13.5,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 ),
                 child: Text(label),
@@ -1677,62 +1677,70 @@ class _AccountPageState extends State<AccountPage> {
         child: ListView(
           padding: edgeToEdgeScrollPadding(
             context,
-            const EdgeInsets.fromLTRB(18, 10, 18, 28),
+            const EdgeInsets.fromLTRB(16, 12, 16, 28),
           ),
           children: [
-            SettingsSectionTitle(label: _text('账号', 'Account')),
-            _summaryRow(
-              icon: LucideIcons.userRound,
-              title: overview.user.email,
-              subtitle: _text(
-                '已验证 · 当前设备已登录',
-                'Verified · signed in on this device',
-              ),
+            OmniSettingsGroup(
+              title: _text('账号', 'Account'),
+              translateTitle: false,
+              dividerIndent: 46,
+              children: [
+                _summaryRow(
+                  icon: LucideIcons.userRound,
+                  title: overview.user.email,
+                  subtitle: _text(
+                    '已验证 · 当前设备已登录',
+                    'Verified · signed in on this device',
+                  ),
+                ),
+                _summaryRow(
+                  icon: LucideIcons.coins,
+                  title: _text('平台额度', 'Platform quota'),
+                  subtitle: quotaSubtitle,
+                  trailing: settings.platformAvailable
+                      ? _platformQuotaValue(platformQuota)
+                      : null,
+                ),
+              ],
             ),
-            _sectionDivider(),
-            _summaryRow(
-              icon: LucideIcons.coins,
-              title: _text('平台额度', 'Platform quota'),
-              subtitle: quotaSubtitle,
-              trailing: settings.platformAvailable
-                  ? _platformQuotaValue(platformQuota)
-                  : null,
-            ),
-            const SizedBox(height: 24),
-            SettingsSectionTitle(label: _text('账号管理', 'Account management')),
-            _accountAction(
-              key: const ValueKey('account-usage-action'),
-              icon: LucideIcons.chartNoAxesColumnIncreasing,
-              title: _text('最近平台用量', 'Recent platform usage'),
-              onTap: _showPlatformUsage,
-            ),
-            _sectionDivider(),
-            _accountAction(
-              key: const ValueKey('account-sessions-action'),
-              icon: LucideIcons.smartphone,
-              title: _text('登录设备', 'Signed-in devices'),
-              onTap: _showSessions,
-            ),
-            _sectionDivider(),
-            _accountAction(
-              key: const ValueKey('change-password-action'),
-              icon: LucideIcons.shieldCheck,
-              title: _text('修改密码', 'Change password'),
-              onTap: _showChangePasswordDialog,
-            ),
-            _sectionDivider(),
-            _accountAction(
-              key: const ValueKey('delete-account-action'),
-              icon: LucideIcons.trash2,
-              title: _text('删除账号', 'Delete account'),
-              destructive: true,
-              onTap: _showDeleteAccountFlow,
+            const SizedBox(height: 22),
+            OmniSettingsGroup(
+              title: _text('账号管理', 'Account management'),
+              translateTitle: false,
+              dividerIndent: 46,
+              children: [
+                _accountAction(
+                  key: const ValueKey('account-usage-action'),
+                  icon: LucideIcons.chartNoAxesColumnIncreasing,
+                  title: _text('最近平台用量', 'Recent platform usage'),
+                  onTap: _showPlatformUsage,
+                ),
+                _accountAction(
+                  key: const ValueKey('account-sessions-action'),
+                  icon: LucideIcons.smartphone,
+                  title: _text('登录设备', 'Signed-in devices'),
+                  onTap: _showSessions,
+                ),
+                _accountAction(
+                  key: const ValueKey('change-password-action'),
+                  icon: LucideIcons.shieldCheck,
+                  title: _text('修改密码', 'Change password'),
+                  onTap: _showChangePasswordDialog,
+                ),
+                _accountAction(
+                  key: const ValueKey('delete-account-action'),
+                  icon: LucideIcons.trash2,
+                  title: _text('删除账号', 'Delete account'),
+                  destructive: true,
+                  onTap: _showDeleteAccountFlow,
+                ),
+              ],
             ),
             if (_error != null) ...[
               const SizedBox(height: 14),
               _errorBanner(_error!),
             ],
-            const SizedBox(height: 24),
+            const SizedBox(height: 22),
             TextButton.icon(
               onPressed: _busy ? null : _logout,
               style: TextButton.styleFrom(
@@ -1821,12 +1829,16 @@ class _AccountPageState extends State<AccountPage> {
   }) {
     final palette = context.omniPalette;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 14, 2, 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, size: 20, color: palette.textPrimary),
-          const SizedBox(width: 10),
+          Icon(
+            icon,
+            size: 19,
+            color: palette.textPrimary.withValues(alpha: 0.78),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1834,23 +1846,21 @@ class _AccountPageState extends State<AccountPage> {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w500,
                     color: palette.textPrimary,
-                    height: 1.5,
-                    fontFamily: 'PingFang SC',
+                    height: 1.38,
                   ),
                 ),
                 if (subtitle != null && subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 2.5),
                   Text(
                     subtitle,
                     style: TextStyle(
                       color: palette.textSecondary,
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: FontWeight.w400,
-                      height: 1.55,
-                      fontFamily: 'PingFang SC',
+                      height: 1.45,
                     ),
                   ),
                 ],
@@ -1859,19 +1869,6 @@ class _AccountPageState extends State<AccountPage> {
           ),
           if (trailing != null) ...[const SizedBox(width: 12), trailing],
         ],
-      ),
-    );
-  }
-
-  Widget _sectionDivider({double left = 34}) {
-    return Padding(
-      padding: EdgeInsets.only(left: left),
-      child: Divider(
-        height: 1,
-        thickness: 1,
-        color: context.omniPalette.borderSubtle.withValues(
-          alpha: context.isDarkTheme ? 0.5 : 0.78,
-        ),
       ),
     );
   }
@@ -1887,33 +1884,35 @@ class _AccountPageState extends State<AccountPage> {
     final color = destructive
         ? Theme.of(context).colorScheme.error
         : palette.textPrimary;
+    final iconColor = destructive
+        ? Theme.of(context).colorScheme.error
+        : palette.textPrimary.withValues(alpha: 0.78);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         key: key,
         onTap: _busy ? null : onTap,
-        borderRadius: BorderRadius.circular(14),
-        splashColor: palette.accentPrimary.withValues(alpha: 0.08),
-        highlightColor: Colors.transparent,
+        splashColor: palette.accentPrimary.withValues(alpha: 0.06),
+        highlightColor: palette.accentPrimary.withValues(alpha: 0.03),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 14, 2, 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              Icon(icon, size: 20, color: color),
-              const SizedBox(width: 10),
+              Icon(icon, size: 19, color: iconColor),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   title,
                   style: TextStyle(
                     color: color,
-                    fontSize: 14,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
               Icon(
                 LucideIcons.chevronRight,
-                size: 18,
+                size: 16,
                 color: palette.textTertiary,
               ),
             ],

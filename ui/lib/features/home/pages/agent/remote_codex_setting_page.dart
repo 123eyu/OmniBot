@@ -11,6 +11,7 @@ import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/settings_section_title.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 class RemoteCodexSettingPage extends StatefulWidget {
   const RemoteCodexSettingPage({super.key});
@@ -297,18 +298,11 @@ class _RemoteCodexSettingPageState extends State<RemoteCodexSettingPage> {
       obscureText: obscure,
       keyboardType: keyboardType,
       textInputAction: TextInputAction.next,
-      style: TextStyle(color: palette.textPrimary, fontSize: 13),
-      decoration: InputDecoration(
+      style: TextStyle(color: palette.textPrimary, fontSize: 13.5),
+      decoration: omniSettingsInputDecoration(
+        context,
         labelText: label,
         hintText: hint,
-        filled: true,
-        fillColor: context.isDarkTheme
-            ? palette.surfaceSecondary.withValues(alpha: 0.72)
-            : const Color(0xFFF8FAFC),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none,
-        ),
         suffixIcon: suffix,
       ),
     );
@@ -317,8 +311,6 @@ class _RemoteCodexSettingPageState extends State<RemoteCodexSettingPage> {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    final dark = context.isDarkTheme;
-    final card = dark ? palette.surfacePrimary : Colors.white;
     return Scaffold(
       backgroundColor: palette.pageBackground,
       appBar: CommonAppBar(
@@ -333,7 +325,7 @@ class _RemoteCodexSettingPageState extends State<RemoteCodexSettingPage> {
             : ListView(
                 padding: edgeToEdgeScrollPadding(
                   context,
-                  const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                  const EdgeInsets.fromLTRB(16, 12, 16, 28),
                 ),
                 children: [
                   SettingsSectionTitle(
@@ -343,13 +335,9 @@ class _RemoteCodexSettingPageState extends State<RemoteCodexSettingPage> {
                       'This page only manages Remote PC Bridge. Configure each local Agent API, account, and default model in Agent mode.',
                     ),
                   ),
-                  Container(
+                  OmniSettingsCard(
                     key: const Key('remote-pc-bridge-settings-card'),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: card,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -363,14 +351,15 @@ class _RemoteCodexSettingPageState extends State<RemoteCodexSettingPage> {
                                 ),
                                 style: TextStyle(
                                   color: palette.textPrimary,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
-                            Switch.adaptive(
+                            OmniSettingsSwitch(
                               value: _enabled,
-                              onChanged: _saving ? null : _setEnabled,
+                              enabled: !_saving,
+                              onToggle: _setEnabled,
                             ),
                           ],
                         ),

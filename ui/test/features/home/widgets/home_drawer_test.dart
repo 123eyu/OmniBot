@@ -1,15 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/features/home/state/habitual_hand_controller.dart';
-import 'package:ui/features/home/widgets/conversation_slidable.dart';
 import 'package:ui/features/home/widgets/home_drawer.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
 import 'package:ui/l10n/app_language_mode.dart';
@@ -129,7 +126,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Performance conversation 0'), findsOneWidget);
-    expect(find.byType(ConversationSlidable).evaluate().length, lessThan(30));
+    expect(
+      find.textContaining('Performance conversation ').evaluate().length,
+      lessThan(30),
+    );
     expect(find.text('Performance conversation 299'), findsNothing);
     await tester.scrollUntilVisible(
       find.text('Performance conversation 299'),
@@ -147,7 +147,10 @@ void main() {
       find.text('Performance conversation 299').hitTestable(),
       findsOneWidget,
     );
-    expect(find.byType(ConversationSlidable).evaluate().length, lessThan(30));
+    expect(
+      find.textContaining('Performance conversation ').evaluate().length,
+      lessThan(30),
+    );
   });
 
   testWidgets('shows and invokes declarative Agent Web quick actions', (
@@ -223,13 +226,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final webMenuButton = find.byKey(
+      const ValueKey('home-drawer-web-menu-button'),
+    );
+    expect(webMenuButton, findsOneWidget);
+    await tester.tap(webMenuButton);
+    await tester.pumpAndSettle();
+
     final kimi = find.byKey(const ValueKey('home-drawer-web-kimi-code-acp'));
     final deepSeek = find.byKey(
       const ValueKey('home-drawer-web-deepseek-harness-acp'),
     );
     expect(kimi, findsOneWidget);
     expect(deepSeek, findsOneWidget);
-    expect(tester.getCenter(kimi).dx, lessThan(tester.getCenter(deepSeek).dx));
+    expect(tester.getCenter(kimi).dy, lessThan(tester.getCenter(deepSeek).dy));
 
     await tester.tap(kimi);
     await tester.pumpAndSettle();
@@ -318,16 +328,21 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final chip = find.byKey(const ValueKey('home-drawer-web-kimi-code-acp'));
+      final webMenuButton = find.byKey(
+        const ValueKey('home-drawer-web-menu-button'),
+      );
+      final menuStatusDot = find.byKey(
+        const ValueKey('home-drawer-web-menu-status-dot'),
+      );
+      expect(webMenuButton, findsOneWidget);
+      expect(menuStatusDot, findsOneWidget);
+
+      await tester.tap(webMenuButton);
+      await tester.pumpAndSettle();
       final statusDot = find.byKey(
         const ValueKey('home-drawer-web-status-kimi-code-acp'),
       );
-      expect(chip, findsOneWidget);
       expect(statusDot, findsOneWidget);
-
-      await tester.longPress(chip);
-      await tester.pumpAndSettle();
-      expect(find.text('Open Kimi Code Web'), findsOneWidget);
       expect(find.text('Stop'), findsOneWidget);
 
       await tester.tap(find.text('Stop'));
@@ -344,7 +359,7 @@ void main() {
         'actionId': 'stop_kimi_web',
         'arguments': <String, dynamic>{},
       });
-      expect(statusDot, findsNothing);
+      expect(menuStatusDot, findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -642,13 +657,28 @@ void main() {
     expect(find.text('重点对话'), findsOneWidget);
     expect(find.text('普通会话'), findsOneWidget);
 
-    final scheduledChildSlidable = tester.widget<ConversationSlidable>(
-      find.ancestor(
-        of: find.text('子运行会话'),
-        matching: find.byType(ConversationSlidable),
-      ),
+    await tester.longPress(find.text('子运行会话'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('home-drawer-context-pin')),
+      findsNothing,
     );
-    expect(scheduledChildSlidable.actions, hasLength(3));
+    expect(
+      find.byKey(const ValueKey('home-drawer-context-rename')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('home-drawer-context-copy')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('home-drawer-context-archive')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('home-drawer-context-delete')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('unfocuses search field when tapping outside', (tester) async {
