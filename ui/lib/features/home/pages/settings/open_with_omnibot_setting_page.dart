@@ -185,23 +185,20 @@ class _OpenWithOmnibotSettingPageState
     }
     return OmniSettingsDropdown<String>(
       value: value,
-      maxWidth: 148,
-      items: [
-        DropdownMenuItem(
+      maxWidth: 168,
+      menuMinWidth: 204,
+      options: [
+        OmniSettingsOption(
           value: _sharedOpenModeDefault,
-          child: _buildDropdownText(_defaultModeLabel(target)),
+          label: _defaultModeLabel(target),
         ),
-        DropdownMenuItem(
+        OmniSettingsOption(
           value: _sharedOpenModeWorkspace,
-          child: _buildDropdownText(context.trLegacy('存入 workspace 并发送路径')),
+          label: context.trLegacy('存入 workspace 并发送路径'),
         ),
       ],
       onChanged: onChanged,
     );
-  }
-
-  Widget _buildDropdownText(String text) {
-    return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis);
   }
 
   Widget _buildSettingsSection(_SettingSection section) {

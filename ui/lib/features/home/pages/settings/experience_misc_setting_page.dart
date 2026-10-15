@@ -277,6 +277,9 @@ class _ExperienceMiscSettingPageState
             icon: LucideIcons.history,
             title: context.l10n.settingsRecentConversationsOnlyTitle,
             subtitle: context.l10n.settingsRecentConversationsOnlySubtitle,
+            onTap: () => _onRecentConversationsOnlyChanged(
+              !_recentConversationsOnlyEnabled,
+            ),
             trailing: OmniSettingsSwitch(
               value: _recentConversationsOnlyEnabled,
               onToggle: _onRecentConversationsOnlyChanged,
@@ -286,6 +289,9 @@ class _ExperienceMiscSettingPageState
             icon: LucideIcons.cornerDownLeft,
             title: context.l10n.settingsIndependentSendButtonTitle,
             subtitle: context.l10n.settingsIndependentSendButtonSubtitle,
+            onTap: () => _onIndependentChatSendButtonChanged(
+              !_useIndependentChatSendButton,
+            ),
             trailing: OmniSettingsSwitch(
               value: _useIndependentChatSendButton,
               onToggle: _onIndependentChatSendButtonChanged,
@@ -308,6 +314,9 @@ class _ExperienceMiscSettingPageState
             icon: LucideIcons.smartphone,
             title: context.trLegacy('防止任务运行时屏幕休眠'),
             subtitle: context.trLegacy('任务运行期间保持屏幕常亮，适用于小万（OmniAi）、Agent 和纯聊天'),
+            onTap: () => _onPreventScreenSleepDuringTasksChanged(
+              !_preventScreenSleepDuringTasksEnabled,
+            ),
             trailing: OmniSettingsSwitch(
               value: _preventScreenSleepDuringTasksEnabled,
               onToggle: _onPreventScreenSleepDuringTasksChanged,
@@ -317,6 +326,9 @@ class _ExperienceMiscSettingPageState
             icon: LucideIcons.bellRing,
             title: context.trLegacy('任务完成通知'),
             subtitle: context.trLegacy('小万（OmniAi）、Agent 和纯聊天完成后推送提醒'),
+            onTap: () => _onTaskCompletionNotificationChanged(
+              !_taskCompletionNotificationEnabled,
+            ),
             trailing: OmniSettingsSwitch(
               value: _taskCompletionNotificationEnabled,
               onToggle: _onTaskCompletionNotificationChanged,
@@ -332,6 +344,7 @@ class _ExperienceMiscSettingPageState
             icon: Icons.swipe_left_rounded,
             title: context.l10n.settingsPredictiveBackTitle,
             subtitle: context.l10n.settingsPredictiveBackSubtitle,
+            onTap: () => _onPredictiveBackChanged(!predictiveBackEnabled),
             trailing: OmniSettingsSwitch(
               value: predictiveBackEnabled,
               onToggle: _onPredictiveBackChanged,
@@ -341,6 +354,7 @@ class _ExperienceMiscSettingPageState
             icon: LucideIcons.vibrate,
             title: context.l10n.settingsVibrationTitle,
             subtitle: context.l10n.settingsVibrationSubtitle,
+            onTap: () => _onVibrationChanged(!_vibrationEnabled),
             trailing: OmniSettingsSwitch(
               value: _vibrationEnabled,
               onToggle: _onVibrationChanged,
@@ -356,6 +370,7 @@ class _ExperienceMiscSettingPageState
             icon: LucideIcons.eyeOff,
             title: context.l10n.settingsHideRecentsTitle,
             subtitle: context.l10n.settingsHideRecentsSubtitle,
+            onTap: () => _onHideFromRecentsChanged(!_hideFromRecentsEnabled),
             trailing: OmniSettingsSwitch(
               value: _hideFromRecentsEnabled,
               onToggle: _onHideFromRecentsChanged,
@@ -421,34 +436,32 @@ class _ExperienceMiscSettingPageState
   Widget _buildHabitualHandDropdown(HabitualHand value) {
     return OmniSettingsDropdown<HabitualHand>(
       value: value,
-      maxWidth: 96,
-      items: [
-        DropdownMenuItem(
+      maxWidth: 112,
+      menuMinWidth: 148,
+      options: [
+        OmniSettingsOption(
           value: HabitualHand.left,
-          child: _buildDropdownText(context.l10n.settingsHabitualHandLeft),
+          label: context.l10n.settingsHabitualHandLeft,
         ),
-        DropdownMenuItem(
+        OmniSettingsOption(
           value: HabitualHand.right,
-          child: _buildDropdownText(context.l10n.settingsHabitualHandRight),
+          label: context.l10n.settingsHabitualHandRight,
         ),
       ],
       onChanged: _onHabitualHandChanged,
     );
   }
 
-  Widget _buildDropdownText(String text) {
-    return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis);
-  }
-
   Widget _buildStartupBehaviorDropdown(ChatStartupBehavior value) {
     return OmniSettingsDropdown<ChatStartupBehavior>(
       value: value,
-      maxWidth: 144,
-      items: ChatStartupBehavior.values
+      maxWidth: 164,
+      menuMinWidth: 188,
+      options: ChatStartupBehavior.values
           .map(
-            (behavior) => DropdownMenuItem(
+            (behavior) => OmniSettingsOption(
               value: behavior,
-              child: _buildDropdownText(context.trLegacy(behavior.legacyLabel)),
+              label: context.trLegacy(behavior.legacyLabel),
             ),
           )
           .toList(),

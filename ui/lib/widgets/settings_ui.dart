@@ -269,6 +269,24 @@ class OmniSettingsTile extends StatelessWidget {
   final bool isDestructive;
   final EdgeInsetsGeometry padding;
 
+  void _triggerDescendantDropdown(BuildContext context) {
+    _OmniDropdownTapTarget? target;
+    void visit(Element element) {
+      if (target != null) return;
+      if (element is StatefulElement &&
+          element.state is _OmniDropdownTapTarget) {
+        target = element.state as _OmniDropdownTapTarget;
+        return;
+      }
+      element.visitChildren(visit);
+    }
+
+    context.visitChildElements(visit);
+    if (target != null && target!.canOpenPopover) {
+      target!.openPopover();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
@@ -283,12 +301,17 @@ class OmniSettingsTile extends StatelessWidget {
     final hasLeading = leading != null || icon != null;
     final effectiveShowChevron =
         showChevron ?? (onTap != null && trailing == null);
+    final effectiveOnTap =
+        onTap ??
+        (trailing is OmniSettingsDropdown
+            ? () => _triggerDescendantDropdown(context)
+            : null);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         key: tileKey,
-        onTap: onTap,
+        onTap: effectiveOnTap,
         splashColor: palette.accentPrimary.withValues(alpha: 0.06),
         highlightColor: palette.accentPrimary.withValues(alpha: 0.03),
         child: Padding(
@@ -501,63 +524,363 @@ class OmniSettingsStatusBadge extends StatelessWidget {
   }
 }
 
-/// Clean, pill-styled dropdown wrapper for inline setting row selections.
-class OmniSettingsDropdown<T> extends StatelessWidget {
+/// Option model for [OmniSettingsDropdown].
+@immutable
+class OmniSettingsOption<T> {
+  const OmniSettingsOption({
+    required this.value,
+    required this.label,
+    this.subtitle,
+  });
+
+  final T value;
+  final String label;
+  final String? subtitle;
+}
+
+abstract interface class _OmniDropdownTapTarget {
+  bool get canOpenPopover;
+  void openPopover();
+}
+
+/// Refined, pill-styled selector trigger that opens an anchored floating
+/// popover menu with inset rounded highlight pills and a checkmark indicator.
+class OmniSettingsDropdown<T> extends StatefulWidget {
   const OmniSettingsDropdown({
     super.key,
     this.dropdownKey,
     required this.value,
-    required this.items,
+    required this.options,
     required this.onChanged,
-    this.maxWidth = 148,
+    this.maxWidth = 156,
+    this.menuMinWidth = 176,
+    this.menuMaxWidth = 264,
   });
 
   final Key? dropdownKey;
   final T value;
-  final List<DropdownMenuItem<T>> items;
+  final List<OmniSettingsOption<T>> options;
   final ValueChanged<T?>? onChanged;
   final double maxWidth;
+  final double menuMinWidth;
+  final double menuMaxWidth;
+
+  @override
+  State<OmniSettingsDropdown<T>> createState() =>
+      _OmniSettingsDropdownState<T>();
+}
+
+class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
+    implements _OmniDropdownTapTarget {
+  @override
+  bool get canOpenPopover =>
+      widget.onChanged != null && widget.options.isNotEmpty;
+
+  @override
+  void openPopover() {
+    _openPopover(context);
+  }
+
+  Future<void> _openPopover(BuildContext anchorContext) async {
+    final callback = widget.onChanged;
+    if (callback == null || widget.options.isEmpty) return;
+
+    final box = anchorContext.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.maybeOf(anchorContext)?.context.findRenderObject()
+            as RenderBox?;
+    if (box == null || !box.hasSize || overlay == null || !overlay.hasSize) {
+      return;
+    }
+
+    final triggerTopLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
+    final triggerBottomRight = box.localToGlobal(
+      box.size.bottomRight(Offset.zero),
+      ancestor: overlay,
+    );
+    final overlaySize = overlay.size;
+    final hasSubtitles = widget.options.any(
+      (item) => item.subtitle != null && item.subtitle!.trim().isNotEmpty,
+    );
+    final estimatedItemHeight = hasSubtitles ? 58.0 : 40.0;
+    final estimatedMenuHeight =
+        widget.options.length * estimatedItemHeight + 16.0;
+    final mediaPadding = MediaQuery.paddingOf(anchorContext);
+    final spaceBelow =
+        overlaySize.height - mediaPadding.bottom - triggerBottomRight.dy - 16.0;
+    final openUpward =
+        spaceBelow < estimatedMenuHeight &&
+        (triggerTopLeft.dy - mediaPadding.top) > estimatedMenuHeight;
+
+    final rightEdge = (overlaySize.width - triggerBottomRight.dx).clamp(
+      16.0,
+      overlaySize.width - 16.0,
+    );
+
+    final selected = await showGeneralDialog<T>(
+      context: anchorContext,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(
+        anchorContext,
+      ).modalBarrierDismissLabel,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 170),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return Stack(
+          children: [
+            Positioned(
+              right: rightEdge,
+              top: openUpward ? null : triggerBottomRight.dy + 6,
+              bottom: openUpward
+                  ? overlaySize.height - triggerTopLeft.dy + 6
+                  : null,
+              child: _OmniSettingsPopoverCard<T>(
+                options: widget.options,
+                selectedValue: widget.value,
+                minWidth: widget.menuMinWidth,
+                maxWidth: widget.menuMaxWidth,
+                onSelected: (picked) =>
+                    Navigator.of(dialogContext).pop(picked),
+              ),
+            ),
+          ],
+        );
+      },
+      transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            alignment: openUpward ? Alignment.bottomRight : Alignment.topRight,
+            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+
+    if (selected != null && selected != widget.value) {
+      callback(selected);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    return Container(
-      constraints: BoxConstraints(maxWidth: maxWidth),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: palette.surfaceSecondary,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: palette.borderSubtle.withValues(
-            alpha: context.isDarkTheme ? 0.5 : 0.7,
-          ),
-          width: 0.65,
-        ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          key: dropdownKey,
-          value: value,
-          isDense: true,
-          isExpanded: true,
-          borderRadius: BorderRadius.circular(14),
-          dropdownColor: palette.surfacePrimary,
-          elevation: 6,
-          style: TextStyle(
-            color: palette.textPrimary,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w500,
-          ),
-          icon: Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: Icon(
-              LucideIcons.chevronsUpDown,
-              size: 14,
-              color: palette.textTertiary,
+    final isDark = context.isDarkTheme;
+    final enabled = widget.onChanged != null;
+    final selectedOption = widget.options.firstWhere(
+      (item) => item.value == widget.value,
+      orElse: () => widget.options.first,
+    );
+
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.5,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: widget.dropdownKey,
+          borderRadius: BorderRadius.circular(9.5),
+          onTap: enabled ? () => _openPopover(context) : null,
+          child: Container(
+            constraints: BoxConstraints(maxWidth: widget.maxWidth),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: palette.surfaceSecondary.withValues(
+                alpha: isDark ? 0.72 : 0.8,
+              ),
+              borderRadius: BorderRadius.circular(9.5),
+              border: Border.all(
+                color: palette.borderSubtle.withValues(
+                  alpha: isDark ? 0.55 : 0.75,
+                ),
+                width: 0.65,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    selectedOption.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.textPrimary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  LucideIcons.chevronsUpDown,
+                  size: 13.5,
+                  color: palette.textTertiary,
+                ),
+              ],
             ),
           ),
-          items: items,
-          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+class _OmniSettingsPopoverCard<T> extends StatelessWidget {
+  const _OmniSettingsPopoverCard({
+    required this.options,
+    required this.selectedValue,
+    required this.minWidth,
+    required this.maxWidth,
+    required this.onSelected,
+  });
+
+  final List<OmniSettingsOption<T>> options;
+  final T selectedValue;
+  final double minWidth;
+  final double maxWidth;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.omniPalette;
+    final isDark = context.isDarkTheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        constraints: BoxConstraints(minWidth: minWidth, maxWidth: maxWidth),
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: isDark ? palette.surfaceElevated : palette.surfacePrimary,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: palette.borderSubtle.withValues(alpha: isDark ? 0.8 : 0.9),
+            width: 0.75,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: palette.shadowColor.withValues(
+                alpha: isDark ? 0.36 : 0.09,
+              ),
+              blurRadius: 22,
+              spreadRadius: -2,
+              offset: const Offset(0, 8),
+            ),
+            BoxShadow(
+              color: palette.shadowColor.withValues(
+                alpha: isDark ? 0.18 : 0.04,
+              ),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: IntrinsicWidth(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < options.length; i++) ...[
+                if (i > 0) const SizedBox(height: 2),
+                _buildOptionTile(context, options[i]),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionTile(BuildContext context, OmniSettingsOption<T> option) {
+    final palette = context.omniPalette;
+    final isDark = context.isDarkTheme;
+    final selected = option.value == selectedValue;
+    final hasSubtitle =
+        option.subtitle != null && option.subtitle!.trim().isNotEmpty;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9.5),
+        onTap: () => onSelected(option.value),
+        splashColor: palette.accentPrimary.withValues(alpha: 0.08),
+        highlightColor: palette.accentPrimary.withValues(alpha: 0.04),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: selected
+                ? palette.accentPrimary.withValues(alpha: isDark ? 0.16 : 0.09)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(9.5),
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: 11,
+              vertical: hasSubtitle ? 9 : 9.5,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: hasSubtitle
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        option.label,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          color: selected
+                              ? palette.accentPrimary
+                              : palette.textPrimary,
+                          height: 1.32,
+                        ),
+                      ),
+                      if (hasSubtitle) ...[
+                        const SizedBox(height: 2.5),
+                        Text(
+                          option.subtitle!,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w400,
+                            color: palette.textSecondary,
+                            height: 1.38,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Padding(
+                  padding: EdgeInsets.only(top: hasSubtitle ? 2 : 0),
+                  child: SizedBox(
+                    width: 15,
+                    height: 15,
+                    child: selected
+                        ? Icon(
+                            LucideIcons.check,
+                            size: 15,
+                            color: palette.accentPrimary,
+                          )
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -324,93 +324,24 @@ class _AboutPageState extends State<AboutPage> {
   }
 
   Widget _buildDownloadSourceTrailing() {
-    final palette = context.omniPalette;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: palette.surfaceSecondary,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: palette.borderSubtle.withValues(
-            alpha: context.isDarkTheme ? 0.5 : 0.7,
-          ),
-          width: 0.65,
-        ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<AppUpdateDownloadSource>(
-          key: const ValueKey('about-download-source-dropdown'),
-          value: _downloadSource,
-          isDense: true,
-          itemHeight: null,
-          menuMaxHeight: 260,
-          dropdownColor: palette.surfacePrimary,
-          borderRadius: BorderRadius.circular(14),
-          icon: Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: Icon(
-              LucideIcons.chevronsUpDown,
-              size: 14,
-              color: palette.textTertiary,
-            ),
-          ),
-          style: TextStyle(
-            color: palette.textPrimary,
-            fontWeight: FontWeight.w500,
-            fontSize: 12.5,
-          ),
-          selectedItemBuilder: (context) {
-            return AppUpdateDownloadSource.values.map((source) {
-              return Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  _downloadSourceLabel(source),
-                  style: TextStyle(
-                    color: palette.textPrimary,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 12.5,
-                  ),
-                ),
-              );
-            }).toList();
-          },
-          items: AppUpdateDownloadSource.values.map((source) {
-            return DropdownMenuItem<AppUpdateDownloadSource>(
+    return OmniSettingsDropdown<AppUpdateDownloadSource>(
+      dropdownKey: const ValueKey('about-download-source-dropdown'),
+      value: _downloadSource,
+      maxWidth: 148,
+      menuMinWidth: 216,
+      menuMaxWidth: 272,
+      options: AppUpdateDownloadSource.values
+          .map(
+            (source) => OmniSettingsOption<AppUpdateDownloadSource>(
               value: source,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _downloadSourceLabel(source),
-                      style: TextStyle(
-                        color: palette.textPrimary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13.5,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _downloadSourceDescription(source),
-                      style: TextStyle(
-                        color: palette.textSecondary,
-                        fontWeight: FontWeight.w400,
-                        fontSize: 11.5,
-                        height: 1.38,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-          onChanged: _isUpdatingDownloadSource
-              ? null
-              : _handleSelectDownloadSource,
-        ),
-      ),
+              label: _downloadSourceLabel(source),
+              subtitle: _downloadSourceDescription(source),
+            ),
+          )
+          .toList(),
+      onChanged: _isUpdatingDownloadSource
+          ? null
+          : _handleSelectDownloadSource,
     );
   }
 

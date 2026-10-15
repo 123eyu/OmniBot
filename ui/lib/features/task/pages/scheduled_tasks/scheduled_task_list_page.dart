@@ -474,16 +474,22 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
             );
           },
           child: Container(
-            height: 42,
+            height: 38,
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               color: palette.segmentTrack,
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: palette.borderSubtle.withValues(
+                  alpha: isDark ? 0.55 : 0.7,
+                ),
+                width: 0.65,
+              ),
             ),
             child: Stack(
               children: [
                 AnimatedAlign(
-                  duration: const Duration(milliseconds: 220),
+                  duration: const Duration(milliseconds: 200),
                   curve: Curves.easeOutCubic,
                   alignment: _currentTab == _scheduleTab
                       ? Alignment.centerLeft
@@ -494,14 +500,20 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
                       margin: const EdgeInsets.symmetric(horizontal: 1),
                       decoration: BoxDecoration(
                         color: palette.segmentThumb,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(9.5),
+                        border: Border.all(
+                          color: palette.borderSubtle.withValues(
+                            alpha: isDark ? 0.45 : 0.55,
+                          ),
+                          width: 0.5,
+                        ),
                         boxShadow: [
                           BoxShadow(
                             color: palette.shadowColor.withValues(
-                              alpha: isDark ? 0.18 : 0.08,
+                              alpha: isDark ? 0.16 : 0.04,
                             ),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                            blurRadius: 3,
+                            offset: const Offset(0, 1),
                           ),
                         ],
                       ),

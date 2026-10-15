@@ -445,7 +445,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
             : ListView(
                 padding: edgeToEdgeScrollPadding(
                   context,
-                  const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                  const EdgeInsets.fromLTRB(16, 12, 16, 32),
                 ),
                 children: [
                   SettingsSectionTitle(
@@ -456,11 +456,12 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                     ),
                   ),
                   _buildSharedModelSummary(card),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   _buildSearchField(card),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   OmniSegmentedSlider<_AgentFilter>(
                     value: _filter,
+                    height: 36,
                     keyPrefix: 'agent-filter',
                     options: [
                       OmniSegmentedOption(
@@ -485,7 +486,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                     onChanged: (value) => setState(() => _filter = value),
                   ),
                   if (managed.isNotEmpty) ...[
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
                     OmniSettingsGroup(
                       title: _text('预置 Agent', 'Built-in Agents'),
                       translateTitle: false,
@@ -626,17 +627,18 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
 
   Widget _buildSearchField(Color card) {
     final palette = context.omniPalette;
+    final isDark = context.isDarkTheme;
     return TextField(
-      style: TextStyle(color: palette.textPrimary, fontSize: 14),
+      style: TextStyle(color: palette.textPrimary, fontSize: 13.5),
       cursorColor: palette.accentPrimary,
       decoration: InputDecoration(
         hintText: _text('搜索 Agent', 'Search Agents'),
-        hintStyle: TextStyle(color: palette.textTertiary, fontSize: 13.5),
+        hintStyle: TextStyle(color: palette.textTertiary, fontSize: 13),
         prefixIcon: Padding(
           padding: const EdgeInsets.only(left: 14, right: 8),
           child: Icon(
             LucideIcons.search,
-            size: 18,
+            size: 17,
             color: palette.textTertiary,
           ),
         ),
@@ -644,15 +646,19 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
         filled: true,
         fillColor: card,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(vertical: 13),
+        contentPadding: const EdgeInsets.symmetric(vertical: 11),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: palette.borderSubtle),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: palette.borderSubtle.withValues(alpha: isDark ? 0.65 : 0.85),
+            width: 0.75,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: palette.accentPrimary.withValues(alpha: 0.6),
+            color: palette.accentPrimary.withValues(alpha: 0.65),
+            width: 1.1,
           ),
         ),
       ),

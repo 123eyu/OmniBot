@@ -24,7 +24,7 @@ class OmniSegmentedSlider<T> extends StatelessWidget {
     required this.onChanged,
     this.position,
     this.keyPrefix = 'omni-segment-option',
-    this.height = 44,
+    this.height = 38,
   });
 
   final T value;
@@ -39,6 +39,8 @@ class OmniSegmentedSlider<T> extends StatelessWidget {
     final palette = context.omniPalette;
     final isDark = context.isDarkTheme;
     const outerPadding = 3.0;
+    const trackRadius = 12.0;
+    const thumbRadius = 9.5;
     final selectedIndex = options.indexWhere((option) => option.value == value);
     final safeIndex = selectedIndex >= 0 ? selectedIndex : 0;
     final visualPosition = (position ?? safeIndex.toDouble()).clamp(
@@ -51,24 +53,25 @@ class OmniSegmentedSlider<T> extends StatelessWidget {
       height: height,
       decoration: BoxDecoration(
         color: palette.segmentTrack,
-        borderRadius: BorderRadius.circular(height / 2),
-        boxShadow: [
-          BoxShadow(
-            color: palette.shadowColor.withValues(alpha: isDark ? 0.12 : 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(trackRadius),
+        border: Border.all(
+          color: palette.borderSubtle.withValues(alpha: isDark ? 0.55 : 0.7),
+          width: 0.65,
+        ),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(height / 2),
+        borderRadius: BorderRadius.circular(trackRadius),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final thumbWidth =
                 (constraints.maxWidth - outerPadding * 2) / options.length;
             return Stack(
               children: [
-                Positioned(
+                AnimatedPositioned(
+                  duration: position != null
+                      ? Duration.zero
+                      : const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
                   left: outerPadding + thumbWidth * visualPosition,
                   top: outerPadding,
                   bottom: outerPadding,
@@ -77,14 +80,20 @@ class OmniSegmentedSlider<T> extends StatelessWidget {
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: palette.segmentThumb,
-                        borderRadius: BorderRadius.circular(height / 2),
+                        borderRadius: BorderRadius.circular(thumbRadius),
+                        border: Border.all(
+                          color: palette.borderSubtle.withValues(
+                            alpha: isDark ? 0.45 : 0.55,
+                          ),
+                          width: 0.5,
+                        ),
                         boxShadow: [
                           BoxShadow(
                             color: palette.shadowColor.withValues(
-                              alpha: isDark ? 0.20 : 0.10,
+                              alpha: isDark ? 0.16 : 0.04,
                             ),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                            blurRadius: 3,
+                            offset: const Offset(0, 1),
                           ),
                         ],
                       ),
@@ -104,25 +113,12 @@ class OmniSegmentedSlider<T> extends StatelessWidget {
                             : Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  AnimatedContainer(
-                                    duration: const Duration(milliseconds: 180),
-                                    curve: Curves.easeOutCubic,
-                                    padding: const EdgeInsets.all(3),
-                                    decoration: BoxDecoration(
-                                      color: selected
-                                          ? palette.accentPrimary.withValues(
-                                              alpha: isDark ? 0.18 : 0.10,
-                                            )
-                                          : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: Icon(
-                                      option.icon,
-                                      size: 14,
-                                      color: selected
-                                          ? palette.accentPrimary
-                                          : palette.textTertiary,
-                                    ),
+                                  Icon(
+                                    option.icon,
+                                    size: 14,
+                                    color: selected
+                                        ? palette.accentPrimary
+                                        : palette.textTertiary,
                                   ),
                                   const SizedBox(width: 6),
                                   Text(option.label),
@@ -136,26 +132,20 @@ class OmniSegmentedSlider<T> extends StatelessWidget {
                               key: ValueKey(
                                 '$keyPrefix-${option.id ?? option.value.toString()}',
                               ),
-                              borderRadius: BorderRadius.circular(height / 2),
+                              borderRadius: BorderRadius.circular(thumbRadius),
                               onTap: () => onChanged(option.value),
                               child: Center(
-                                child: AnimatedScale(
+                                child: AnimatedDefaultTextStyle(
                                   duration: const Duration(milliseconds: 180),
                                   curve: Curves.easeOutCubic,
-                                  scale: selected ? 1.0 : 0.97,
-                                  child: AnimatedDefaultTextStyle(
-                                    duration: const Duration(milliseconds: 180),
-                                    curve: Curves.easeOutCubic,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: selected
-                                          ? FontWeight.w700
-                                          : FontWeight.w600,
-                                      color: foreground,
-                                      letterSpacing: selected ? 0.1 : 0,
-                                    ),
-                                    child: label,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: selected
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                    color: foreground,
                                   ),
+                                  child: label,
                                 ),
                               ),
                             ),
