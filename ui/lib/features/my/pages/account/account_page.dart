@@ -1625,7 +1625,12 @@ class _AccountPageState extends State<AccountPage> {
             register ? 'account-auth-mode-register' : 'account-auth-mode-login',
           ),
           behavior: HitTestBehavior.opaque,
-          onTap: () => _selectAuthMode(register),
+          onTap: () {
+            if (_registerMode != register) {
+              performOmniSelectionHaptic();
+            }
+            _selectAuthMode(register);
+          },
           child: Center(
             child: AnimatedScale(
               duration: const Duration(milliseconds: 180),

@@ -469,9 +469,13 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
             final box = sliderContext.findRenderObject() as RenderBox?;
             if (box == null || !box.hasSize) return;
             final local = box.globalToLocal(details.globalPosition);
-            _switchTab(
-              local.dx >= box.size.width / 2 ? _alarmTab : _scheduleTab,
-            );
+            final targetTab = local.dx >= box.size.width / 2
+                ? _alarmTab
+                : _scheduleTab;
+            if (targetTab != _currentTab) {
+              performOmniSelectionHaptic();
+            }
+            _switchTab(targetTab);
           },
           child: Container(
             height: 38,

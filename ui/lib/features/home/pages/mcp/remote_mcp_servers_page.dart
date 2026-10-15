@@ -587,16 +587,26 @@ class _RemoteMcpServerEditorSheetState
                 ? 'Bearer Token (Optional)'
                 : 'Bearer Token（可选）',
           ),
-          const SizedBox(height: 12),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: _enabled,
-            onChanged: (value) => setState(() => _enabled = value),
-            title: Text(
-              Localizations.localeOf(context).languageCode == 'en'
-                  ? 'Enabled'
-                  : '启用',
-            ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  Localizations.localeOf(context).languageCode == 'en'
+                      ? 'Enabled'
+                      : '启用',
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w500,
+                    color: context.omniPalette.textPrimary,
+                  ),
+                ),
+              ),
+              OmniSettingsSwitch(
+                value: _enabled,
+                onToggle: (value) => setState(() => _enabled = value),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           SizedBox(

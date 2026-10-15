@@ -780,11 +780,24 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
             hintText: 'KEY=VALUE',
           ),
         ),
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          title: Text(_text('启用 Agent', 'Enable Agent')),
-          value: _enabled,
-          onChanged: (value) => setState(() => _enabled = value),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _text('启用 Agent', 'Enable Agent'),
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w500,
+                  color: context.omniPalette.textPrimary,
+                ),
+              ),
+            ),
+            OmniSettingsSwitch(
+              value: _enabled,
+              onToggle: (value) => setState(() => _enabled = value),
+            ),
+          ],
         ),
       ],
     );

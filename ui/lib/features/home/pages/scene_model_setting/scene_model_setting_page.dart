@@ -899,14 +899,13 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
                   const SizedBox(width: 10),
                   OmniSettingsStatusBadge(label: status, color: statusColor),
                   const Spacer(),
-                  Switch.adaptive(
+                  OmniSettingsSwitch(
                     key: const Key('scene-voice-autoplay-switch'),
                     value: _voiceConfig.autoPlay,
-                    onChanged: bound
-                        ? (value) => _saveVoiceConfig(
-                            _voiceConfig.copyWith(autoPlay: value),
-                          )
-                        : null,
+                    enabled: bound,
+                    onToggle: (value) => _saveVoiceConfig(
+                      _voiceConfig.copyWith(autoPlay: value),
+                    ),
                   ),
                 ],
               ),

@@ -722,11 +722,10 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                               ],
                             ),
                           ),
-                          Switch.adaptive(
+                          OmniSettingsSwitch(
                             value: plugin.enabled,
-                            onChanged: _busy || !plugin.compatible
-                                ? null
-                                : _toggle,
+                            enabled: !_busy && plugin.compatible,
+                            onToggle: _toggle,
                           ),
                         ],
                       ),

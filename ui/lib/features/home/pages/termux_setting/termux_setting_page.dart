@@ -1394,13 +1394,10 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
                 ],
               ),
             ),
-            Switch.adaptive(
+            OmniSettingsSwitch(
               value: task.enabled,
-              onChanged: _isAutoStartBusy
-                  ? null
-                  : (value) => _toggleAutoStartTask(task, value),
-              activeTrackColor: const Color(0xFF93C5FD),
-              activeThumbColor: const Color(0xFF2563EB),
+              enabled: !_isAutoStartBusy,
+              onToggle: (value) => _toggleAutoStartTask(task, value),
             ),
           ],
         ),
@@ -1751,16 +1748,28 @@ class _AutoStartTaskDialogState extends State<_AutoStartTaskDialog> {
                 hintText: '/workspace',
               ),
             ),
-            const SizedBox(height: 12),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              value: _enabled,
-              onChanged: (value) {
-                setState(() {
-                  _enabled = value;
-                });
-              },
-              title: Text(context.l10n.alpineBootAutoStart),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    context.l10n.alpineBootAutoStart,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w500,
+                      color: context.omniPalette.textPrimary,
+                    ),
+                  ),
+                ),
+                OmniSettingsSwitch(
+                  value: _enabled,
+                  onToggle: (value) {
+                    setState(() {
+                      _enabled = value;
+                    });
+                  },
+                ),
+              ],
             ),
           ],
         ),

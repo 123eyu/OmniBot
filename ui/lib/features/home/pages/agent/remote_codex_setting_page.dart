@@ -356,9 +356,10 @@ class _RemoteCodexSettingPageState extends State<RemoteCodexSettingPage> {
                                 ),
                               ),
                             ),
-                            Switch.adaptive(
+                            OmniSettingsSwitch(
                               value: _enabled,
-                              onChanged: _saving ? null : _setEnabled,
+                              enabled: !_saving,
+                              onToggle: _setEnabled,
                             ),
                           ],
                         ),

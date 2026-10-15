@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:ui/models/scheduled_task.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 /// 定时任务配置底部弹窗
 class ScheduleTaskSheet extends StatefulWidget {
@@ -187,10 +188,9 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
                       ),
                     ),
                     const Spacer(),
-                    CupertinoSwitch(
+                    OmniSettingsSwitch(
                       value: _repeatDaily,
-                      activeTrackColor: palette.accentPrimary,
-                      onChanged: (value) {
+                      onToggle: (value) {
                         setState(() {
                           _repeatDaily = value;
                         });

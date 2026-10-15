@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:ui/theme/theme_context.dart';
 
 @immutable
@@ -133,7 +134,12 @@ class OmniSegmentedSlider<T> extends StatelessWidget {
                                 '$keyPrefix-${option.id ?? option.value.toString()}',
                               ),
                               borderRadius: BorderRadius.circular(thumbRadius),
-                              onTap: () => onChanged(option.value),
+                              onTap: () {
+                                if (option.value != value) {
+                                  HapticFeedback.selectionClick();
+                                }
+                                onChanged(option.value);
+                              },
                               child: Center(
                                 child: AnimatedDefaultTextStyle(
                                   duration: const Duration(milliseconds: 180),

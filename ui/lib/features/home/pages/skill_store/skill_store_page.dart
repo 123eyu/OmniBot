@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter_switch/flutter_switch.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/models/agent_skill_item.dart';
 import 'package:ui/services/agent_skill_store_service.dart';
@@ -553,30 +552,10 @@ class _SkillStorePageState extends State<SkillStorePage> {
         child: Stack(
           alignment: Alignment.centerRight,
           children: [
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: busy ? null : () => _toggleSkill(item, !item.enabled),
-              child: AbsorbPointer(
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  opacity: busy ? 0.4 : 1,
-                  child: FlutterSwitch(
-                    width: 40,
-                    height: 22,
-                    toggleSize: 16,
-                    padding: 3,
-                    activeColor: palette.accentPrimary,
-                    inactiveColor: context.isDarkTheme
-                        ? palette.borderStrong
-                        : const Color(0xFFD5DFEC),
-                    toggleColor: Colors.white,
-                    borderRadius: 999,
-                    value: item.enabled,
-                    onToggle: (_) {},
-                  ),
-                ),
-              ),
+            OmniSettingsSwitch(
+              value: item.enabled,
+              enabled: !busy,
+              onToggle: (next) => _toggleSkill(item, next),
             ),
             IgnorePointer(
               ignoring: !busy,

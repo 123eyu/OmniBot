@@ -890,11 +890,24 @@ class _AddCustomAgentDialogState extends State<_AddCustomAgentDialog> {
                   ),
                 ),
               ),
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                title: Text(_text('启用 Agent', 'Enable Agent')),
-                value: _enabled,
-                onChanged: (value) => setState(() => _enabled = value),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _text('启用 Agent', 'Enable Agent'),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: context.omniPalette.textPrimary,
+                      ),
+                    ),
+                  ),
+                  OmniSettingsSwitch(
+                    value: _enabled,
+                    onToggle: (value) => setState(() => _enabled = value),
+                  ),
+                ],
               ),
             ],
           ),
