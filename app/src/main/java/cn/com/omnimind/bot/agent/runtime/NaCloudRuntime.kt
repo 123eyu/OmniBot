@@ -43,6 +43,8 @@ internal class NaCloudRuntime(
     private val profiles: AcpAgentProfileStore,
     private val emit: (Map<String, Any?>) -> Unit,
 ) {
+    private val appContext = context.applicationContext
+    private val historyAccess = NaConversationAccess(appContext)
     private val preferences = context.getSharedPreferences("na_cloud_connection", Context.MODE_PRIVATE)
     private val client = OkHttpClient.Builder().retryOnConnectionFailure(false)
         .followRedirects(false).followSslRedirects(false)
@@ -100,6 +102,7 @@ internal class NaCloudRuntime(
             preferences.edit().putBoolean("development", false).apply()
             token = ""
             cachedStatus = emptyMap()
+            cn.com.omnimind.bot.webchat.FlutterChatSyncBridge.dispatchNaHistoryOwnerChanged(appContext)
             return config()
         }
         val address = args["baseUrl"]?.toString()?.trim()?.trimEnd('/') ?: baseUrl
@@ -111,6 +114,7 @@ internal class NaCloudRuntime(
         preferences.edit().putBoolean("development", true).apply()
         args["apiKey"]?.let { token = it.toString().trim() }
         cachedStatus = emptyMap()
+        cn.com.omnimind.bot.webchat.FlutterChatSyncBridge.dispatchNaHistoryOwnerChanged(appContext)
         return config()
     }
 
@@ -179,14 +183,30 @@ internal class NaCloudRuntime(
     }
 
     private suspend fun bind(id: String, conversationId: Long?, title: String?): Long {
+        val connection = connection()
+        connection.account?.requireSessionGeneration(connection.generation)
+        if (conversationId != null) {
+            val existingOwner = profiles.naOwnerForConversation(conversationId)
+            check(existingOwner == null || existingOwner == connection.prefix) { "此会话属于另一个账号。" }
+        }
         val local = bindings.ensureBinding(id, conversationId, cwd = "na-cloud", title = title)
         profiles.bindSession(id, NA_AGENT_ID)
         profiles.bindConversation(local, NA_AGENT_ID)
+        profiles.bindNaConversationOwner(local, connection.prefix)
+        connection.account?.requireSessionGeneration(connection.generation)
         return local
     }
 
     private suspend fun resolveSession(args: Map<String, Any?>): String? {
         val local = (args["conversationId"] as? Number)?.toLong()
+        if (local != null) {
+            require(historyAccess.canRead(local, connection().prefix)) {
+                "此云端会话缺少当前账号的可验证归属，请切回原账号或新建会话。"
+            }
+        }
+        local?.let { profiles.naOwnerForConversation(it) }?.let { owner ->
+            require(owner == connection().prefix) { "此云端会话属于另一个账号。" }
+        }
         val binding = local?.let { bindings.getBindingByConversationId(it) }
         val explicit = (args["sessionId"] ?: args["threadId"])?.toString()?.takeIf { it.isNotBlank() }
         // The persisted conversation wins over a stale view's session hint.
@@ -253,6 +273,7 @@ internal class NaCloudRuntime(
                             val run = snapshot.map("run").ifEmpty { snapshot }
                             (run["items"] as? List<*>)?.filterIsInstance<Map<*, *>>()?.forEach { raw ->
                                 projector.updates(raw.entries.associate { it.key.toString() to it.value }).forEach { update ->
+                                    connection.account?.requireSessionGeneration(connection.generation)
                                     emit(mapOf("method" to "session/update", "conversationId" to local,
                                         "agentId" to NA_AGENT_ID, "sessionId" to id, "turnId" to reservation,
                                         "params" to mapOf("sessionId" to id, "turnId" to reservation, "update" to update)))

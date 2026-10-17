@@ -450,6 +450,33 @@ class AccountRepositoryTest {
         assertNull(modeStore.mode)
     }
 
+    @Test fun verifiedHistoryIdentitySurvivesOfflineRestartAndClearsOnLogout() = runBlocking {
+        val remote = FakeAccountRemote().apply {
+            loginHandler = { _, _ -> session("a", "r") }
+            logoutHandler = { }
+        }
+        val store = FakeTokenStore()
+        val account = AccountRepository(remote, store)
+        account.login("alice@example.test", "test-password")
+        assertEquals("user-1", account.cachedCloudUserId())
+        // No remote handler is installed: local visibility cannot need a request.
+        val restarted = AccountRepository(FakeAccountRemote().apply { logoutHandler = { } }, store)
+        assertEquals("user-1", restarted.cachedCloudUserId())
+        assertEquals("user-1", restarted.localUserId.value)
+        restarted.logout()
+        assertNull(restarted.cachedCloudUserId())
+        assertNull(restarted.localUserId.value)
+    }
+
+    @Test fun legacyCredentialsStayUnattributedUntilServerIdentityIsVerified() = runBlocking {
+        val store = FakeTokenStore(session("a", "r").tokens)
+        val remote = FakeAccountRemote().apply { userHandler = { session("a", "r").user } }
+        val account = AccountRepository(remote, store)
+        assertNull(account.cachedCloudUserId())
+        account.currentUser()
+        assertEquals("user-1", AccountRepository(FakeAccountRemote(), store).cachedCloudUserId())
+    }
+
     private fun session(accessToken: String, refreshToken: String) = AccountSession(
         user = AccountUser(
             id = "user-1",

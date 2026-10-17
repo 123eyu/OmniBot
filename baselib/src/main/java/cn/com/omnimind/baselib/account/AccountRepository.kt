@@ -21,6 +21,20 @@ class AccountRepository(
     private val generation = MutableStateFlow(0L)
     val sessionGeneration = generation.asStateFlow()
     private var cloudIdentity: Pair<String, AccountUser>? = null
+    private val localIdentity = MutableStateFlow(runCatching { tokenStore.read()?.localUserId }.getOrNull())
+    val localUserId = localIdentity.asStateFlow()
+
+    fun cachedCloudUserId(): String? = synchronized(sessionLock) { tokenStore.read()?.localUserId }
+
+    private fun rememberVerifiedIdentity(accessToken: String, user: AccountUser) = synchronized(sessionLock) {
+        val tokens = tokenStore.read() ?: throw AccountNotAuthenticatedException()
+        if (tokens.accessToken != accessToken) throw AccountNotAuthenticatedException()
+        if (tokens.localUserId != user.id && !tokenStore.write(tokens.copy(localUserId = user.id))) {
+            throw AccountCredentialStorageException()
+        }
+        cloudIdentity = accessToken to user
+        localIdentity.value = user.id
+    }
 
     fun requireSessionGeneration(expected: Long) = synchronized(sessionLock) {
         if (generation.value != expected || tokenStore.read() == null) {
@@ -44,7 +58,7 @@ class AccountRepository(
             val user = cached ?: remote.getCurrentUser(accessToken).also {
                 synchronized(sessionLock) {
                     requireSessionGeneration(expectedGeneration)
-                    cloudIdentity = accessToken to it
+                    rememberVerifiedIdentity(accessToken, it)
                 }
             }
             if (expectedUserId != null && user.id != expectedUserId) throw AccountNotAuthenticatedException()
@@ -108,7 +122,8 @@ class AccountRepository(
     suspend fun login(email: String, password: String): AccountSession {
         requireCloudServiceAccess()
         val expectedGeneration = generation.value
-        val session = remote.login(email, password)
+        val response = remote.login(email, password)
+        val session = response.copy(tokens = response.tokens.copy(localUserId = response.user.id))
         synchronized(sessionLock) {
             if (generation.value != expectedGeneration) throw AccountNotAuthenticatedException()
             if (!tokenStore.write(session.tokens)) {
@@ -116,6 +131,7 @@ class AccountRepository(
                 throw AccountCredentialStorageException()
             }
             cloudIdentity = session.tokens.accessToken to session.user
+            localIdentity.value = session.user.id
             generation.value += 1
         }
         aiAccessModeStore.clear()
@@ -130,7 +146,9 @@ class AccountRepository(
         return session
     }
 
-    suspend fun currentUser(): AccountUser = authorized(remote::getCurrentUser)
+    suspend fun currentUser(): AccountUser = authorized { token ->
+        remote.getCurrentUser(token).also { rememberVerifiedIdentity(token, it) }
+    }
 
     suspend fun getAiSettings(): AiSettings = authorized(remote::getAiSettings).also {
         aiAccessModeStore.write(it.effectiveMode)
@@ -263,7 +281,8 @@ class AccountRepository(
 
     private suspend fun refreshAndStore(current: AccountTokens): AccountSession {
         return try {
-            remote.refresh(current.refreshToken).also { refreshed ->
+            val response = remote.refresh(current.refreshToken)
+            response.copy(tokens = response.tokens.copy(localUserId = response.user.id)).also { refreshed ->
                 synchronized(sessionLock) {
                     if (tokenStore.read() != current) throw AccountNotAuthenticatedException()
                     if (!tokenStore.write(refreshed.tokens)) {
@@ -271,6 +290,7 @@ class AccountRepository(
                         throw AccountCredentialStorageException()
                     }
                     cloudIdentity = refreshed.tokens.accessToken to refreshed.user
+                    localIdentity.value = refreshed.user.id
                 }
             }
         } catch (error: AccountApiException) {
@@ -286,6 +306,7 @@ class AccountRepository(
     private fun clearLocalSession() = synchronized(sessionLock) {
         generation.value += 1
         cloudIdentity = null
+        localIdentity.value = null
         val tokensCleared = try {
             tokenStore.clear()
         } finally {
