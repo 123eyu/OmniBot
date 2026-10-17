@@ -1123,49 +1123,81 @@ class _SceneSelectionPopupEntryState extends State<_SceneSelectionPopupEntry> {
       _isDarkTheme ? context.omniPalette.textTertiary : const Color(0xFF94A3B8);
 
   Widget _buildSearchRow() {
+    final palette = context.omniPalette;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      child: Row(
-        children: [
-          Icon(LucideIcons.search, size: 18, color: _tertiaryTextColor),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: _searchController,
-              autofocus: false,
-              scrollPadding: EdgeInsets.zero,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-              style: TextStyle(
-                fontSize: 13,
-                color: _primaryTextColor,
-                fontWeight: FontWeight.w500,
-                fontFamily: 'PingFang SC',
-              ),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: 'Filter model ID',
-                hintStyle: TextStyle(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8.5),
+        decoration: BoxDecoration(
+          color: palette.surfaceSecondary,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: palette.borderSubtle.withValues(
+              alpha: _isDarkTheme ? 0.55 : 0.75,
+            ),
+            width: 0.65,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(LucideIcons.search, size: 15.5, color: _tertiaryTextColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                autofocus: false,
+                scrollPadding: EdgeInsets.zero,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) =>
+                    FocusManager.instance.primaryFocus?.unfocus(),
+                cursorColor: palette.accentPrimary,
+                style: TextStyle(
                   fontSize: 13,
-                  color: _tertiaryTextColor,
+                  color: _primaryTextColor,
                   fontWeight: FontWeight.w500,
-                  fontFamily: 'PingFang SC',
                 ),
-                border: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
+                decoration: InputDecoration(
+                  isDense: true,
+                  filled: false,
+                  fillColor: Colors.transparent,
+                  hintText: context.trLegacy('搜索模型 ID'),
+                  hintStyle: TextStyle(
+                    fontSize: 12.5,
+                    color: _tertiaryTextColor,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  border: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
             ),
-          ),
-        ],
+            if (_hasSearchQuery) ...[
+              const SizedBox(width: 6),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _searchController.clear,
+                child: Icon(
+                  LucideIcons.x,
+                  size: 14,
+                  color: _tertiaryTextColor,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildRestoreDefaultTile() {
     final selected = widget.currentBinding == null;
-    final label = context.trLegacy('恢复默认（${widget.scene.defaultModel}）');
+    final defaultModel = widget.scene.defaultModel.trim();
+    final label = defaultModel.isEmpty
+        ? context.trLegacy('恢复默认（未绑定）')
+        : context.trLegacy('恢复默认（$defaultModel）');
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 2, 10, 4),
       child: InkWell(
