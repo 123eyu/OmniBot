@@ -149,3 +149,26 @@ Official contracts:
 - [Models and inference](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)
 - [Errors and recovery](https://developers.openai.com/siwc/token-sharing-open-source/errors-and-recovery)
 - [Preview limitations](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations)
+
+## Responses stream media types
+
+OkHttp's SSE reader rejects a successful response before `onOpen` when its body
+media type is not `text/event-stream`. If the body actually contains Responses
+SSE, reading it as an error can wait for generation to finish and then produce
+misleading text such as `HTTP 200: event: response.created data: ...`.
+
+For the exact official OAuth Responses endpoint, a bounded peek now recognizes
+Responses SSE framing and normalizes the body media type before the same OkHttp
+reader consumes it. Original headers remain available for diagnostics. It does
+not replay the request, change authentication, or introduce a second event
+reducer. Ordinary JSON/HTML and non-2xx errors are not converted into successful
+streams; official completion/failure semantics remain unchanged.
+
+OAuth HTTP 2xx transport failures no longer drain the live body into an error
+message or accept a non-streaming JSON object in place of `response.completed`.
+The real transport exception is retained. Non-2xx error-body capture is bounded.
+MockWebServer regressions cover the original failure, MIME variants, BOM and
+comments, early stream admission, cancellation, semantic errors and incomplete
+streams. A screenshot containing only `response.created` cannot establish model
+completion or identify who supplied an incorrect response header; use the
+request log's actual transport error and Content-Type when available.

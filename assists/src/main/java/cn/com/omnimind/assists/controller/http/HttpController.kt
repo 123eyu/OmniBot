@@ -363,7 +363,12 @@ object HttpController {
                     }
                     requestLogSeed?.let { seed ->
                         val fallbackBody = runCatching {
-                            response?.peekBody(1024L * 1024L)?.string()
+                            when {
+                                !requireResponsesCompleted -> response?.peekBody(1024L * 1024L)?.string()
+                                response?.isSuccessful == false && rawEvents.isEmpty() ->
+                                    response.peekBody(64L * 1024L).string()
+                                else -> null
+                            }
                         }.getOrNull()
                         persistAiRequestLog(
                             seed = seed,
@@ -2791,6 +2796,18 @@ object HttpController {
 
     private val chatGptStreamingClient: OkHttpClient by lazy {
         openAIStreamingClient.newBuilder()
+            .addInterceptor { chain ->
+                val response = chain.proceed(chain.request())
+                if (chain.request().method == "POST" &&
+                    chain.request().url.toString() == "${ChatGptOAuthProvider.BASE_URL}/responses") {
+                    try {
+                        OpenAiResponsesSseBody.normalize(response)
+                    } catch (error: Exception) {
+                        response.close()
+                        throw error
+                    }
+                } else response
+            }
             .followRedirects(false)
             .followSslRedirects(false)
             .retryOnConnectionFailure(false)
@@ -4039,7 +4056,12 @@ object HttpController {
             }
 
             override fun onFailure(eventSource: EventSource, t: Throwable?, response: okhttp3.Response?) {
-                val body = response?.body?.string()
+                // A rejected HTTP 2xx stream may still be producing data. Do
+                // not drain it into an error string or accept partial SSE as
+                // a completed response. Genuine admission errors are bounded.
+                val body = if (response?.isSuccessful == false) {
+                    runCatching { response.peekBody(64L * 1024L).string() }.getOrNull()
+                } else null
                 result.complete(buildFailureSceneResponse(
                     code = response?.code?.toString() ?: "500",
                     message = if (response?.code == 401) {

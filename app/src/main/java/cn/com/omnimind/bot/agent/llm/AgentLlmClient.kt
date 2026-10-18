@@ -8,6 +8,7 @@ import cn.com.omnimind.baselib.llm.ChatCompletionRequest
 import cn.com.omnimind.baselib.llm.ChatCompletionMessage
 import cn.com.omnimind.baselib.llm.ChatCompletionTurn
 import cn.com.omnimind.baselib.llm.ChatCompletionUsage
+import cn.com.omnimind.baselib.llm.ChatGptOAuthProvider
 import cn.com.omnimind.baselib.llm.OpenAiWireApi
 import cn.com.omnimind.baselib.llm.OpenAiResponsesFunctionNameCodec
 import cn.com.omnimind.baselib.llm.OmniOfficialProvider
@@ -711,7 +712,13 @@ class HttpAgentLlmClient(
                         "status=${response?.code ?: "none"} " +
                         "protocol=${routeInfo.protocolType}"
                 )
-                val responseBody = extractRawResponseBody(response)
+                val requiresResponsesStream = routeInfo.routeTag == ChatGptOAuthProvider.SOURCE_TYPE
+                // A successful HTTP admission can still fail the SSE transport's
+                // header/framing checks. Reading its live body here would wait
+                // for generation to end and turn response.created into an error.
+                val responseBody = if (requiresResponsesStream && response?.isSuccessful == true) {
+                    null
+                } else extractRawResponseBody(response, bounded = requiresResponsesStream)
                 parseSuccessfulNonStreamingResponsesTurn(
                     statusCode = response?.code,
                     responseBody = responseBody,
@@ -796,8 +803,10 @@ class HttpAgentLlmClient(
     }
 
 
-    private fun extractRawResponseBody(response: Response?): String? {
-        val body = runCatching { response?.body?.string() }.getOrNull()?.trim().orEmpty()
+    private fun extractRawResponseBody(response: Response?, bounded: Boolean): String? {
+        val body = runCatching {
+            if (bounded) response?.peekBody(64L * 1024)?.string() else response?.body?.string()
+        }.getOrNull()?.trim().orEmpty()
         return body.takeIf { it.isNotEmpty() }
     }
 
@@ -809,6 +818,7 @@ class HttpAgentLlmClient(
         if (
             statusCode == null ||
             statusCode !in 200..299 ||
+            routeInfo.routeTag == ChatGptOAuthProvider.SOURCE_TYPE ||
             !OpenAiWireApi.isResponses(routeInfo.wireApi)
         ) return null
         val parsed = HttpController.parseOpenAiResponsesBody(responseBody)
@@ -847,6 +857,9 @@ class HttpAgentLlmClient(
     private fun extractErrorReason(responseBody: String?): String? {
         val raw = responseBody?.trim().orEmpty()
         if (raw.isEmpty()) return null
+        // SSE framing is diagnostic transport data, never a provider error
+        // message. Preserve the actual transport exception instead.
+        if (Regex("^(?:\\uFEFF)?(?:event:|data:|id:|retry:|:)").containsMatchIn(raw)) return null
         val parsed = runCatching { json.parseToJsonElement(raw) }.getOrNull() as? JsonObject
             ?: return sanitizeReason(raw)
         val errorObj = parsed["error"] as? JsonObject
