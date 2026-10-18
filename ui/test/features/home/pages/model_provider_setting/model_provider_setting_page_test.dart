@@ -133,6 +133,59 @@ void main() {
     ModelsDevCatalogService.resetForTesting();
   });
 
+  testWidgets(
+    'ChatGPT provider shows account controls without editable credentials',
+    (tester) async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(assistCoreChannel, (call) async {
+        switch (call.method) {
+          case 'listModelProviderProfiles':
+            return profilePayload(
+              name: 'Personal ChatGPT',
+              sourceType: 'chatgpt_oauth',
+              wireApi: 'responses',
+            );
+          case 'getChatGptAccount':
+            return {
+              'connected': true,
+              'email': 'sample@example.com',
+              'planEnabled': true,
+            };
+          case 'fetchProviderModels':
+            return <Map<String, dynamic>>[];
+        }
+        return null;
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const ModelProviderSettingPage(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byKey(const Key('chatgpt-account-section')), findsOneWidget);
+      expect(find.text('sample@example.com'), findsOneWidget);
+      expect(find.text('ChatGPT'), findsOneWidget);
+      expect(
+        find.widgetWithText(TextField, 'Personal ChatGPT'),
+        findsOneWidget,
+      );
+      expect(find.text('API Key'), findsNothing);
+      expect(find.text('Base URL'), findsNothing);
+      expect(
+        find.byKey(const Key('provider-api-key-visibility-button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('provider-custom-headers-toggle')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final fieldLabel in ['API Key', 'Base URL']) {
     testWidgets(
       'refresh persists the $fieldLabel draft and reopening queries again',
@@ -621,12 +674,18 @@ void main() {
       find.byKey(const Key('provider-protocol-type-menu')),
     );
     expect(menuRect.width, greaterThanOrEqualTo(200));
+    expect(find.text('ChatGPT'), findsOneWidget);
     expect(find.text('DeepSeek'), findsOneWidget);
     expect(find.text('Mimo'), findsOneWidget);
     expect(find.text('Kimi'), findsOneWidget);
     expect(find.text('MiniMax'), findsOneWidget);
     expect(find.text('阿里百炼'), findsOneWidget);
     expect(find.text('OpenAI'), findsAtLeastNWidgets(1));
+    await tester.drag(
+      find.byKey(const Key('provider-protocol-type-menu')),
+      const Offset(0, -180),
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Anthropic'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -792,6 +851,62 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'selecting ChatGPT clears credentials and fixes the official Responses endpoint',
+    (tester) async {
+      final saves = <Map<dynamic, dynamic>>[];
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(assistCoreChannel, (call) async {
+        switch (call.method) {
+          case 'listModelProviderProfiles':
+            return profilePayload();
+          case 'saveModelProviderProfile':
+            final args = Map<dynamic, dynamic>.from(call.arguments as Map);
+            saves.add(args);
+            return savedProfileResponse(args);
+          case 'getChatGptAccount':
+            return {'connected': false};
+        }
+        return null;
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const ModelProviderSettingPage(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final keyField = find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.labelText == 'API Key',
+      );
+      await tester.enterText(keyField, 'unsaved-api-key');
+      await tester.tap(find.byKey(const Key('provider-protocol-type-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ChatGPT'));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+      final saved = saves
+          .where((args) => args['sourceType'] == 'chatgpt_oauth')
+          .single;
+      final saveCount = saves.length;
+      expect(saved['sourceType'], 'chatgpt_oauth');
+      expect(saved['baseUrl'], 'https://api.openai.com/v1');
+      expect(saved['protocolType'], 'openai_compatible');
+      expect(saved['wireApi'], 'responses');
+      expect(saved['clearApiKey'], isTrue);
+      expect(saved['clearCustomHeaders'], isTrue);
+      expect(saved.containsKey('apiKey'), isFalse);
+      expect(saved.containsKey('customHeaders'), isFalse);
+      expect(find.byKey(const Key('chatgpt-login-button')), findsOneWidget);
+      expect(find.text('API Key'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(saves, hasLength(saveCount));
+    },
+  );
 
   testWidgets('provider fields do not auto-save while focused', (tester) async {
     var saveCalls = 0;

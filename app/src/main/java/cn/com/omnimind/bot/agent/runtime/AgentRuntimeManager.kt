@@ -9,6 +9,7 @@ import com.ai.assistance.operit.terminal.setup.buildAlpinePackageInstallCommand
 import cn.com.omnimind.baselib.database.DatabaseHelper
 import cn.com.omnimind.baselib.llm.ModelProviderProfile
 import cn.com.omnimind.baselib.llm.ModelProviderConfigStore
+import cn.com.omnimind.baselib.llm.ChatGptOAuthProvider
 import cn.com.omnimind.baselib.llm.OmniOfficialProvider
 import cn.com.omnimind.baselib.llm.OpenAiWireApi
 import cn.com.omnimind.baselib.llm.PlatformAiProvisioner
@@ -131,7 +132,8 @@ internal suspend fun fetchAgentProviderModels(
             apiKey = profile.apiKey,
             customHeaders = profile.customHeaders,
             protocolType = profile.protocolType,
-            wireApi = profile.wireApi
+            wireApi = profile.wireApi,
+            providerProfile = profile,
         )
     }
 }
@@ -1976,6 +1978,10 @@ class AgentRuntimeManager private constructor(
         // Harness.  Dependency installation belongs exclusively to the
         // explicit `agent/prepare` request above.
         val sharedProviderProfile = currentAgentProviderProfile()
+        require(!usesSharedProvider || !ChatGptOAuthProvider.isOAuth(sharedProviderProfile?.sourceType)) {
+            "ChatGPT OAuth currently supports Xiaowan and built-in model requests. " +
+                "Use the Agent's own ChatGPT login or an API-key provider for this external Harness."
+        }
         val sharedProvider = currentAgentProviderCredentials()
         val boundModel = currentAgentBoundModel()
         if (usesSharedProvider) {
@@ -2115,7 +2121,8 @@ class AgentRuntimeManager private constructor(
             ?.takeIf { it.providerProfileId.isNotBlank() && it.modelId.isNotBlank() }
             ?.takeIf { binding ->
                 ModelProviderConfigStore.getProfile(binding.providerProfileId)
-                    ?.let { it.baseUrl.isNotBlank() && it.apiKey.isNotBlank() } == true
+                    ?.let { it.baseUrl.isNotBlank() &&
+                        (it.apiKey.isNotBlank() || (ChatGptOAuthProvider.isOAuth(it.sourceType) && it.ready)) } == true
             }
         if (current != null) return current
 

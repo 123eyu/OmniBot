@@ -13,6 +13,7 @@
     <exclude domain="sharedpref" path="omni_account_tokens.xml" />
     <!-- User-supplied provider credentials are device-bound and must not be backed up. -->
     <exclude domain="sharedpref" path="omni_model_provider_secrets.xml" />
+    <exclude domain="sharedpref" path="omni_chatgpt_oauth_secrets.xml" />
     <!--
    <include domain="sharedpref" path="."/>
    <exclude domain="sharedpref" path="device.xml"/>

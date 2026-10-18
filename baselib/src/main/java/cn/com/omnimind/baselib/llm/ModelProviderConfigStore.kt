@@ -1,6 +1,7 @@
 package cn.com.omnimind.baselib.llm
 
 import android.content.Context
+import cn.com.omnimind.baselib.llm.chatgpt.ChatGptOAuthManager
 import cn.com.omnimind.baselib.util.ContentEndpointSecurity
 import cn.com.omnimind.baselib.util.OmniLog
 import cn.com.omnimind.baselib.util.CredentialEndpointSecurity
@@ -122,6 +123,7 @@ object ModelProviderConfigStore {
         val revision: Long? = null,
     )
 
+    @Synchronized
     fun listProfiles(): List<ModelProviderProfile> {
         ModelProviderMigration.ensureMigrated()
         val mmkv = MMKV.defaultMMKV()
@@ -211,6 +213,7 @@ object ModelProviderConfigStore {
         return target
     }
 
+    @Synchronized
     fun replaceProfiles(
         profiles: List<ModelProviderProfile>,
         editingProfileId: String? = null
@@ -266,9 +269,10 @@ object ModelProviderConfigStore {
         mmkv.encode(KEY_EDITING_PROFILE_ID, resolvedEditingId)
         getProfile(resolvedEditingId)?.let { syncLegacyFlatConfig(mmkv, it) }
 
-        return sanitized
+        return sanitized.map(ChatGptOAuthProvider::normalize)
     }
 
+    @Synchronized
     fun saveProfile(
         id: String? = null,
         name: String,
@@ -316,8 +320,8 @@ object ModelProviderConfigStore {
             existingId = if (currentIndex >= 0) normalizedId else null
         )
         val existingProfile = current.getOrNull(currentIndex)
-        val nextRevision = (existingProfile?.revision ?: 0L) + 1L
-        val nextProfile = ModelProviderProfile(
+        val nextRevision = (existingProfile?.let { it.revision - it.credentialRevision } ?: 0L) + 1L
+        val nextProfile = ChatGptOAuthProvider.normalize(ModelProviderProfile(
             id = normalizedId,
             name = sanitizedName,
             baseUrl = normalizedBaseUrl,
@@ -332,7 +336,7 @@ object ModelProviderConfigStore {
             protocolType = normalizedProtocolType,
             wireApi = normalizedWireApi,
             revision = nextRevision,
-        )
+        ))
 
         if (currentIndex >= 0) {
             current[currentIndex] = nextProfile
@@ -344,9 +348,12 @@ object ModelProviderConfigStore {
         clearDeletedOfficialProfileIfNeeded(mmkv, normalizedId)
         mmkv.encode(KEY_EDITING_PROFILE_ID, nextProfile.id)
         syncLegacyFlatConfig(mmkv, nextProfile)
-        return nextProfile
+        return if (ChatGptOAuthProvider.isOAuth(nextProfile.sourceType)) {
+            getProfile(nextProfile.id) ?: nextProfile
+        } else nextProfile
     }
 
+    @Synchronized
     fun deleteProfile(profileId: String): List<ModelProviderProfile> {
         ModelProviderMigration.ensureMigrated()
         val mmkv = MMKV.defaultMMKV()
@@ -421,9 +428,13 @@ object ModelProviderConfigStore {
         }
     }
 
+    @Synchronized
     fun clearConfig() {
         val current = getEditingProfile()
         require(!current.readOnly) { "builtin provider is read only" }
+        if (ChatGptOAuthProvider.isOAuth(current.sourceType)) {
+            ChatGptOAuthManager.removeProfile(current.id)
+        }
         saveProfile(
             id = current.id,
             name = current.name,
@@ -674,6 +685,10 @@ object ModelProviderConfigStore {
         existingSourceType: String?
     ): String {
         val normalizedRequested = requestedSourceType?.trim()?.lowercase().orEmpty()
+        if (ChatGptOAuthProvider.isOAuth(normalizedRequested) ||
+            (normalizedRequested.isEmpty() && ChatGptOAuthProvider.isOAuth(existingSourceType))) {
+            return ChatGptOAuthProvider.SOURCE_TYPE
+        }
         if (normalizedRequested == "custom") {
             return "custom"
         }
@@ -823,7 +838,7 @@ object ModelProviderConfigStore {
                 statusText = profile.statusText,
                 protocolType = normalizeProtocolType(profile.protocolType),
                 wireApi = normalizeWireApi(profile.wireApi),
-                revision = profile.revision,
+                revision = profile.revision - profile.credentialRevision,
             )
         }
         return gson.toJson(normalized)
@@ -859,7 +874,23 @@ object ModelProviderConfigStore {
     ): List<ModelProviderProfile> {
         val store = requireSecretStore()
         return profiles.map { profile ->
-            mergeProfileSecrets(profile, store.readProfile(profile.id))
+            val hydrated = mergeProfileSecrets(profile, store.readProfile(profile.id))
+            if (!ChatGptOAuthProvider.isOAuth(profile.sourceType)) return@map hydrated
+            val account = ChatGptOAuthManager.account(profile.id)
+            val ready = account["connected"] == true && account["planEnabled"] == true &&
+                account["needsReauth"] != true
+            ChatGptOAuthProvider.withAccountRevision(
+                hydrated, (account["revision"] as? Number)?.toLong() ?: 0L,
+            ).copy(
+                ready = ready,
+                statusText = when {
+                    account["secureStorageAvailable"] == false -> "ChatGPT 安全凭据存储不可用"
+                    ready -> account["email"] as? String
+                    account["needsReauth"] == true -> "请重新登录 ChatGPT"
+                    account["connected"] == true -> "请授权使用 ChatGPT 套餐"
+                    else -> "请使用 ChatGPT 登录"
+                },
+            )
         }
     }
 
@@ -1000,7 +1031,18 @@ object ModelProviderConfigStore {
         }
         val safeProfiles = profiles.map(::enforceCredentialTransport)
         val previousMetadata = mmkv.decodeString(KEY_PROVIDER_PROFILES)
-        val previousIds = decodeProfilesJson(previousMetadata).mapTo(LinkedHashSet()) { it.id }
+        val previousProfiles = decodeProfilesJson(previousMetadata)
+        // Invalidate OAuth before committing a removal/conversion. If secure
+        // deletion fails, metadata must remain unchanged; otherwise the editor
+        // could report failure after silently changing the selected provider.
+        // A later metadata write failure may leave the retained profile signed
+        // out, which is safer than restoring credentials after a deletion.
+        val retainedOAuthIds = safeProfiles.filter { ChatGptOAuthProvider.isOAuth(it.sourceType) }
+            .mapTo(HashSet()) { it.id }
+        previousProfiles
+            .filter { ChatGptOAuthProvider.isOAuth(it.sourceType) && it.id !in retainedOAuthIds }
+            .forEach { ChatGptOAuthManager.removeProfile(it.id) }
+        val previousIds = previousProfiles.mapTo(LinkedHashSet()) { it.id }
         val touchedIds = previousIds + safeProfiles.map { it.id }
         val previousSecrets = touchedIds.associateWith(store::readProfile)
         try {
@@ -1063,6 +1105,9 @@ object ModelProviderConfigStore {
     }
 
     private fun enforceCredentialTransport(profile: ModelProviderProfile): ModelProviderProfile {
+        if (ChatGptOAuthProvider.isOAuth(profile.sourceType)) {
+            return ChatGptOAuthProvider.normalize(profile)
+        }
         val endpoint = stripDirectRequestUrlMarker(profile.baseUrl)
         val safeMetadata = try {
             ContentEndpointSecurity.requireSafe(

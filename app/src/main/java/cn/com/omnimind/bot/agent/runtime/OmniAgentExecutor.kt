@@ -263,7 +263,8 @@ class OmniAgentExecutor(
                         explicitCustomHeaders = modelOverride?.customHeaders,
                         explicitModel = modelOverride?.modelId,
                         explicitProtocolType = modelOverride?.protocolType,
-                        explicitWireApi = modelOverride?.wireApi
+                        explicitWireApi = modelOverride?.wireApi,
+                        explicitProviderProfileId = modelOverride?.oauthProfileId,
                     )
                 )
             }.getOrDefault(AgentToolImageContinuationPolicy.DEFAULT)

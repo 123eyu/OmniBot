@@ -31,6 +31,8 @@ data class ModelProviderProfile(
     val protocolType: String = "openai_compatible",
     val wireApi: String = OpenAiWireApi.CHAT_COMPLETIONS,
     val revision: Long = 0L,
+    /** Runtime-only account version; excluded from persisted provider metadata. */
+    val credentialRevision: Long = 0L,
 ) {
     fun isConfigured(): Boolean = baseUrl.isNotBlank()
 }

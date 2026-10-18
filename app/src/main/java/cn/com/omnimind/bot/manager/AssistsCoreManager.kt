@@ -21,6 +21,7 @@ import cn.com.omnimind.baselib.llm.ChatCompletionRequest
 import cn.com.omnimind.baselib.llm.ChatCompletionTool
 import cn.com.omnimind.baselib.llm.AiRequestLogStore
 import cn.com.omnimind.baselib.llm.DeepSeekProvider
+import cn.com.omnimind.baselib.llm.ChatGptOAuthProvider
 import cn.com.omnimind.baselib.llm.ModelProviderConfig
 import cn.com.omnimind.baselib.llm.ModelProviderProfile
 import cn.com.omnimind.baselib.llm.ReasoningEffort
@@ -1622,8 +1623,9 @@ class AssistsCoreManager(private val context: Context) {
                     }
                     return@launch
                 }
-                val profile = profileId?.let(ModelProviderConfigStore::getProfile)
-                    ?: ModelProviderConfigStore.getEditingProfile()
+                val profile = if (profileId != null) {
+                    requireNotNull(ModelProviderConfigStore.getProfile(profileId)) { "provider profile changed" }
+                } else ModelProviderConfigStore.getEditingProfile()
                 require(expectedProfileRevision != null && expectedProfileRevision >= 0L) {
                     "provider profile revision is required"
                 }
@@ -1638,6 +1640,11 @@ class AssistsCoreManager(private val context: Context) {
                         )
                 ) { "provider profile changed" }
                 val apiBase = if (baseUrlArg.isNotEmpty()) baseUrlArg else profile.baseUrl
+                require(!ChatGptOAuthProvider.isOAuth(profile.sourceType) ||
+                    (!useProvidedApiKey && !useProvidedCustomHeaders &&
+                        ModelProviderConfigStore.sameCanonicalEndpoint(apiBase, ChatGptOAuthProvider.BASE_URL))) {
+                    "ChatGPT OAuth requires its registered provider endpoint"
+                }
                 val apiKey = if (useProvidedApiKey) apiKeyArg else profile.apiKey
                 val customHeaders = if (useProvidedCustomHeaders) customHeadersArg else profile.customHeaders
                 val models = HttpController.fetchProviderModels(
@@ -1645,9 +1652,10 @@ class AssistsCoreManager(private val context: Context) {
                     apiKey = apiKey,
                     customHeaders = customHeaders,
                     protocolType = profile.protocolType,
-                    wireApi = profile.wireApi
+                    wireApi = profile.wireApi,
+                    providerProfile = profile,
                 )
-                val currentProfile = profileId?.let(ModelProviderConfigStore::getProfile)
+                val currentProfile = ModelProviderConfigStore.getProfile(profile.id)
                 require(
                     currentProfile != null &&
                         currentProfile.revision == expectedProfileRevision &&
@@ -1717,9 +1725,15 @@ class AssistsCoreManager(private val context: Context) {
                     }
                     return@launch
                 }
-                val profile = profileId?.let(ModelProviderConfigStore::getProfile)
-                    ?: ModelProviderConfigStore.getEditingProfile()
+                val profile = if (profileId != null) {
+                    requireNotNull(ModelProviderConfigStore.getProfile(profileId)) { "provider profile changed" }
+                } else ModelProviderConfigStore.getEditingProfile()
                 val apiBase = if (baseUrlArg.isNotEmpty()) baseUrlArg else profile.baseUrl
+                require(!ChatGptOAuthProvider.isOAuth(profile.sourceType) ||
+                    (!useProvidedApiKey && !useProvidedCustomHeaders &&
+                        ModelProviderConfigStore.sameCanonicalEndpoint(apiBase, ChatGptOAuthProvider.BASE_URL))) {
+                    "ChatGPT OAuth requires its registered provider endpoint"
+                }
                 val apiKey = if (useProvidedApiKey) apiKeyArg else profile.apiKey
                 val customHeaders = if (useProvidedCustomHeaders) {
                     customHeadersArg
@@ -1732,8 +1746,14 @@ class AssistsCoreManager(private val context: Context) {
                     apiKey = apiKey,
                     customHeaders = customHeaders,
                     protocolType = profile.protocolType,
-                    wireApi = profile.wireApi
+                    wireApi = profile.wireApi,
+                    providerProfile = profile,
                 )
+                val currentProfile = ModelProviderConfigStore.getProfile(profile.id)
+                require(currentProfile != null && currentProfile.revision == profile.revision &&
+                    ModelProviderConfigStore.sameCanonicalEndpoint(currentProfile.baseUrl, profile.baseUrl)) {
+                    "provider profile changed"
+                }
 
                 withContext(Dispatchers.Main) {
                     result.success(

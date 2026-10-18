@@ -17,6 +17,9 @@ import cn.com.omnimind.baselib.llm.ProviderRequestCapabilities
 import cn.com.omnimind.baselib.database.DatabaseHelper
 import cn.com.omnimind.baselib.database.TokenUsageRecord
 import cn.com.omnimind.baselib.llm.ModelProviderConfig
+import cn.com.omnimind.baselib.llm.ModelProviderProfile
+import cn.com.omnimind.baselib.llm.ChatGptOAuthProvider
+import cn.com.omnimind.baselib.llm.chatgpt.ChatGptOAuthManager
 import cn.com.omnimind.baselib.llm.ModelProviderConfigStore
 import cn.com.omnimind.baselib.util.OmniLog
 import cn.com.omnimind.baselib.llm.ModelSceneRegistry
@@ -30,6 +33,7 @@ import cn.com.omnimind.baselib.llm.ProviderModelOption
 import cn.com.omnimind.baselib.llm.ProviderCustomHeaderUtils
 import cn.com.omnimind.baselib.llm.ReasoningEffort
 import cn.com.omnimind.baselib.llm.SceneModelBindingStore
+import cn.com.omnimind.baselib.llm.SceneModelBindingEntry
 import cn.com.omnimind.baselib.llm.SceneOperationConfigStore
 import cn.com.omnimind.baselib.llm.contentText
 import cn.com.omnimind.baselib.llm.encodeRequestToString
@@ -51,6 +55,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -109,7 +114,8 @@ object HttpController {
         val overrideApplied: Boolean,
         val overrideModel: String?,
         val protocolType: String = "openai_compatible",
-        val wireApi: String = OpenAiWireApi.CHAT_COMPLETIONS
+        val wireApi: String = OpenAiWireApi.CHAT_COMPLETIONS,
+        val oauthProfileId: String? = null,
     )
 
     private data class AiRequestLogSeed(
@@ -213,7 +219,8 @@ object HttpController {
         explicitCustomHeaders: Map<String, String>? = null,
         explicitModel: String? = null,
         explicitProtocolType: String? = null,
-        explicitWireApi: String? = null
+        explicitWireApi: String? = null,
+        explicitProviderProfileId: String? = null,
     ): ChatCompletionRouteInfo {
         return resolveSceneRequest(
             modelOrScene = modelOrScene,
@@ -222,7 +229,8 @@ object HttpController {
             explicitCustomHeaders = explicitCustomHeaders,
             explicitModel = explicitModel,
             explicitProtocolType = explicitProtocolType,
-            explicitWireApi = explicitWireApi
+            explicitWireApi = explicitWireApi,
+            explicitProviderProfileId = explicitProviderProfileId,
         ).toRouteInfo()
     }
 
@@ -266,11 +274,15 @@ object HttpController {
     private fun createLoggingEventListener(
         label: String,
         delegate: EventSourceListener,
-        requestLogSeed: AiRequestLogSeed? = null
+        requestLogSeed: AiRequestLogSeed? = null,
+        requireResponsesCompleted: Boolean = false,
     ): EventSourceListener {
         val fullContent = StringBuilder()
         val rawEvents = mutableListOf<String>()
         var responseCode: Int? = null
+        var responsesCompleted = false
+        var responsesFailure: String? = null
+        var diagnosticChars = 0
         return object : EventSourceListener() {
             override fun onOpen(eventSource: EventSource, response: okhttp3.Response) {
                 responseCode = response.code
@@ -283,12 +295,29 @@ object HttpController {
                 type: String?,
                 data: String
             ) {
+                if (requireResponsesCompleted) {
+                    val event = runCatching { completionJson.parseToJsonElement(data) as? KxJsonObject }.getOrNull()
+                    val eventType = type?.takeIf(String::isNotBlank) ?: event?.text("type")
+                    if (event?.get("error") is KxJsonObject) responsesFailure = data.take(500)
+                    when (eventType) {
+                        "response.completed" -> {
+                            val response = event?.get("response") as? KxJsonObject
+                            if (response?.text("status") == "completed") responsesCompleted = true
+                            else responsesFailure = "Invalid response.completed payload"
+                        }
+                        "response.failed", "response.incomplete", "error" -> responsesFailure = data.take(500)
+                    }
+                }
                 delegate.onEvent(eventSource, id, type, data)
                 runCatching {
-                    appendStreamLogChunk(fullContent, data)
-                    data.trim()
-                        .takeIf { it.isNotEmpty() && it != "[DONE]" }
-                        ?.let(rawEvents::add)
+                    // Diagnostic retention is bounded independently of model output.
+                    if (!requireResponsesCompleted || diagnosticChars + data.length <= 1024 * 1024) {
+                        appendStreamLogChunk(fullContent, data)
+                        data.trim()
+                            .takeIf { it.isNotEmpty() && it != "[DONE]" }
+                            ?.let(rawEvents::add)
+                        diagnosticChars += data.length
+                    }
                 }.onFailure {
                     OmniLog.w(
                         TAG,
@@ -306,9 +335,12 @@ object HttpController {
                     requestLogSeed?.let { seed ->
                         persistAiRequestLog(
                             seed = seed,
-                            success = true,
+                            success = !requireResponsesCompleted || (responsesCompleted && responsesFailure == null),
                             statusCode = responseCode,
-                            responseJson = AiRequestLogStore.buildStreamResponseJson(rawEvents)
+                            responseJson = AiRequestLogStore.buildStreamResponseJson(rawEvents),
+                            errorMessage = if (requireResponsesCompleted && (!responsesCompleted || responsesFailure != null)) {
+                                responsesFailure ?: "Responses stream ended before response.completed"
+                            } else null,
                         )
                     }
                 }.onFailure {
@@ -335,11 +367,12 @@ object HttpController {
                         }.getOrNull()
                         persistAiRequestLog(
                             seed = seed,
-                            success = false,
+                            success = requireResponsesCompleted && responsesCompleted && responsesFailure == null,
                             statusCode = response?.code ?: responseCode,
                             responseJson = AiRequestLogStore.buildStreamResponseJson(rawEvents)
                                 .ifBlank { AiRequestLogStore.prettyJsonOrRaw(fallbackBody) },
-                            errorMessage = t?.message
+                            errorMessage = if (requireResponsesCompleted && responsesCompleted && responsesFailure == null) null
+                                else responsesFailure ?: t?.message,
                         )
                     }
                 }.onFailure {
@@ -864,6 +897,7 @@ object HttpController {
         explicitModel: String? = null,
         explicitProtocolType: String? = null,
         explicitWireApi: String? = null,
+        explicitProviderProfileId: String? = null,
         @Suppress("UNUSED_PARAMETER") defaultTransport: ModelSceneRegistry.SceneTransport = ModelSceneRegistry.SceneTransport.OPENAI_COMPATIBLE
     ): ResolvedSceneRequest {
         val requestedModel = modelOrScene.trim()
@@ -903,7 +937,6 @@ object HttpController {
                 ?: PlatformAiProvisioner.officialProfileOrNull()
                     ?.takeIf { OmniOfficialProvider.isOfficialProfile(profileId) }
             }
-        val directBoundProfile = resolveBindingProfile(directSceneBinding)
         val sharedAgentBoundProfile = resolveBindingProfile(sharedAgentBinding)
         val sharedAgentModel = sharedAgentBinding
             ?.takeIf { sharedAgentBoundProfile?.isConfigured() == true }
@@ -924,16 +957,9 @@ object HttpController {
             requestedModel.startsWith("scene.") -> ModelSceneRegistry.resolveModel(requestedModel)
             else -> requestedModel
         }
-        // A dedicated VLM binding wins. If it is absent or stale, inherit the
-        // active Agent binding so every Agent capability uses one Provider.
-        val sceneBinding = when {
-            directSceneBinding != null && directBoundProfile?.isConfigured() == true ->
-                directSceneBinding
-            sceneProfile?.sceneId == SceneOperationConfigStore.SCENE_ID &&
-                sharedAgentBinding != null && sharedAgentBoundProfile?.isConfigured() == true ->
-                sharedAgentBinding
-            else -> directSceneBinding
-        }
+        // A saved direct binding is authoritative even when its provider was
+        // removed or cleared. Only an absent binding inherits the Agent route.
+        val sceneBinding = selectSceneBinding(directSceneBinding, sharedAgentBinding)
         val boundProfile = resolveBindingProfile(sceneBinding)
         // VLM is an Agent capability, not a second model route. Do not use the
         // legacy official VLM service as an implicit fallback: when the Agent
@@ -948,7 +974,7 @@ object HttpController {
             explicitBase == null &&
                 explicitResolvedModel == null &&
                 sceneBinding != null &&
-                boundProfile == null
+                boundProfile?.isConfigured() != true
         val overrideModel = when {
             explicitResolvedModel != null -> explicitResolvedModel
             bindingApplied -> sceneBinding?.modelId
@@ -959,6 +985,15 @@ object HttpController {
                 explicitResolvedModel != null ||
                 bindingApplied
 
+        val selectedProfile = selectRequestProvider(
+            explicitProviderProfileId = explicitProviderProfileId,
+            explicitProfile = explicitProviderProfileId?.let(ModelProviderConfigStore::getProfile),
+            bindingApplied = bindingApplied,
+            bindingProfileMissing = bindingProfileMissing,
+            boundProfile = boundProfile,
+            defaultProfile = if (explicitBase == null) ModelProviderConfigStore.getProfile(providerConfig.id) else null,
+        )
+        val oauthProfile = selectedProfile?.takeIf { ChatGptOAuthProvider.isOAuth(it.sourceType) }
         val providerBase = when {
             explicitBase != null -> explicitBase
             bindingApplied -> boundProfile?.baseUrl
@@ -1013,10 +1048,21 @@ object HttpController {
             else -> null
         }
 
-        if (officialProviderSelected) {
+        if (officialProviderSelected && oauthProfile == null) {
             aiAccess.unavailableReason?.let { throw IllegalStateException(it) }
         }
-        val transportRoute = AiRequestTransportPolicy.apply(
+        val transportRoute = if (oauthProfile != null) {
+            // OAuth credentials belong to this selected profile. Never use caller URL,
+            // key, headers, or protocol overrides to move them to another destination.
+            AiTransportRoute(
+                apiBase = ChatGptOAuthProvider.BASE_URL,
+                apiKey = null,
+                customHeaders = emptyMap(),
+                protocolType = "openai_compatible",
+                wireApi = OpenAiWireApi.RESPONSES,
+                routeTag = ChatGptOAuthProvider.SOURCE_TYPE,
+            )
+        } else AiRequestTransportPolicy.apply(
             access = aiAccess,
             byokRoute = AiTransportRoute(
                 apiBase = providerBase,
@@ -1041,14 +1087,8 @@ object HttpController {
             apiBase = transportRoute.apiBase,
             apiKey = transportRoute.apiKey,
             customHeaders = transportRoute.customHeaders,
-            providerProfileId = when {
-                bindingApplied -> boundProfile?.id
-                else -> null
-            },
-            providerProfileName = when {
-                bindingApplied -> boundProfile?.name
-                else -> null
-            },
+            providerProfileId = selectedProfile?.id,
+            providerProfileName = selectedProfile?.name,
             routeTag = transportRoute.routeTag,
             customApiBaseApplied = !transportRoute.apiBase.isNullOrBlank(),
             bindingApplied = bindingApplied,
@@ -1056,8 +1096,35 @@ object HttpController {
             overrideApplied = overrideApplied,
             overrideModel = overrideModel,
             protocolType = transportRoute.protocolType,
-            wireApi = transportRoute.wireApi
+            wireApi = transportRoute.wireApi,
+            oauthProfileId = oauthProfile?.id,
         )
+    }
+
+    private fun selectSceneBinding(
+        direct: SceneModelBindingEntry?,
+        sharedAgent: SceneModelBindingEntry?,
+    ): SceneModelBindingEntry? = direct ?: sharedAgent
+
+    private fun selectRequestProvider(
+        explicitProviderProfileId: String?,
+        explicitProfile: ModelProviderProfile?,
+        bindingApplied: Boolean,
+        bindingProfileMissing: Boolean,
+        boundProfile: ModelProviderProfile?,
+        defaultProfile: ModelProviderProfile?,
+    ): ModelProviderProfile? {
+        if (explicitProviderProfileId != null) {
+            checkNotNull(explicitProfile) { "Provider 配置不存在，请重新选择" }
+            check(ChatGptOAuthProvider.isOAuth(explicitProfile.sourceType)) {
+                "ChatGPT Provider 已更改，请重新选择"
+            }
+            return explicitProfile
+        }
+        // A stale binding still expresses the user's provider/account choice.
+        // Using the editing provider here would silently change billing routes.
+        check(!bindingProfileMissing) { "已绑定的 Provider 不存在或配置不完整，请重新选择模型提供商" }
+        return if (bindingApplied) boundProfile else defaultProfile
     }
 
     private fun normalizeApiBase(input: String): String? {
@@ -1630,6 +1697,21 @@ object HttpController {
         }.sortedBy { it.id.lowercase() }
     }
 
+    private fun parseChatGptModelsResponse(responseBody: String?): List<ProviderModelOption> {
+        val root = completionJson.parseToJsonElement(responseBody ?: "{}") as? KxJsonObject
+            ?: return emptyList()
+        val models = (root["models"] as? KxJsonArray).orEmpty().mapNotNull { raw ->
+            val item = raw as? KxJsonObject ?: return@mapNotNull null
+            val slug = item.text("slug").trim()
+            if (item.text("visibility") != "list" || slug.isEmpty()) return@mapNotNull null
+            KxJsonObject(item + ("id" to JsonPrimitive(slug)))
+        }
+        val parsedById = parseProviderModelsResponse(
+            buildJsonObject { put("data", KxJsonArray(models)) }.toString()
+        ).associateBy { it.id }
+        return models.mapNotNull { parsedById[it.text("id")] }
+    }
+
     private fun convertContentToAnthropicFormat(content: JsonElement?): Any? {
         return when {
             content == null -> null
@@ -1721,11 +1803,11 @@ object HttpController {
         }
     }
 
-    /**
-     * 包装一个 EventSourceListener，将 Anthropic SSE 事件实时翻译为 OpenAI-style chunks
-     * 后转发给 outer，使上层 AgentLlmStreamAccumulator 无需修改。
-     */
-    fun wrapResponsesListener(outer: EventSourceListener): EventSourceListener {
+    /** Projects Responses SSE onto the shared chat accumulator without a second lifecycle. */
+    fun wrapResponsesListener(
+        outer: EventSourceListener,
+        requireCompleted: Boolean = false,
+    ): EventSourceListener {
         return object : EventSourceListener() {
             private val toolCalls = linkedMapOf<String, ResponseToolCallState>()
             private val toolCallAliases = linkedMapOf<String, String>()
@@ -1734,6 +1816,7 @@ object HttpController {
             private var nextToolIndex = 0
             private var sawToolCall = false
             private var terminalFailureSignaled = false
+            private var completed = false
 
             override fun onOpen(eventSource: EventSource, response: okhttp3.Response) {
                 outer.onOpen(eventSource, response)
@@ -1745,7 +1828,9 @@ object HttpController {
                 type: String?,
                 data: String
             ) {
+                if (terminalFailureSignaled || completed) return
                 if (data == "[DONE]") {
+                    if (requireCompleted) return
                     outer.onEvent(eventSource, id, type, "[DONE]")
                     return
                 }
@@ -1891,8 +1976,15 @@ object HttpController {
                         )
                     }
                     "response.completed" -> {
-                        val responseObj = json.obj("response") ?: json
-                        val usage = responseObj.obj("usage")?.let(::normalizeResponsesUsage)
+                        val responseObj = json.obj("response")
+                        if (requireCompleted && responseObj?.string("status") != "completed") {
+                            terminalFailureSignaled = true
+                            outer.onFailure(eventSource, IllegalStateException("Invalid response.completed payload"), null)
+                            return
+                        }
+                        completed = true
+                        val completedResponse = responseObj ?: json
+                        val usage = completedResponse.obj("usage")?.let(::normalizeResponsesUsage)
                         outer.onEvent(
                             eventSource,
                             id,
@@ -1917,11 +2009,13 @@ object HttpController {
                                 ?.string("message")
                                 ?.takeIf(String::isNotBlank)
                             ?: eventType
-                        val message = "DeepSeek Responses $eventType: $detail"
+                        val message = "Responses $eventType: $detail"
                         val failureBody = buildJsonObject {
                             put("error", buildJsonObject {
                                 put("type", eventType)
                                 put("message", message)
+                                responseObj.obj("error")?.get("code")?.let { put("code", it) }
+                                responseObj.obj("error")?.get("param")?.let { put("param", it) }
                                 put("raw_event", json.toString())
                             })
                         }.toString()
@@ -1942,7 +2036,12 @@ object HttpController {
                         )
                     }
                     else -> {
-                        if (json.containsKey("error")) {
+                        if (requireCompleted && (eventType == "error" || json.containsKey("error"))) {
+                            terminalFailureSignaled = true
+                            val detail = json.obj("error")?.string("message")
+                                ?.takeIf(String::isNotBlank) ?: json.string("message").ifBlank { "Responses error" }
+                            outer.onFailure(eventSource, IllegalStateException(detail), null)
+                        } else if (json.containsKey("error")) {
                             outer.onEvent(eventSource, id, type, data)
                         }
                     }
@@ -1950,7 +2049,13 @@ object HttpController {
             }
 
             override fun onClosed(eventSource: EventSource) {
-                outer.onClosed(eventSource)
+                if (terminalFailureSignaled) return
+                if (requireCompleted && !completed) {
+                    terminalFailureSignaled = true
+                    outer.onFailure(eventSource, IllegalStateException("Responses stream ended before response.completed"), null)
+                } else {
+                    outer.onClosed(eventSource)
+                }
             }
 
             override fun onFailure(
@@ -1958,7 +2063,10 @@ object HttpController {
                 t: Throwable?,
                 response: okhttp3.Response?
             ) {
-                outer.onFailure(eventSource, t, response)
+                val failure = if (requireCompleted && response?.code == 401) {
+                    IllegalStateException("ChatGPT 身份或套餐授权未被接受，请检查所选账号和授权范围。", t)
+                } else t
+                outer.onFailure(eventSource, failure, response)
             }
 
             private fun getOrCreateResponsesToolCallState(raw: KxJsonObject): ResponseToolCallState {
@@ -2681,6 +2789,36 @@ object HttpController {
             .build()
     }
 
+    private val chatGptStreamingClient: OkHttpClient by lazy {
+        openAIStreamingClient.newBuilder()
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .retryOnConnectionFailure(false)
+            .build()
+    }
+
+    private val chatGptHttp1StreamingClient: OkHttpClient by lazy {
+        chatGptStreamingClient.newBuilder().protocols(listOf(Protocol.HTTP_1_1)).build()
+    }
+
+    private val chatGptModelsClient: OkHttpClient by lazy {
+        chatGptStreamingClient.newBuilder().readTimeout(60, java.util.concurrent.TimeUnit.SECONDS).build()
+    }
+
+    private fun buildChatGptRequest(accessToken: String, payload: KxJsonObject?): Request {
+        require(accessToken.isNotBlank()) { "ChatGPT 登录已失效，请重新登录" }
+        val builder = Request.Builder()
+            .url("${ChatGptOAuthProvider.BASE_URL}/${if (payload == null) "models" else "responses"}")
+            .header("Authorization", "Bearer $accessToken")
+        return if (payload == null) builder.get().build() else builder
+            .header("Accept", "text/event-stream")
+            .post(completionJson.toStreamingRequestBody(payload))
+            .build()
+    }
+
+    private suspend fun chatGptRequest(profileId: String, payload: KxJsonObject?): Request =
+        buildChatGptRequest(ChatGptOAuthManager.accessToken(profileId), payload)
+
     private fun openAIStreamClient(forceHttp1: Boolean = false): OkHttpClient =
         if (forceHttp1) openAIHttp1StreamingClient else openAIStreamingClient
 
@@ -3066,6 +3204,34 @@ object HttpController {
         return stripAnthropicOnlyFields(completionJson.encodeToJsonElement(payload)) as KxJsonObject
     }
 
+    private fun buildChatGptResponsesRequestPayload(
+        root: KxJsonObject,
+        resolvedModel: String,
+    ): KxJsonObject {
+        val responses = buildOpenAIResponsesRequestPayload(root, resolvedModel, ProviderRequestCapabilities())
+        val tools = responses["tools"] as? KxJsonArray ?: KxJsonArray(emptyList())
+        val history = responses["input"] as? KxJsonArray ?: KxJsonArray(emptyList())
+        return buildJsonObject {
+            responses.forEach { (key, value) ->
+                if (key !in setOf("max_output_tokens", "tools", "input", "stream")) put(key, value)
+            }
+            put("store", false)
+            put("stream", true)
+            put("input", buildJsonArray {
+                if (tools.isNotEmpty()) add(buildJsonObject {
+                    put("type", "additional_tools")
+                    put("role", "developer")
+                    put("tools", tools)
+                })
+                // Plain reasoning text is not a replayable OpenAI reasoning item:
+                // it lacks the provider's encrypted state/signature. Preserve the
+                // actual messages and function-call/result history instead.
+                history.filterNot { (it as? KxJsonObject)?.text("type") == "reasoning" }
+                    .forEach(::add)
+            })
+        }
+    }
+
     private fun buildResponsesInputItems(messages: List<ChatCompletionMessage>): List<JsonElement> {
         val items = mutableListOf<JsonElement>()
         val callIdPlan = OpenAiResponsesCallIdCodec.planFor(messages)
@@ -3391,14 +3557,22 @@ object HttpController {
 
     private suspend fun postOpenAIStreamRequestAsFlow(
         chatRequest: ChatCompletionRequest,
-        apiBase: String?,
-        apiKey: String?,
-        customHeaders: Map<String, String> = emptyMap(),
+        resolved: ResolvedSceneRequest,
         event: EventSourceListener,
-        routeTag: String? = null,
-        protocolType: String = "openai_compatible",
-        wireApi: String = OpenAiWireApi.CHAT_COMPLETIONS
     ): EventSource = withContext(Dispatchers.IO) {
+        if (resolved.oauthProfileId != null) {
+            return@withContext postOpenAIChatCompletionsStreamRequest(
+                resolved = resolved,
+                requestBody = completionJson.encodeToJsonElement(chatRequest.copy(stream = true)) as KxJsonObject,
+                event = event,
+            )
+        }
+        val apiBase = resolved.apiBase
+        val apiKey = resolved.apiKey
+        val customHeaders = resolved.customHeaders
+        val routeTag = resolved.routeTag
+        val protocolType = resolved.protocolType
+        val wireApi = resolved.wireApi
         if (protocolType == "anthropic") {
             val resolved = ResolvedSceneRequest(
                 requestedModel = chatRequest.model,
@@ -3523,7 +3697,9 @@ object HttpController {
         val base = normalizeApiBase(resolved.apiBase ?: "")
             ?: throw IllegalArgumentException("Invalid apiBase")
         val normalizedWireApi = OpenAiWireApi.normalize(resolved.wireApi)
-        val preparedRequest = if (OpenAiWireApi.isResponses(normalizedWireApi)) {
+        val preparedRequest = if (resolved.oauthProfileId != null) {
+            buildChatGptResponsesRequestPayload(requestBody, resolved.resolvedModel)
+        } else if (OpenAiWireApi.isResponses(normalizedWireApi)) {
             buildOpenAIResponsesRequestPayload(
                 root = requestBody,
                 resolvedModel = resolved.resolvedModel,
@@ -3544,7 +3720,9 @@ object HttpController {
         }
         val httpBody = completionJson.toStreamingRequestBody(preparedRequest)
         val url = buildOpenAIInferenceUrl(base, normalizedWireApi)
-        val request = buildOpenAIRequestBuilder(
+        val request = if (resolved.oauthProfileId != null) {
+            chatGptRequest(resolved.oauthProfileId, preparedRequest)
+        } else buildOpenAIRequestBuilder(
             url = url,
             requestBody = httpBody,
             apiKey = resolved.apiKey,
@@ -3561,11 +3739,14 @@ object HttpController {
             it.value.joinToString(",")
         })
         val delegate = if (OpenAiWireApi.isResponses(normalizedWireApi)) {
-            wrapResponsesListener(event)
+            wrapResponsesListener(event, requireCompleted = resolved.oauthProfileId != null)
         } else {
             event
         }
-        EventSources.createFactory(openAIStreamClient(forceHttp1)).newEventSource(
+        val client = if (resolved.oauthProfileId != null) {
+            if (forceHttp1) chatGptHttp1StreamingClient else chatGptStreamingClient
+        } else openAIStreamClient(forceHttp1)
+        EventSources.createFactory(client).newEventSource(
             request,
             createLoggingEventListener(
                 "[openai_compatible $wireApiLabel model=${resolved.resolvedModel}]",
@@ -3582,7 +3763,8 @@ object HttpController {
                     stream = true,
                     requestJson = completionJson.requestLogJson(preparedRequest),
                     conversationId = conversationIdFromPromptCacheKey((requestBody["prompt_cache_key"] as? JsonPrimitive)?.contentOrNull)
-                )
+                ),
+                requireResponsesCompleted = resolved.oauthProfileId != null,
             )
         )
     }
@@ -3638,13 +3820,8 @@ object HttpController {
         logSceneProfile(resolved)
         return postOpenAIStreamRequestAsFlow(
             chatRequest = createChatRequestFromText(resolved, text),
-            apiBase = resolved.apiBase,
-            apiKey = resolved.apiKey,
-            customHeaders = resolved.customHeaders,
+            resolved = resolved,
             event = event,
-            routeTag = resolved.routeTag,
-            protocolType = resolved.protocolType,
-            wireApi = resolved.wireApi
         )
     }
 
@@ -3669,7 +3846,8 @@ object HttpController {
         explicitWireApi: String? = null,
         reasoningEffort: String? = null,
         promptCacheKey: String? = null,
-        maxCompletionTokens: Int? = null
+        maxCompletionTokens: Int? = null,
+        explicitProviderProfileId: String? = null,
     ): EventSource {
         val resolved = resolveSceneRequest(
             modelOrScene = model,
@@ -3678,7 +3856,8 @@ object HttpController {
             explicitCustomHeaders = explicitCustomHeaders,
             explicitModel = explicitModel,
             explicitProtocolType = explicitProtocolType,
-            explicitWireApi = explicitWireApi
+            explicitWireApi = explicitWireApi,
+            explicitProviderProfileId = explicitProviderProfileId,
         )
         logSceneProfile(resolved)
         return postOpenAIStreamRequestAsFlow(
@@ -3692,13 +3871,8 @@ object HttpController {
                 if (maxCompletionTokens == null) request
                 else request.copy(maxCompletionTokens = maxCompletionTokens, maxTokens = null)
             },
-            apiBase = resolved.apiBase,
-            apiKey = resolved.apiKey,
-            customHeaders = resolved.customHeaders,
+            resolved = resolved,
             event = event,
-            routeTag = resolved.routeTag,
-            protocolType = resolved.protocolType,
-            wireApi = resolved.wireApi
         )
     }
 
@@ -3718,7 +3892,8 @@ object HttpController {
         explicitModel: String? = null,
         explicitProtocolType: String? = null,
         explicitWireApi: String? = null,
-        forceHttp1: Boolean = false
+        forceHttp1: Boolean = false,
+        explicitProviderProfileId: String? = null,
     ): EventSource {
         val resolved = resolveSceneRequest(
             modelOrScene = model,
@@ -3727,7 +3902,8 @@ object HttpController {
             explicitCustomHeaders = explicitCustomHeaders,
             explicitModel = explicitModel,
             explicitProtocolType = explicitProtocolType,
-            explicitWireApi = explicitWireApi
+            explicitWireApi = explicitWireApi,
+            explicitProviderProfileId = explicitProviderProfileId,
         )
         logSceneProfile(resolved)
         return postOpenAIChatCompletionsStreamRequest(
@@ -3748,7 +3924,8 @@ object HttpController {
         explicitModel: String? = null,
         explicitProtocolType: String? = null,
         explicitWireApi: String? = null,
-        forceHttp1: Boolean = false
+        forceHttp1: Boolean = false,
+        explicitProviderProfileId: String? = null,
     ): EventSource {
         val resolved = resolveSceneRequest(
             modelOrScene = model,
@@ -3757,7 +3934,8 @@ object HttpController {
             explicitCustomHeaders = explicitCustomHeaders,
             explicitModel = explicitModel,
             explicitProtocolType = explicitProtocolType,
-            explicitWireApi = explicitWireApi
+            explicitWireApi = explicitWireApi,
+            explicitProviderProfileId = explicitProviderProfileId,
         )
         logSceneProfile(resolved)
         return postOpenAIChatCompletionsStreamRequest(
@@ -3845,11 +4023,89 @@ object HttpController {
         val request: ChatCompletionRequest
     )
 
+    private suspend fun awaitChatGptCompletion(
+        profileId: String,
+        payload: KxJsonObject,
+        parser: ModelSceneRegistry.ResponseParser,
+        routeTag: String?,
+    ): SceneChatCompletionResponse {
+        val request = chatGptRequest(profileId, payload)
+        val result = CompletableDeferred<SceneChatCompletionResponse>()
+        var completedResponse: String? = null
+        val adapter = wrapResponsesListener(object : EventSourceListener() {
+            override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
+                if (data != "[DONE]") return
+                result.complete(parseResponsesSceneResponse(completedResponse, parser, routeTag))
+            }
+
+            override fun onFailure(eventSource: EventSource, t: Throwable?, response: okhttp3.Response?) {
+                val body = response?.body?.string()
+                result.complete(buildFailureSceneResponse(
+                    code = response?.code?.toString() ?: "500",
+                    message = if (response?.code == 401) {
+                        "ChatGPT 身份或套餐授权未被接受，请检查所选账号和授权范围。 ${extractAvailabilityMessage(body)}"
+                    } else if (!body.isNullOrBlank()) extractAvailabilityMessage(body)
+                        else t?.message?.takeIf(String::isNotBlank) ?: "Responses request failed",
+                    parser = parser,
+                    routeTag = routeTag,
+                    rawResponseBody = body,
+                ))
+            }
+        }, requireCompleted = true)
+        val listener = object : EventSourceListener() {
+            override fun onOpen(eventSource: EventSource, response: okhttp3.Response) =
+                adapter.onOpen(eventSource, response)
+
+            override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
+                val event = runCatching { completionJson.parseToJsonElement(data) as? KxJsonObject }.getOrNull()
+                if ((type ?: event?.text("type")) == "response.completed") {
+                    completedResponse = event?.get("response")?.toString()
+                }
+                adapter.onEvent(eventSource, id, type, data)
+            }
+
+            override fun onClosed(eventSource: EventSource) = adapter.onClosed(eventSource)
+            override fun onFailure(eventSource: EventSource, t: Throwable?, response: okhttp3.Response?) =
+                adapter.onFailure(eventSource, t, response)
+        }
+        val source = EventSources.createFactory(chatGptStreamingClient).newEventSource(
+            request,
+            createLoggingEventListener(
+                "[chatgpt responses model=${payload.text("model")}]",
+                listener,
+                requestLogSeed = AiRequestLogSeed(
+                    label = "chatgpt/responses.stream",
+                    model = payload.text("model"),
+                    protocolType = "openai_compatible",
+                    url = request.url.toString(),
+                    stream = true,
+                    requestJson = completionJson.requestLogJson(payload),
+                    conversationId = conversationIdFromPromptCacheKey(payload.text("prompt_cache_key")),
+                ),
+                requireResponsesCompleted = true,
+            ),
+        )
+        return try {
+            result.await()
+        } finally {
+            source.cancel()
+        }
+    }
+
     private suspend fun postSceneChatCompletionInternal(
         resolved: ResolvedSceneRequest,
         request: ChatCompletionRequest,
         retryOnBadRequest: Boolean
     ): SceneChatCompletionResponse = withContext(Dispatchers.IO) {
+        if (resolved.oauthProfileId != null) {
+            val payload = buildChatGptResponsesRequestPayload(
+                completionJson.encodeToJsonElement(request) as KxJsonObject,
+                resolved.resolvedModel,
+            )
+            return@withContext awaitChatGptCompletion(
+                resolved.oauthProfileId, payload, resolved.responseParser, resolved.routeTag,
+            )
+        }
         val base = normalizeApiBase(resolved.apiBase ?: "")
         if (base == null) {
             return@withContext buildFailureSceneResponse(
@@ -4157,8 +4413,25 @@ object HttpController {
         apiKey: String?,
         customHeaders: Map<String, String> = emptyMap(),
         protocolType: String = "openai_compatible",
-        wireApi: String = OpenAiWireApi.CHAT_COMPLETIONS
+        wireApi: String = OpenAiWireApi.CHAT_COMPLETIONS,
+        providerProfile: ModelProviderProfile? = null,
     ): ModelAvailabilityCheckResult {
+        if (ChatGptOAuthProvider.isOAuth(providerProfile?.sourceType)) {
+            if (model.isBlank()) return ModelAvailabilityCheckResult(false, null, "模型名不能为空")
+            val payload = buildChatGptResponsesRequestPayload(
+                completionJson.encodeToJsonElement(ChatCompletionRequest(
+                    model = model.trim(),
+                    messages = listOf(ChatCompletionMessage(role = "user", content = JsonPrimitive("Reply with OK."))),
+                )) as KxJsonObject,
+                model.trim(),
+            )
+            val response = awaitChatGptCompletion(
+                providerProfile!!.id, payload, ModelSceneRegistry.ResponseParser.TEXT_CONTENT,
+                ChatGptOAuthProvider.SOURCE_TYPE,
+            )
+            return ModelAvailabilityCheckResult(response.success, response.code.toIntOrNull(),
+                if (response.success) "OK" else response.message)
+        }
         return if (DeepSeekProvider.normalizeProtocolType(protocolType) == "anthropic") {
             checkAnthropicModelAvailability(
                 model = model,
@@ -4182,8 +4455,19 @@ object HttpController {
         apiKey: String?,
         customHeaders: Map<String, String> = emptyMap(),
         protocolType: String = "openai_compatible",
-        @Suppress("UNUSED_PARAMETER") wireApi: String = OpenAiWireApi.CHAT_COMPLETIONS
+        @Suppress("UNUSED_PARAMETER") wireApi: String = OpenAiWireApi.CHAT_COMPLETIONS,
+        providerProfile: ModelProviderProfile? = null,
     ): List<ProviderModelOption> = withContext(Dispatchers.IO) {
+        if (ChatGptOAuthProvider.isOAuth(providerProfile?.sourceType)) {
+            val request = chatGptRequest(providerProfile!!.id, null)
+            return@withContext chatGptModelsClient.newCall(request).execute().use { response ->
+                val body = response.body?.string()
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("获取 ChatGPT 模型列表失败 (${response.code})：${extractAvailabilityMessage(body)}")
+                }
+                parseChatGptModelsResponse(body)
+            }
+        }
         val normalizedApiBase = normalizeApiBase(apiBase)
             ?: return@withContext emptyList()
         val request = if (protocolType == "anthropic") {

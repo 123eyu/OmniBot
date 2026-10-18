@@ -94,7 +94,8 @@ class HttpAgentLlmClient(
             explicitCustomHeaders = explicitCustomHeaders,
             explicitModel = explicitModel,
             explicitProtocolType = explicitProtocolType,
-            explicitWireApi = explicitWireApi
+            explicitWireApi = explicitWireApi,
+            explicitProviderProfileId = modelOverride?.oauthProfileId,
         )
     },
     private val refreshPlatformSessionOp: suspend () -> Boolean = {
@@ -757,6 +758,7 @@ class HttpAgentLlmClient(
                 explicitProtocolType = modelOverride?.protocolType,
                 explicitWireApi = modelOverride?.wireApi,
                 forceHttp1 = forceHttp1,
+                explicitProviderProfileId = modelOverride?.oauthProfileId,
             )
             OmniLog.i(
                 tag,
