@@ -258,6 +258,8 @@ android {
                     buildConfigString(llmThuModel),
                 )
             }
+            // Keep size/performance optimizations. Project rules disable only
+            // identifier obfuscation; persisted JSON schemas remain explicit.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

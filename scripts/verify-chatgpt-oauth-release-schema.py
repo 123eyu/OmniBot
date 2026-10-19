@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Check the actual minified APK retains every OAuth credential JSON field name.
+"""Check a release APK retains every OAuth credential JSON field name.
 
-Uses Android SDK dexdump, not application credentials. Prints no APK string dump.
+Current releases run R8 with -dontobfuscate. --mapping is optional for current
+artifacts and required for older renamed artifacts. Uses Android SDK dexdump,
+not credentials; prints no APK string dump.
 """
 import argparse
 from contextlib import contextmanager
@@ -43,10 +45,15 @@ def dex_files(apk, dex_directory):
 
 
 def verify(apk, dex_directory, mapping_file, dexdump):
-    mapping = mapping_file.read_text()
-    record = mapped_descriptor(mapping, RECORD_CLASS)
-    annotation = mapped_descriptor(mapping, ANNOTATION_CLASS)
-    map_id = re.search(r"^# pg_map_id: (\S+)$", mapping, re.MULTILINE)
+    if mapping_file is None:
+        record = "L" + RECORD_CLASS.replace(".", "/") + ";"
+        annotation = "L" + ANNOTATION_CLASS.replace(".", "/") + ";"
+        map_id = None
+    else:
+        mapping = mapping_file.read_text()
+        record = mapped_descriptor(mapping, RECORD_CLASS)
+        annotation = mapped_descriptor(mapping, ANNOTATION_CLASS)
+        map_id = re.search(r"^# pg_map_id: (\S+)$", mapping, re.MULTILINE)
     with dex_files(apk, dex_directory) as files:
         for dex in files:
             output = subprocess.run(
@@ -73,17 +80,18 @@ def verify(apk, dex_directory, mapping_file, dexdump):
             if set(found) != FIELDS or len(found) != len(FIELDS):
                 missing = ", ".join(sorted(FIELDS - set(found))) or "duplicate/unexpected fields"
                 raise ValueError("Release OAuth JSON schema is not stable: " + missing)
-            print("PASS: all 11 OAuth credential JSON field names survive R8 in " + dex.name)
+            print("PASS: all 11 OAuth credential JSON field names are stable in " + dex.name)
             return
-    raise ValueError("OAuth credential class was not found; check the matching R8 mapping")
+    hint = "check the matching R8 mapping" if mapping_file is not None else "check the release APK or DEX directory"
+    raise ValueError("OAuth credential class was not found; " + hint)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--apk", type=Path)
-    source.add_argument("--dex-dir", type=Path, help="R8 output directory when release signing is unavailable")
-    parser.add_argument("--mapping", required=True, type=Path)
+    source.add_argument("--dex-dir", type=Path, help="Directory containing compiled classes*.dex files")
+    parser.add_argument("--mapping", type=Path, help="Matching R8 mapping; optional when class names are unchanged")
     parser.add_argument("--dexdump", required=True, type=Path)
     args = parser.parse_args()
     try:

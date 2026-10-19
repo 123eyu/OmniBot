@@ -109,8 +109,14 @@ The verified old mapping SHA-256 is
 Its APK SHA-256 is
 `eb9a0f44e1eb4e2bef25af4d629daad60b40454bf396aabbbf1e3c0d83ba29cd`.
 
+Current release builds keep R8 code shrinking, optimization and resource
+shrinking enabled. The project uses the supported `-dontobfuscate` option to
+disable identifier renaming for this open-source app. Keep stable JSON field
+names and the legacy decoder: shrinking can still affect reflection, and users
+upgrading from an older APK may have records written with obfuscated names.
+
 The regression checks include Android instrumentation with actual encrypted
-preferences and a local callback, plus inspection of the final minified APK:
+preferences and a local callback, plus inspection of the final release APK:
 
 ```sh
 ./gradlew --no-daemon :baselib:connectedDebugAndroidTest \
@@ -118,22 +124,27 @@ preferences and a local callback, plus inspection of the final minified APK:
 ./gradlew --no-daemon :app:assembleDevelopStandardRelease -Ptarget=lib/main_standard.dart
 python3 scripts/verify-chatgpt-oauth-release-schema.py \
   --apk app/build/outputs/apk/developStandard/release/app-develop-standard-release.apk \
-  --mapping app/build/outputs/mapping/developStandardRelease/mapping.txt \
   --dexdump /path/to/android-sdk/build-tools/36.0.0/dexdump
 ```
 
-The artifact check fails on the affected APK and requires all eleven runtime
-`SerializedName` annotations in the new APK, even if R8 renames the class and
-fields. It reads compiled metadata only, never account files.
+The artifact check requires all eleven runtime `SerializedName` annotations and
+uses the original class names by default. It reads compiled metadata only, never
+account files. R8 still runs and emits a mapping; retained identifiers should
+map to their original names even though code can be removed or optimized.
 
-When signing credentials are unavailable, run
-`:app:minifyDevelopStandardReleaseWithR8` and pass
-`--dex-dir app/build/intermediates/dex/developStandardRelease/minifyDevelopStandardReleaseWithR8`
-instead of `--apk`, with
-`--mapping app/build/intermediates/mapping/developStandardRelease/minifyDevelopStandardReleaseWithR8/mapping.txt`.
-The published `outputs/mapping` copy may still belong to the previous APK until
-packaging completes. This verifies the actual R8 output without changing release
-signing configuration; it does not produce an installable signed APK.
+To inspect a historical obfuscated APK, add `--mapping /path/to/its/mapping.txt`.
+Use the mapping from that exact build, not a leftover mapping from another APK.
+This legacy mode still rejects the affected APK whose credential fields lacked
+stable annotations. An existing directory of compiled `classes*.dex` files can
+also be inspected with `--dex-dir /path/to/dex` instead of `--apk`; that check
+only inspects an artifact and does not produce or sign an installable APK.
+
+When signing credentials are unavailable, build
+`:app:minifyDevelopStandardReleaseWithR8` and inspect
+`--dex-dir app/build/intermediates/dex/developStandardRelease/minifyDevelopStandardReleaseWithR8`.
+If supplying `--mapping`, use
+`app/build/intermediates/mapping/developStandardRelease/minifyDevelopStandardReleaseWithR8/mapping.txt`
+from that same run; the packaged `outputs/mapping` copy may still be stale.
 
 Current primary-source comparisons also confirm the chosen authentication
 contract: [OpenCode's ChatGPT provider](https://github.com/anomalyco/opencode/blob/8c173a8f3805d8e749d44311054b07e37a1b2ce1/packages/core/src/plugin/provider/chatgpt.ts)
