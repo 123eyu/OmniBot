@@ -1,12 +1,17 @@
 package cn.com.omnimind.bot.agent.runtime
 
 import android.content.Context
+import cn.com.omnimind.bot.BuildConfig
+import cn.com.omnimind.baselib.account.OmniAccount
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -19,9 +24,11 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.security.MessageDigest
 import java.util.UUID
 import java.io.ByteArrayOutputStream
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.io.InputStream
 import java.net.URLConnection
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
@@ -40,40 +47,83 @@ internal class NaCloudRuntime(
     private val profiles: AcpAgentProfileStore,
     private val emit: (Map<String, Any?>) -> Unit,
 ) {
+    private val appContext = context.applicationContext
+    private val historyAccess = NaConversationAccess(appContext)
     private val preferences = context.getSharedPreferences("na_cloud_connection", Context.MODE_PRIVATE)
     private val client = OkHttpClient.Builder().retryOnConnectionFailure(false)
+        .followRedirects(false).followSslRedirects(false)
         .connectTimeout(10, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS).build()
     private val gson = Gson()
-    private var token = "" // Account access token only; never the model-provider API key.
+    private var token = "" // Debug standalone-instance token; managed credentials stay in AccountRepository.
     private val mutex = Mutex()
     private val prompts = ConcurrentHashMap<String, Deferred<Map<String, Any?>>>()
+    private val promptOwners = ConcurrentHashMap<String, NaCloudConnection>()
     private val activeRuns = ConcurrentHashMap<String, String>()
     private val cancelPending = ConcurrentHashMap.newKeySet<String>()
     private var cachedStatus: Map<String, Any?> = emptyMap()
-    private val baseUrl get() = preferences.getString("baseUrl", "http://127.0.0.1:8787")!!
-    private val prefix get() = "na:" + MessageDigest.getInstance("SHA-256")
-        .digest(baseUrl.toByteArray()).take(8).joinToString("") { "%02x".format(it) } + ":"
+    private val development get() = BuildConfig.DEBUG && preferences.getBoolean("development", false)
+    private val baseUrl get() = if (development) preferences.getString("baseUrl", "http://127.0.0.1:8787")!! else BuildConfig.CLOUD_URL
+
+    init {
+        if (OmniAccount.isConfigured()) scope.launch {
+            val account = OmniAccount.repository()
+            var previous = account.sessionGeneration.value
+            account.sessionGeneration.collect { current ->
+                if (current != previous && !development) {
+                    promptOwners.entries.filter { it.value.managed && it.value.generation != current }.forEach {
+                        prompts.remove(it.key)?.cancel()
+                        promptOwners.remove(it.key)
+                    }
+                    cachedStatus = emptyMap()
+                }
+                previous = current
+            }
+        }
+    }
+
+    private suspend fun connection() = currentCoroutineContext()[NaCloudConnection]
+        ?: error("Na connection attribution is missing")
+
+    private suspend fun <T> withConnection(operation: suspend () -> T): T {
+        val connection = if (development) NaCloudConnection(baseUrl, developmentToken = token)
+            else NaCloudConnection.managed(BuildConfig.CLOUD_URL, BuildConfig.DEBUG, OmniAccount.repository())
+        return withContext(connection) { connection.prepareWorkspace(client); operation() }
+    }
 
     fun config(): Map<String, Any?> = mapOf(
-        "kind" to "na-cloud", "baseUrl" to baseUrl, "apiKey" to token,
+        "kind" to "na-cloud", "baseUrl" to baseUrl, "apiKey" to if (development) token else "",
+        "connectionMode" to if (development) "development" else "managed",
+        "developmentAvailable" to BuildConfig.DEBUG,
+        "signedIn" to (OmniAccount.isConfigured() && runCatching { OmniAccount.repository().isSignedIn() }.getOrDefault(false)),
         "cloudModelManaged" to true,
     )
 
     fun configure(args: Map<String, Any?>): Map<String, Any?> {
         check(prompts.values.none { !it.isCompleted }) { "请等待当前 Na 任务结束后修改连接。" }
+        val mode = args["connectionMode"]?.toString() ?: if (development) "development" else "managed"
+        require(mode == "managed" || (mode == "development" && BuildConfig.DEBUG)) { "不支持此连接方式。" }
+        if (mode == "managed") {
+            preferences.edit().putBoolean("development", false).apply()
+            token = ""
+            cachedStatus = emptyMap()
+            cn.com.omnimind.bot.webchat.FlutterChatSyncBridge.dispatchNaHistoryOwnerChanged(appContext)
+            return config()
+        }
         val address = args["baseUrl"]?.toString()?.trim()?.trimEnd('/') ?: baseUrl
         val url = address.toHttpUrl()
         require(url.username.isEmpty() && url.password.isEmpty() && url.query == null && url.fragment == null) {
             "请输入有效的 HTTP / HTTPS 服务地址。"
         }
         preferences.edit().putString("baseUrl", address).apply()
+        preferences.edit().putBoolean("development", true).apply()
         args["apiKey"]?.let { token = it.toString().trim() }
         cachedStatus = emptyMap()
+        cn.com.omnimind.bot.webchat.FlutterChatSyncBridge.dispatchNaHistoryOwnerChanged(appContext)
         return config()
     }
 
     suspend fun status(): Map<String, Any?> {
-        val error = runCatching { request("GET", "/api/status") }
+        val error = runCatching { withConnection { request("GET", "/api/status") } }
             .onSuccess { cachedStatus = it }.exceptionOrNull()
         val connected = error == null && cachedStatus["connected"] == true
         return mapOf(
@@ -119,36 +169,70 @@ internal class NaCloudRuntime(
         "model/list" -> mapOf("models" to emptyList<Any>())
         "collaborationMode/list" -> mapOf("collaborationModes" to emptyList<Any>())
         "config/read" -> config()
-        "config/remote/fs/list" -> listFiles(args)
-        "config/remote/fs/read" -> fileContent(args, write = false)
-        "config/remote/fs/write" -> fileContent(args, write = true)
-        "session/new" -> mutex.withLock { load(args, create = true) }
-        "session/load", "session/resume", "session/read" -> mutex.withLock { load(args, create = false) }
-        "session/list" -> list()
-        "session/prompt" -> prompt(args)
-        "session/cancel" -> cancel(args)
-        "session/close" -> mapOf("ok" to true) // Closing a view never deletes server history.
-        else -> error("Na 云端不支持此操作：$method")
+        "session/close" -> mapOf("ok" to true)
+        else -> withConnection { handleConnected(method, args) }
+    }
+
+    private suspend fun handleConnected(method: String, args: Map<String, Any?>): Any? {
+        if (method.startsWith("config/remote/fs/")) {
+            if (args["sessionId"] != null) resolveSession(args)
+            requireNaWorkspaceOwner(connection().prefix, args["workspaceOwner"],
+                required = method != "config/remote/fs/list" && args["sessionId"] == null)
+        }
+        return when (method) {
+            "config/remote/fs/list" -> listFiles(args)
+            "config/remote/fs/read" -> fileContent(args, write = false)
+            "config/remote/fs/write" -> fileContent(args, write = true)
+            "config/remote/fs/move" -> request("POST", "/api/files/rename", mapOf("path" to relativePath(args),
+                "destination" to relativePath(mapOf("path" to args["destinationPath"]))))
+            "config/remote/fs/delete" -> request("DELETE", "/api/files/content?path=" +
+                java.net.URLEncoder.encode(relativePath(args), "UTF-8"))
+            "session/new" -> mutex.withLock { load(args, create = true) }
+            "session/load", "session/resume", "session/read" -> mutex.withLock { load(args, create = false) }
+            "session/list" -> list()
+            "session/prompt" -> prompt(args)
+            "session/cancel" -> cancel(args)
+            "session/close" -> mapOf("ok" to true) // Closing a view never deletes server history.
+            else -> error("Na 云端不支持此操作：$method")
+        }
     }
 
     private suspend fun bind(id: String, conversationId: Long?, title: String?): Long {
+        val connection = connection()
+        connection.account?.requireSessionGeneration(connection.generation)
+        if (conversationId != null) {
+            val existingOwner = profiles.naOwnerForConversation(conversationId)
+            check(existingOwner == null || existingOwner == connection.prefix) { "此会话属于另一个账号。" }
+        }
         val local = bindings.ensureBinding(id, conversationId, cwd = "na-cloud", title = title)
         profiles.bindSession(id, NA_AGENT_ID)
         profiles.bindConversation(local, NA_AGENT_ID)
+        profiles.bindNaConversationOwner(local, connection.prefix)
+        connection.account?.requireSessionGeneration(connection.generation)
         return local
     }
 
     private suspend fun resolveSession(args: Map<String, Any?>): String? {
         val local = (args["conversationId"] as? Number)?.toLong()
+        if (local != null) {
+            require(historyAccess.canRead(local, connection().prefix)) {
+                "此云端会话缺少当前账号的可验证归属，请切回原账号或新建会话。"
+            }
+        }
+        local?.let { profiles.naOwnerForConversation(it) }?.let { owner ->
+            require(owner == connection().prefix) { "此云端会话属于另一个账号。" }
+        }
         val binding = local?.let { bindings.getBindingByConversationId(it) }
         val explicit = (args["sessionId"] ?: args["threadId"])?.toString()?.takeIf { it.isNotBlank() }
         // The persisted conversation wins over a stale view's session hint.
         val id = binding?.threadId ?: explicit ?: return null
-        require(id.startsWith(prefix)) { "此会话属于另一 Na 实例，请恢复原连接或创建新会话。" }
+        val prefix = connection().prefix
+        require(id.startsWith(prefix)) { "此云端会话属于另一个账号或连接，请切回原账号或新建会话。" }
         return id
     }
 
     private suspend fun load(args: Map<String, Any?>, create: Boolean): Map<String, Any?> {
+        val prefix = connection().prefix
         profiles.select(NA_AGENT_ID)
         val existing = resolveSession(args)
         val response = if (existing == null) {
@@ -164,6 +248,7 @@ internal class NaCloudRuntime(
     }
 
     private suspend fun list(): Map<String, Any?> {
+        val prefix = connection().prefix
         val entries = request("GET", "/api/conversations")["conversations"] as? List<*> ?: emptyList<Any>()
         val sessions = entries.mapNotNull { raw ->
             val c = raw as? Map<*, *> ?: return@mapNotNull null
@@ -177,23 +262,56 @@ internal class NaCloudRuntime(
     }
 
     private suspend fun prompt(args: Map<String, Any?>): Map<String, Any?> {
-        require((args["attachments"] as? List<*>)?.isNotEmpty() != true) {
-            "Na 暂不支持从 App 上传附件，请先在云端工作区准备文件。"
-        }
+        val input = AcpPromptInputCompatibilityAdapter.normalize(args)
+        val attachments = (input["attachments"] as? List<*>)?.map { raw ->
+            require(raw is Map<*, *>) { "附件信息无效，请重新选择。" }
+            raw.entries.associate { it.key.toString() to it.value }
+        }.orEmpty()
         val id = resolveSession(args) ?: error("Na session is required")
         val reservation = args["requestId"]?.toString()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        val connection = connection()
+        val prefix = connection.prefix
         val key = "$id/$reservation"
         val execution = mutex.withLock {
-            prompts[key] ?: scope.async {
+            prompts[key] ?: scope.async(connection) {
                 val local = bind(id, (args["conversationId"] as? Number)?.toLong(), null)
-                // One write per logical submission; GET reconnection never replays it.
-                val accepted = request("POST", "/api/conversations/${id.removePrefix(prefix)}/messages",
-                    mapOf("text" to args["text"], "clientMessageId" to reservation) +
-                        (args["userMessageId"]?.toString()?.takeIf { it.isNotBlank() }?.let { mapOf("clientUserMessageId" to it) } ?: emptyMap()))
-                val runId = accepted["runId"].toString()
-                activeRuns[id] = runId
-                val projector = NaItemProjection()
+                val promptContext = currentCoroutineContext()
+                val checkActive: () -> Unit = {
+                    promptContext.ensureActive()
+                    connection.account?.requireSessionGeneration(connection.generation)
+                    if (cancelPending.contains(id)) throw NaAttachmentCancelled()
+                }
+                var admittedRunId: String? = null
                 try {
+                    val uploadOwner = mapOf("conversationId" to id.removePrefix(prefix), "clientMessageId" to reservation)
+                    val attachmentIds = mutableListOf<String>()
+                    if (attachments.isNotEmpty()) {
+                        val capabilities = request("GET", "/api/status")["capabilities"] as? List<*>
+                        check(capabilities?.contains("attachments") == true) { "云端附件服务尚未更新，请稍后再试。" }
+                    }
+                    // One admission after all uploads; neither PUT nor POST is replayed.
+                    val accepted = naSubmitWithAttachments(
+                        input["text"]?.toString().orEmpty(), attachments, key, appContext.cacheDir,
+                        ::openAttachment,
+                        { path, file, active ->
+                            val attachment = attachments[attachmentIds.size]
+                            attachmentIds += path.removePrefix("attachment-").take(36)
+                            val mime = attachment["mimeType"]?.toString()?.takeIf { it.matches(Regex("[a-zA-Z0-9.+_-]+/[a-zA-Z0-9.+_-]+")) }
+                                ?: "application/octet-stream"
+                            naUploadAttachment(connection, client, path, file, active, uploadOwner + ("mimeType" to mime))
+                        },
+                        checkActive,
+                        includeReferences = false,
+                        cleanup = { request("DELETE", "/api/files/uploads", uploadOwner) },
+                    ) { text ->
+                        request("POST", "/api/conversations/${id.removePrefix(prefix)}/messages",
+                            mapOf("text" to text, "clientMessageId" to reservation, "attachmentIds" to attachmentIds) +
+                                (args["userMessageId"]?.toString()?.takeIf { it.isNotBlank() }?.let { mapOf("clientUserMessageId" to it) } ?: emptyMap()))
+                    }
+                    val runId = accepted["runId"].toString()
+                    admittedRunId = runId
+                    activeRuns[id] = runId
+                    val projector = NaItemProjection(reservation)
                     if (cancelPending.remove(id)) request("POST", "/api/runs/$runId/cancel", emptyMap())
                     withTimeout(31 * 60 * 1000L) {
                         while (true) {
@@ -201,6 +319,7 @@ internal class NaCloudRuntime(
                             val run = snapshot.map("run").ifEmpty { snapshot }
                             (run["items"] as? List<*>)?.filterIsInstance<Map<*, *>>()?.forEach { raw ->
                                 projector.updates(raw.entries.associate { it.key.toString() to it.value }).forEach { update ->
+                                    connection.account?.requireSessionGeneration(connection.generation)
                                     emit(mapOf("method" to "session/update", "conversationId" to local,
                                         "agentId" to NA_AGENT_ID, "sessionId" to id, "turnId" to reservation,
                                         "params" to mapOf("sessionId" to id, "turnId" to reservation, "update" to update)))
@@ -217,13 +336,40 @@ internal class NaCloudRuntime(
                         }
                         @Suppress("UNREACHABLE_CODE") emptyMap<String, Any?>()
                     }
-                } finally { activeRuns.remove(id, runId); cancelPending.remove(id) }
-            }.also { prompts[key] = it }
+                } catch (_: NaAttachmentCancelled) {
+                    mapOf("sessionId" to id, "threadId" to id, "conversationId" to local,
+                        "turnId" to reservation, "stopReason" to "cancelled")
+                } finally { admittedRunId?.let { activeRuns.remove(id, it) }; cancelPending.remove(id) }
+            }.also { promptOwners[key] = connection; prompts[key] = it }
         }
         try { return execution.await() } finally {
             // Retain completed reservations for concurrent duplicate callers, bounded.
             if (prompts.size > 128) prompts.entries.filter { it.value.isCompleted }.take(64)
-                .forEach { prompts.remove(it.key, it.value) }
+                .forEach { prompts.remove(it.key, it.value); promptOwners.remove(it.key) }
+        }
+    }
+
+    private fun openAttachment(attachment: Map<String, Any?>): InputStream {
+        val dataUrl = attachment["dataUrl"]?.toString().orEmpty()
+        if (dataUrl.isNotEmpty()) {
+            val separator = dataUrl.indexOf(',')
+            require(separator in 1..256 && dataUrl.substring(0, separator).endsWith(";base64")) { "附件编码无效。" }
+            require(dataUrl.length - separator - 1 <= ((NA_ATTACHMENT_MAX_BYTES + 2) / 3 * 4)) { "附件不能超过 10 MiB，请重新选择。" }
+            return ByteArrayInputStream(Base64.getDecoder().decode(dataUrl.substring(separator + 1)))
+        }
+        val path = attachment["path"]?.toString().orEmpty()
+        require(path.isNotBlank()) { "附件不可读，请重新选择。" }
+        val uri = android.net.Uri.parse(path)
+        return when (uri.scheme?.lowercase()) {
+            "content" -> appContext.contentResolver.openInputStream(uri)
+                ?: error("附件读取权限已失效，请重新选择。")
+            "file", null -> {
+                val file = File(if (uri.scheme == null) path else uri.path.orEmpty())
+                require(file.isAbsolute && file.isFile) { "附件不可读，请重新选择。" }
+                require(file.length() <= NA_ATTACHMENT_MAX_BYTES) { "附件不能超过 10 MiB，请重新选择。" }
+                file.inputStream()
+            }
+            else -> error("请从手机选择文件后上传附件。")
         }
     }
 
@@ -258,7 +404,7 @@ internal class NaCloudRuntime(
             entries[name] = mapOf("name" to name, "path" to "$path/$name",
                 "type" to if('/' in tail) "directory" else "file", "size" to file["size"], "hidden" to name.startsWith('.'))
         }
-        return mapOf("ok" to true, "path" to path, "cwd" to "/workspace",
+        return mapOf("ok" to true, "path" to path, "cwd" to "/workspace", "workspaceOwner" to connection().prefix,
             "parent" to if(relative.isEmpty()) null else path.substringBeforeLast('/'),
             "entries" to entries.values.sortedBy { it["name"].toString() })
     }
@@ -266,17 +412,17 @@ internal class NaCloudRuntime(
     private suspend fun fileContent(args: Map<String, Any?>, write: Boolean): Map<String, Any?> = withContext(Dispatchers.IO) {
         val relative = relativePath(args)
         require(relative.isNotEmpty()) { "File path is required" }
-        val url = (baseUrl.trimEnd('/') + "/api/files/content").toHttpUrl().newBuilder().addQueryParameter("path", relative).build()
+        val connection = connection()
+        val url = (connection.apiBaseUrl + "/api/files/content").toHttpUrl().newBuilder().addQueryParameter("path", relative).build()
         val builder = Request.Builder().url(url)
-        if (token.isNotBlank()) builder.header("Authorization", "Bearer $token")
         if (write) {
             val content = args["content"]?.toString().orEmpty().toByteArray(Charsets.UTF_8)
             require(content.size <= 10 * 1024 * 1024) { "Na file exceeds 10 MiB" }
             builder.put(content.toRequestBody("application/octet-stream".toMediaType()))
         }
-        naHttpResponse(client, builder.build()) { response ->
+        connection.execute(client, builder.build()) consume@{ response ->
             check(response.isSuccessful) { "Na file HTTP ${response.code}" }
-            if (write) return@naHttpResponse mapOf("ok" to true, "saved" to true)
+            if (write) return@consume mapOf("ok" to true, "saved" to true)
             val bytes = ByteArrayOutputStream()
             response.body!!.byteStream().use { stream ->
                 val chunk = ByteArray(8192)
@@ -301,18 +447,18 @@ internal class NaCloudRuntime(
 
     private suspend fun request(method: String, path: String, body: Map<String, Any?>? = null): Map<String, Any?> =
         withContext(Dispatchers.IO) {
-            val builder = Request.Builder().url(baseUrl.trimEnd('/') + path)
+            val connection = connection()
+            val builder = Request.Builder().url(connection.apiBaseUrl + path)
                 .header("Accept", "application/json")
-            if (token.isNotBlank()) builder.header("Authorization", "Bearer $token")
             builder.method(method, if (method == "GET") null else gson.toJson(body ?: emptyMap<String, Any?>())
                 .toRequestBody("application/json".toMediaType()))
-            naHttpResponse(client, builder.build()) { response ->
+            connection.execute(client, builder.build()) { response ->
                 val raw = response.body?.string().orEmpty()
                 if (response.code == 401) error("Na 访问令牌无效，请在设置 → Agent 模式 → Na 中更新。")
                 val value: Map<String, Any?> = runCatching {
                     gson.fromJson<Map<String, Any?>>(raw, object : TypeToken<Map<String, Any?>>() {}.type)
                 }.getOrNull() ?: emptyMap()
-                check(response.isSuccessful) { value["error"]?.toString() ?: "Na HTTP ${response.code}" }
+                check(response.isSuccessful) { naCloudPublicError(response.code, value["error"]) }
                 value
             }
         }
@@ -325,7 +471,7 @@ private fun Map<String, Any?>.map(key: String): Map<String, Any?> = this[key] as
  * shared AgentEventReducer. Item ids and suffix offsets make repeated reads
  * idempotent and preserve whitespace across message/reasoning chunks.
  */
-internal class NaItemProjection {
+internal class NaItemProjection(private val turnId: String) {
     private val textById = mutableMapOf<String, String>()
     private val toolsById = mutableMapOf<String, Map<String, Any?>>()
     fun updates(item: Map<String, Any?>): List<Map<String, Any?>> {
@@ -347,7 +493,9 @@ internal class NaItemProjection {
         val kind = when(type) { "command_execution" -> "execute"; "file_change" -> "edit"; "web_search" -> "search"; else -> "other" }
         val content = item["aggregated_output"] ?: item["result"] ?: item["output"] ?: item["text"]
         val update = mapOf("sessionUpdate" to if(first) "tool_call" else "tool_call_update",
-            "toolCallId" to id, "title" to (item["command"] ?: item["tool"] ?: type ?: "Tool"),
+            // ACP tool ids are session-unique; Na runner ids are only run-unique.
+            // Unlike messageId, the shared reducer does not add a turn prefix.
+            "toolCallId" to "$turnId-$id", "title" to (item["command"] ?: item["tool"] ?: type ?: "Tool"),
             "kind" to kind, "status" to status, "rawInput" to item,
             "content" to if(content == null) emptyList<Any>() else listOf(mapOf("type" to "content", "content" to mapOf("type" to "text", "text" to content.toString()))))
         return if (first && status in setOf("completed", "failed")) listOf(update + ("status" to "in_progress"), update + ("sessionUpdate" to "tool_call_update")) else listOf(update)
@@ -362,15 +510,42 @@ internal fun naThreadSnapshot(sessionId: String, response: Map<String, Any?>): M
     val turns = (response["runs"] as? List<*>)?.filterIsInstance<Map<*, *>>()?.map { run ->
         val turnId = (run["clientMessageId"] ?: run["id"]).toString()
         val items = mutableListOf<Map<String, Any?>>(mapOf("id" to "$turnId-user", "type" to "userMessage",
-            "content" to listOf(mapOf("type" to "text", "text" to run["input"])), "createdAt" to run["createdAt"],
+            "content" to listOf(mapOf("type" to "text", "text" to (run["userText"] ?: run["input"]))), "createdAt" to run["createdAt"],
+            "attachments" to naHistoryAttachments(sessionId, run["attachments"]),
             "hostMessageId" to run["clientUserMessageId"]))
         (run["items"] as? List<*>)?.filterIsInstance<Map<*, *>>()?.forEach { item ->
-            items += item.entries.associate { it.key.toString() to it.value } + ("id" to "$turnId-${item["id"]}")
+            val itemId = "$turnId-${item["id"]}"
+            val identity = if (item["type"] in setOf("agent_message", "reasoning")) emptyMap()
+                else mapOf("sessionId" to sessionId, "turnId" to turnId, "toolCallId" to itemId)
+            items += item.entries.associate { it.key.toString() to it.value } + ("id" to itemId) + identity
         }
-        mapOf("id" to turnId, "status" to run["status"], "startedAt" to run["createdAt"], "items" to items)
+        mapOf("id" to turnId, "status" to run["status"], "startedAt" to run["createdAt"], "items" to items,
+            "stopReason" to when (run["status"]) {
+                "completed" -> "end_turn"
+                "cancelled" -> "cancelled"
+                "failed" -> "error"
+                else -> null
+            })
     } ?: emptyList()
     return mapOf("id" to sessionId, "agentId" to NA_AGENT_ID, "agentName" to "Na", "title" to conversation["title"], "turns" to turns)
 }
+
+internal fun requireNaWorkspaceOwner(expected: String, supplied: Any?, required: Boolean) {
+    require((supplied == null && !required) || supplied == expected) {
+        "云端账号或连接已变化，请重新打开文件窗口。"
+    }
+}
+
+internal fun naHistoryAttachments(sessionId: String, value: Any?): List<Map<String, Any?>> =
+    (value as? List<*>)?.filterIsInstance<Map<*, *>>()?.mapNotNull { row ->
+        val path = row["path"] as? String ?: return@mapNotNull null
+        if (path.startsWith('/') || path.contains('\\') || path.split('/').any { it.isEmpty() || it.startsWith('.') }) return@mapNotNull null
+        val size = (row["size"] as? Number)?.toLong() ?: return@mapNotNull null
+        if (size < 0 || size > NA_ATTACHMENT_MAX_BYTES) return@mapNotNull null
+        mapOf("id" to row["id"], "name" to row["name"], "size" to size, "mimeType" to row["mimeType"],
+            "path" to "/workspace/$path", "source" to "na-cloud", "sessionId" to sessionId,
+            "isImage" to false, "deleted" to (row["deleted"] == true), "sendToModel" to false)
+    }.orEmpty()
 
 /** One transport owner for safe reads. Writes, including a lost prompt POST
  * response, are never retried. A read snapshot cannot admit another turn. */

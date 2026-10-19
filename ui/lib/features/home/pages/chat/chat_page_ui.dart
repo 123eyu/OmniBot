@@ -1176,7 +1176,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     }
     return CodexRemoteWorkspaceBrowser(
       agentId: _activeAcpAgentId == 'na-cloud' ? 'na-cloud' : null,
-      allowFileMutations: _activeAcpAgentId != 'na-cloud',
+      allowFileMutations: true,
       key: key,
       workspacePath: workspacePath,
       remoteBridgeUrl: bridgeUrl,

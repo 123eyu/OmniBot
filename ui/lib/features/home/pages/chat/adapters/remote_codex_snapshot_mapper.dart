@@ -23,10 +23,22 @@ List<ChatMessageModel> _mergeRemoteCodexSnapshotMessages({
     snapshotUserTextCounts: _remoteUserMessageTextCounts(snapshotMessages),
   );
   final snapshotTaskIds = _remoteSnapshotTaskIds(snapshotMessages);
+  // A later authoritative terminal snapshot may settle a remote turn after
+  // the phone's prompt transport failed. Retire only that turn's local error
+  // placeholder; a running/incomplete snapshot cannot erase the failure.
+  final settledTaskIds = <String>{
+    for (final message in snapshotMessages)
+      if (const {
+            'end_turn',
+            'cancelled',
+          }.contains(message.streamMeta?['stopReason']) &&
+          _messageTaskId(message) != null)
+        _messageTaskId(message)!,
+  };
   final mergedById = <String, ChatMessageModel>{};
   for (final snapshot in snapshotMessages) {
     final existing = existingById[snapshot.id];
-    mergedById[snapshot.id] = canonicalizeAgentHistoryMessage(
+    var merged = canonicalizeAgentHistoryMessage(
       existing != null &&
               _shouldPreferExistingRemoteMessage(
                 existing: existing,
@@ -37,9 +49,34 @@ List<ChatMessageModel> _mergeRemoteCodexSnapshotMessages({
           ? existing
           : snapshot,
     );
+    // Some servers store uploaded attachments as text references. Preserve the
+    // submitted content for this exact user-message ID when metadata is absent.
+    final localAttachments = existing?.content?['attachments'];
+    final remoteAttachments = snapshot.content?['attachments'];
+    if (existing?.user == 1 &&
+        existing?.type == 1 &&
+        snapshot.user == 1 &&
+        snapshot.type == 1 &&
+        localAttachments is List &&
+        localAttachments.isNotEmpty &&
+        (remoteAttachments is! List || remoteAttachments.isEmpty)) {
+      merged = merged.copyWith(
+        content: {
+          ...?merged.content,
+          'text': existing!.text ?? '',
+          'attachments': localAttachments,
+        },
+      );
+    }
+    mergedById[snapshot.id] = merged;
   }
   for (final existing in existingMessages) {
     if (snapshotById.containsKey(existing.id)) {
+      continue;
+    }
+    if (isAgentTurnFailureMessage(existing) &&
+        settledTaskIds.contains(_messageTaskId(existing)) &&
+        !(isAiResponding && _messageBelongsToTask(existing, activeTaskId))) {
       continue;
     }
     if (existing.type == 1 && existing.user == 1) {
@@ -334,6 +371,7 @@ List<ChatMessageModel> _remoteCodexMessagesFromThreadResponse(
     return const <ChatMessageModel>[];
   }
   final chronological = <ChatMessageModel>[];
+  final terminalReasons = <String, String>{};
   final effectiveActiveTurnId =
       activeTurnId ??
       (active ? _remoteCodexLatestTurnIdFromThreadResponse(response) : null);
@@ -345,6 +383,10 @@ List<ChatMessageModel> _remoteCodexMessagesFromThreadResponse(
     }
     final turnId =
         _remoteCodexTurnIdAt(rawTurns, turnIndex) ?? 'turn-$turnIndex';
+    final stopReason = _asAgentString(turn['stopReason']);
+    if (const {'end_turn', 'cancelled', 'error'}.contains(stopReason)) {
+      terminalReasons[turnId] = stopReason!;
+    }
     final isActiveTurn =
         active &&
         ((effectiveActiveTurnId != null && turnId == effectiveActiveTurnId) ||
@@ -385,7 +427,8 @@ List<ChatMessageModel> _remoteCodexMessagesFromThreadResponse(
         if (text.trim().isEmpty && attachments.isEmpty) continue;
         // Adapters can retain the host's submitted message identity. This
         // also covers retries where user and prompt ids are unrelated.
-        final messageId = _asAgentString(item['hostMessageId']) ?? '$itemId-agent-user';
+        final messageId =
+            _asAgentString(item['hostMessageId']) ?? '$itemId-agent-user';
         final content = <String, dynamic>{
           'text': text,
           'id': messageId,
@@ -652,13 +695,23 @@ List<ChatMessageModel> _remoteCodexMessagesFromThreadResponse(
           toolInfo.toolType,
           itemType: itemType,
         );
-        final cardId = '$itemId-agent-$toolKind';
+        // ACP snapshots retain the same session/tool identity as live updates.
+        // Legacy snapshots without that identity keep their existing entry id.
+        final identity = AgentToolIdentity.fromMaps(raw: item);
+        final cardId = identity.cardId(
+          suffix: toolKind,
+          fallback: '$itemId-agent-$toolKind',
+        );
         final itemActivity = _remoteCodexActivityFromValue(
           item['status'] ?? item['state'],
         );
         final isRunning = isActiveTurn && itemActivity?.active != false;
         final normalizedStatus = toolInfo.status == 'running' && !isRunning
-            ? 'success'
+            ? switch (stopReason) {
+                'cancelled' => 'cancelled',
+                'error' => 'error',
+                _ => 'success',
+              }
             : toolInfo.status;
         final status = isRunning ? 'running' : normalizedStatus;
         final toolTitle = toolInfo.toolTitle;
@@ -714,6 +767,12 @@ List<ChatMessageModel> _remoteCodexMessagesFromThreadResponse(
           'displayName': toolInfo.displayName,
           'toolTitle': toolTitle,
           'cardId': cardId,
+          if (identity.hasAcpIdentity) ...{
+            'sessionId': identity.sessionId,
+            'turnId': identity.turnId ?? turnId,
+            'toolCallId': identity.toolCallId,
+            'toolKey': identity.toolKey,
+          },
           'toolType': toolInfo.toolType,
           if (toolInfo.serverName != null) 'serverName': toolInfo.serverName,
           'status': status,
@@ -763,7 +822,14 @@ List<ChatMessageModel> _remoteCodexMessagesFromThreadResponse(
       )
       .map(
         (message) => _withAcpAgentIdentity(
-          message,
+          terminalReasons.containsKey(_messageTaskId(message))
+              ? message.copyWith(
+                  streamMeta: {
+                    ...?message.streamMeta,
+                    'stopReason': terminalReasons[_messageTaskId(message)],
+                  },
+                )
+              : message,
           agentId: agentId,
           agentName: agentName,
         ),

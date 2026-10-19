@@ -219,17 +219,24 @@ String formatAgentRuntimeErrorForUser(
     r'(?:chat completion stream|responses|anthropic) request failed\((\d{3})\)',
   ).firstMatch(raw);
   final httpStatus = int.tryParse(httpMatch?.group(1) ?? '');
-  if (failureKind == 'provider_service_unavailable') return text('serviceUnavailable');
-  if (failureKind == 'provider_request_rejected') return text('requestRejected');
+  if (failureKind == 'provider_service_unavailable')
+    return text('serviceUnavailable');
+  if (failureKind == 'provider_request_rejected')
+    return text('requestRejected');
   if (failureKind == 'provider_quota_exceeded') return text('quota');
   if (failureKind == 'provider_rate_limited') return text('rateLimit');
   if (failureKind == 'provider_request_limited') return text('requestLimited');
   if (httpStatus == 401) return text('credentials');
   if (httpStatus == 429) {
-    if (raw.contains('insufficient_quota') || raw.contains('quota_exceeded') ||
-        raw.contains('quota exhausted') || raw.contains('quota_exhausted') ||
-        raw.contains('额度不足') || raw.contains('余额不足')) return text('quota');
-    if (raw.contains('rate_limit_exceeded') || raw.contains('rate_limit_error')) {
+    if (raw.contains('insufficient_quota') ||
+        raw.contains('quota_exceeded') ||
+        raw.contains('quota exhausted') ||
+        raw.contains('quota_exhausted') ||
+        raw.contains('额度不足') ||
+        raw.contains('余额不足'))
+      return text('quota');
+    if (raw.contains('rate_limit_exceeded') ||
+        raw.contains('rate_limit_error')) {
       return text('rateLimit');
     }
     return text('requestLimited');
@@ -833,6 +840,7 @@ class CodexRemoteDirectoryList {
     this.parent,
     this.cwd,
     this.home,
+    this.workspaceOwner,
     this.error,
     this.entries = const <CodexRemoteDirectoryEntry>[],
   });
@@ -842,6 +850,7 @@ class CodexRemoteDirectoryList {
   final String? parent;
   final String? cwd;
   final String? home;
+  final String? workspaceOwner;
   final String? error;
   final List<CodexRemoteDirectoryEntry> entries;
 
@@ -854,6 +863,7 @@ class CodexRemoteDirectoryList {
       parent: _stringOrNull(source['parent']),
       cwd: _stringOrNull(source['cwd']),
       home: _stringOrNull(source['home']),
+      workspaceOwner: _stringOrNull(source['workspaceOwner']),
       error: _stringOrNull(source['error']),
       entries: rawEntries is List
           ? rawEntries
@@ -1073,6 +1083,7 @@ class AgentRuntimeService {
 
   static Future<Map<String, dynamic>> writeAgentConfig(
     String agentId, {
+    String? connectionMode,
     String? baseUrl,
     String? model,
     String? apiKey,
@@ -1083,6 +1094,7 @@ class AgentRuntimeService {
   }) {
     return _invokeMap('agent/config/write', {
       'agentId': agentId.trim(),
+      if (connectionMode != null) 'connectionMode': connectionMode,
       if (baseUrl != null) 'baseUrl': baseUrl,
       if (model != null) 'model': model,
       if (apiKey != null) 'apiKey': apiKey,
@@ -1646,6 +1658,7 @@ class AgentRuntimeService {
 
   static Future<CodexRemoteDirectoryList> listRemoteDirectories({
     String? agentId,
+    String? workspaceOwner,
     String remoteBridgeUrl = '',
     String remoteBridgeToken = '',
     String remoteCwd = '',
@@ -1653,6 +1666,7 @@ class AgentRuntimeService {
   }) async {
     final result = await _invokeMap('config/remote/fs/list', {
       if (agentId != null) 'agentId': agentId,
+      if (workspaceOwner != null) 'workspaceOwner': workspaceOwner,
       if (remoteBridgeUrl.trim().isNotEmpty)
         'remoteBridgeUrl': remoteBridgeUrl.trim(),
       if (remoteBridgeToken.trim().isNotEmpty)
@@ -1665,6 +1679,8 @@ class AgentRuntimeService {
 
   static Future<CodexRemoteFilePayload> readRemoteFile({
     String? agentId,
+    String? sessionId,
+    String? workspaceOwner,
     String remoteBridgeUrl = '',
     String remoteBridgeToken = '',
     String remoteCwd = '',
@@ -1672,6 +1688,8 @@ class AgentRuntimeService {
   }) async {
     final result = await _invokeMap('config/remote/fs/read', {
       if (agentId != null) 'agentId': agentId,
+      if (sessionId != null) 'sessionId': sessionId,
+      if (workspaceOwner != null) 'workspaceOwner': workspaceOwner,
       if (remoteBridgeUrl.trim().isNotEmpty)
         'remoteBridgeUrl': remoteBridgeUrl.trim(),
       if (remoteBridgeToken.trim().isNotEmpty)
@@ -1684,6 +1702,8 @@ class AgentRuntimeService {
 
   static Future<Map<String, dynamic>> writeRemoteFile({
     String? agentId,
+    String? sessionId,
+    String? workspaceOwner,
     String remoteBridgeUrl = '',
     String remoteBridgeToken = '',
     String remoteCwd = '',
@@ -1692,6 +1712,8 @@ class AgentRuntimeService {
   }) {
     return _invokeMap('config/remote/fs/write', {
       if (agentId != null) 'agentId': agentId,
+      if (sessionId != null) 'sessionId': sessionId,
+      if (workspaceOwner != null) 'workspaceOwner': workspaceOwner,
       if (remoteBridgeUrl.trim().isNotEmpty)
         'remoteBridgeUrl': remoteBridgeUrl.trim(),
       if (remoteBridgeToken.trim().isNotEmpty)
@@ -1703,6 +1725,8 @@ class AgentRuntimeService {
   }
 
   static Future<Map<String, dynamic>> deleteRemotePath({
+    String? agentId,
+    String? workspaceOwner,
     String remoteBridgeUrl = '',
     String remoteBridgeToken = '',
     String remoteCwd = '',
@@ -1710,6 +1734,8 @@ class AgentRuntimeService {
     bool recursive = false,
   }) {
     return _invokeMap('config/remote/fs/delete', {
+      if (agentId != null) 'agentId': agentId,
+      if (workspaceOwner != null) 'workspaceOwner': workspaceOwner,
       if (remoteBridgeUrl.trim().isNotEmpty)
         'remoteBridgeUrl': remoteBridgeUrl.trim(),
       if (remoteBridgeToken.trim().isNotEmpty)
@@ -1721,6 +1747,8 @@ class AgentRuntimeService {
   }
 
   static Future<Map<String, dynamic>> moveRemotePath({
+    String? agentId,
+    String? workspaceOwner,
     String remoteBridgeUrl = '',
     String remoteBridgeToken = '',
     String remoteCwd = '',
@@ -1728,6 +1756,8 @@ class AgentRuntimeService {
     required String destinationPath,
   }) {
     return _invokeMap('config/remote/fs/move', {
+      if (agentId != null) 'agentId': agentId,
+      if (workspaceOwner != null) 'workspaceOwner': workspaceOwner,
       if (remoteBridgeUrl.trim().isNotEmpty)
         'remoteBridgeUrl': remoteBridgeUrl.trim(),
       if (remoteBridgeToken.trim().isNotEmpty)
