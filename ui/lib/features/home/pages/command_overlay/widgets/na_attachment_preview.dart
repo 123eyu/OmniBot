@@ -68,7 +68,7 @@ class _NaAttachmentPreviewState extends State<NaAttachmentPreview> {
                 height: 100,
                 fit: BoxFit.cover,
                 cacheWidth: 240,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
             widget.child,

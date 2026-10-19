@@ -52,8 +52,9 @@ void main() {
         );
         expect(merged.any(isAgentTurnFailureMessage), reason == null);
         expect(merged.where((m) => m.text == 'remote result'), hasLength(1));
-        if (reason != null)
+        if (reason != null) {
           expect(merged.single.streamMeta?['stopReason'], reason);
+        }
       },
     );
   }

@@ -32,6 +32,7 @@ void main() {
         'ok': true,
         'path': '/workspace',
         'cwd': '/workspace',
+        'workspaceOwner': 'na:alice:cloud:',
         'entries': [
           {'name': 'result.md', 'path': '/workspace/result.md', 'type': 'file'},
         ],
@@ -63,20 +64,96 @@ void main() {
     await tester.pumpAndSettle();
     expect(calls.last.method, 'config/remote/fs/read');
     expect((calls.last.arguments as Map)['agentId'], 'na-cloud');
+    expect((calls.last.arguments as Map)['workspaceOwner'], 'na:alice:cloud:');
     expect(find.textContaining('Na cloud result'), findsWidgets);
   });
 
-  testWidgets('same workspace path reloads when its Agent owner changes', (tester) async {
+  for (final action in ['Rename', 'Delete']) {
+    testWidgets('Na $action retains the listing owner across confirmation', (
+      tester,
+    ) async {
+      final mutations = <MethodCall>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method != 'config/remote/fs/list') {
+          mutations.add(call);
+          return {'ok': false, 'error': 'Account changed'};
+        }
+        return {
+          'ok': true,
+          'path': '/workspace',
+          'cwd': '/workspace',
+          'workspaceOwner': 'na:alice:cloud:',
+          'entries': [
+            {
+              'name': 'report.txt',
+              'path': '/workspace/report.txt',
+              'type': 'file',
+            },
+          ],
+        };
+      });
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: CodexRemoteWorkspaceBrowser(
+              workspacePath: '/workspace',
+              agentId: 'na-cloud',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('report.txt'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text(action));
+      await tester.tap(find.text(action));
+      await tester.pumpAndSettle();
+      if (action == 'Rename') {
+        await tester.enterText(find.byType(TextField), 'renamed.txt');
+        await tester.tap(find.text('Save'));
+      } else {
+        await tester.tap(find.text('Delete').last);
+      }
+      await tester.pumpAndSettle();
+      expect(mutations, hasLength(1));
+      expect(
+        (mutations.single.arguments as Map)['workspaceOwner'],
+        'na:alice:cloud:',
+      );
+      expect(
+        mutations.single.method,
+        action == 'Rename'
+            ? 'config/remote/fs/move'
+            : 'config/remote/fs/delete',
+      );
+    });
+  }
+
+  testWidgets('same workspace path reloads when its Agent owner changes', (
+    tester,
+  ) async {
     final owners = <String?>[];
     messenger.setMockMethodCallHandler(channel, (call) async {
       final owner = (call.arguments as Map)['agentId'] as String?;
       owners.add(owner);
       final name = owner == 'na-cloud' ? 'cloud.md' : 'bridge.md';
-      return {'ok': true, 'path': '/workspace', 'cwd': '/workspace',
-        'entries': [{'name': name, 'path': '/workspace/$name', 'type': 'file'}]};
+      return {
+        'ok': true,
+        'path': '/workspace',
+        'cwd': '/workspace',
+        'entries': [
+          {'name': name, 'path': '/workspace/$name', 'type': 'file'},
+        ],
+      };
     });
-    Widget browser(String? owner) => MaterialApp(home: Scaffold(body:
-      CodexRemoteWorkspaceBrowser(workspacePath: '/workspace', agentId: owner)));
+    Widget browser(String? owner) => MaterialApp(
+      home: Scaffold(
+        body: CodexRemoteWorkspaceBrowser(
+          workspacePath: '/workspace',
+          agentId: owner,
+        ),
+      ),
+    );
     await tester.pumpWidget(browser(null));
     await tester.pumpAndSettle();
     expect(find.text('bridge.md'), findsOneWidget);

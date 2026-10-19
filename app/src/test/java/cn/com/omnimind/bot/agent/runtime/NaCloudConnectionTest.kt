@@ -12,6 +12,18 @@ import org.junit.Test
 import org.mockito.Mockito.*
 
 class NaCloudConnectionTest {
+    @Test fun staleWorkspaceWindowCannotActOnAnotherAccountOrEndpoint() {
+        requireNaWorkspaceOwner("na:alice:cloud-a:", "na:alice:cloud-a:", true)
+        requireNaWorkspaceOwner("na:alice:cloud-a:", null, false)
+        for (owner in listOf(null, "", "na:bob:cloud-a:", "na:alice:cloud-b:")) {
+            assertThrows(IllegalArgumentException::class.java) {
+                requireNaWorkspaceOwner("na:alice:cloud-a:", owner, true)
+            }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            requireNaWorkspaceOwner("na:bob:cloud-a:", "na:alice:cloud-a:", false)
+        }
+    }
     private val user = AccountUser("alice", "alice@example.test", "user", "active", "", "")
     private val tokens = AccountTokens("access-one", "2099-01-01T00:00:00Z", "refresh-one", "2099-01-01T00:00:00Z")
     private class Store(var tokens: AccountTokens?) : AccountTokenStore {

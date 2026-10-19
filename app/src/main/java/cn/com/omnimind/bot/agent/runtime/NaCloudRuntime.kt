@@ -173,21 +173,28 @@ internal class NaCloudRuntime(
         else -> withConnection { handleConnected(method, args) }
     }
 
-    private suspend fun handleConnected(method: String, args: Map<String, Any?>): Any? = when (method) {
-        "config/remote/fs/list" -> listFiles(args)
-        "config/remote/fs/read" -> fileContent(args, write = false)
-        "config/remote/fs/write" -> fileContent(args, write = true)
-        "config/remote/fs/move" -> request("POST", "/api/files/rename", mapOf("path" to relativePath(args),
-            "destination" to relativePath(mapOf("path" to args["destinationPath"]))))
-        "config/remote/fs/delete" -> request("DELETE", "/api/files/content?path=" +
-            java.net.URLEncoder.encode(relativePath(args), "UTF-8"))
-        "session/new" -> mutex.withLock { load(args, create = true) }
-        "session/load", "session/resume", "session/read" -> mutex.withLock { load(args, create = false) }
-        "session/list" -> list()
-        "session/prompt" -> prompt(args)
-        "session/cancel" -> cancel(args)
-        "session/close" -> mapOf("ok" to true) // Closing a view never deletes server history.
-        else -> error("Na 云端不支持此操作：$method")
+    private suspend fun handleConnected(method: String, args: Map<String, Any?>): Any? {
+        if (method.startsWith("config/remote/fs/")) {
+            if (args["sessionId"] != null) resolveSession(args)
+            requireNaWorkspaceOwner(connection().prefix, args["workspaceOwner"],
+                required = method != "config/remote/fs/list" && args["sessionId"] == null)
+        }
+        return when (method) {
+            "config/remote/fs/list" -> listFiles(args)
+            "config/remote/fs/read" -> fileContent(args, write = false)
+            "config/remote/fs/write" -> fileContent(args, write = true)
+            "config/remote/fs/move" -> request("POST", "/api/files/rename", mapOf("path" to relativePath(args),
+                "destination" to relativePath(mapOf("path" to args["destinationPath"]))))
+            "config/remote/fs/delete" -> request("DELETE", "/api/files/content?path=" +
+                java.net.URLEncoder.encode(relativePath(args), "UTF-8"))
+            "session/new" -> mutex.withLock { load(args, create = true) }
+            "session/load", "session/resume", "session/read" -> mutex.withLock { load(args, create = false) }
+            "session/list" -> list()
+            "session/prompt" -> prompt(args)
+            "session/cancel" -> cancel(args)
+            "session/close" -> mapOf("ok" to true) // Closing a view never deletes server history.
+            else -> error("Na 云端不支持此操作：$method")
+        }
     }
 
     private suspend fun bind(id: String, conversationId: Long?, title: String?): Long {
@@ -397,13 +404,12 @@ internal class NaCloudRuntime(
             entries[name] = mapOf("name" to name, "path" to "$path/$name",
                 "type" to if('/' in tail) "directory" else "file", "size" to file["size"], "hidden" to name.startsWith('.'))
         }
-        return mapOf("ok" to true, "path" to path, "cwd" to "/workspace",
+        return mapOf("ok" to true, "path" to path, "cwd" to "/workspace", "workspaceOwner" to connection().prefix,
             "parent" to if(relative.isEmpty()) null else path.substringBeforeLast('/'),
             "entries" to entries.values.sortedBy { it["name"].toString() })
     }
 
     private suspend fun fileContent(args: Map<String, Any?>, write: Boolean): Map<String, Any?> = withContext(Dispatchers.IO) {
-        if (args["sessionId"] != null) resolveSession(args)
         val relative = relativePath(args)
         require(relative.isNotEmpty()) { "File path is required" }
         val connection = connection()
@@ -522,6 +528,12 @@ internal fun naThreadSnapshot(sessionId: String, response: Map<String, Any?>): M
             })
     } ?: emptyList()
     return mapOf("id" to sessionId, "agentId" to NA_AGENT_ID, "agentName" to "Na", "title" to conversation["title"], "turns" to turns)
+}
+
+internal fun requireNaWorkspaceOwner(expected: String, supplied: Any?, required: Boolean) {
+    require((supplied == null && !required) || supplied == expected) {
+        "云端账号或连接已变化，请重新打开文件窗口。"
+    }
 }
 
 internal fun naHistoryAttachments(sessionId: String, value: Any?): List<Map<String, Any?>> =

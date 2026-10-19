@@ -22,6 +22,8 @@ On failure or cancellation the App requests `DELETE /api/files/uploads` for the 
 
 Cloud history returns original user text and attachment metadata. A device without local metadata restores file cards, authenticated previews and image thumbnails through the existing file reader. Preview requests include the namespaced session so an old account's card cannot read the current account's files. Rename updates the history path/name; deletion leaves a disabled `Deleted` card. Legacy explicit attachment references are also imported by the server.
 
+Workspace listings also carry an opaque account/endpoint owner. Browsing, preview, save, rename and delete retain that owner, including while a confirmation dialog is open. The native file boundary rejects stale owners before making a file request; switching accounts cannot redirect an old file action into the new account's workspace.
+
 After a mid-run connection failure, loading history reads the same durable run without resubmitting it. An explicit terminal Na snapshot replaces the stale transport-failure presentation through the existing snapshot mapper and coordinator. Incomplete snapshots cannot erase that failure or revive an App prompt.
 
 ## Checks

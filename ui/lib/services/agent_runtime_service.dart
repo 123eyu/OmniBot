@@ -840,6 +840,7 @@ class CodexRemoteDirectoryList {
     this.parent,
     this.cwd,
     this.home,
+    this.workspaceOwner,
     this.error,
     this.entries = const <CodexRemoteDirectoryEntry>[],
   });
@@ -849,6 +850,7 @@ class CodexRemoteDirectoryList {
   final String? parent;
   final String? cwd;
   final String? home;
+  final String? workspaceOwner;
   final String? error;
   final List<CodexRemoteDirectoryEntry> entries;
 
@@ -861,6 +863,7 @@ class CodexRemoteDirectoryList {
       parent: _stringOrNull(source['parent']),
       cwd: _stringOrNull(source['cwd']),
       home: _stringOrNull(source['home']),
+      workspaceOwner: _stringOrNull(source['workspaceOwner']),
       error: _stringOrNull(source['error']),
       entries: rawEntries is List
           ? rawEntries
@@ -1655,6 +1658,7 @@ class AgentRuntimeService {
 
   static Future<CodexRemoteDirectoryList> listRemoteDirectories({
     String? agentId,
+    String? workspaceOwner,
     String remoteBridgeUrl = '',
     String remoteBridgeToken = '',
     String remoteCwd = '',
@@ -1662,6 +1666,7 @@ class AgentRuntimeService {
   }) async {
     final result = await _invokeMap('config/remote/fs/list', {
       if (agentId != null) 'agentId': agentId,
+      if (workspaceOwner != null) 'workspaceOwner': workspaceOwner,
       if (remoteBridgeUrl.trim().isNotEmpty)
         'remoteBridgeUrl': remoteBridgeUrl.trim(),
       if (remoteBridgeToken.trim().isNotEmpty)
@@ -1675,6 +1680,7 @@ class AgentRuntimeService {
   static Future<CodexRemoteFilePayload> readRemoteFile({
     String? agentId,
     String? sessionId,
+    String? workspaceOwner,
     String remoteBridgeUrl = '',
     String remoteBridgeToken = '',
     String remoteCwd = '',
@@ -1683,6 +1689,7 @@ class AgentRuntimeService {
     final result = await _invokeMap('config/remote/fs/read', {
       if (agentId != null) 'agentId': agentId,
       if (sessionId != null) 'sessionId': sessionId,
+      if (workspaceOwner != null) 'workspaceOwner': workspaceOwner,
       if (remoteBridgeUrl.trim().isNotEmpty)
         'remoteBridgeUrl': remoteBridgeUrl.trim(),
       if (remoteBridgeToken.trim().isNotEmpty)
@@ -1696,6 +1703,7 @@ class AgentRuntimeService {
   static Future<Map<String, dynamic>> writeRemoteFile({
     String? agentId,
     String? sessionId,
+    String? workspaceOwner,
     String remoteBridgeUrl = '',
     String remoteBridgeToken = '',
     String remoteCwd = '',
@@ -1705,6 +1713,7 @@ class AgentRuntimeService {
     return _invokeMap('config/remote/fs/write', {
       if (agentId != null) 'agentId': agentId,
       if (sessionId != null) 'sessionId': sessionId,
+      if (workspaceOwner != null) 'workspaceOwner': workspaceOwner,
       if (remoteBridgeUrl.trim().isNotEmpty)
         'remoteBridgeUrl': remoteBridgeUrl.trim(),
       if (remoteBridgeToken.trim().isNotEmpty)
@@ -1717,6 +1726,7 @@ class AgentRuntimeService {
 
   static Future<Map<String, dynamic>> deleteRemotePath({
     String? agentId,
+    String? workspaceOwner,
     String remoteBridgeUrl = '',
     String remoteBridgeToken = '',
     String remoteCwd = '',
@@ -1725,6 +1735,7 @@ class AgentRuntimeService {
   }) {
     return _invokeMap('config/remote/fs/delete', {
       if (agentId != null) 'agentId': agentId,
+      if (workspaceOwner != null) 'workspaceOwner': workspaceOwner,
       if (remoteBridgeUrl.trim().isNotEmpty)
         'remoteBridgeUrl': remoteBridgeUrl.trim(),
       if (remoteBridgeToken.trim().isNotEmpty)
@@ -1737,6 +1748,7 @@ class AgentRuntimeService {
 
   static Future<Map<String, dynamic>> moveRemotePath({
     String? agentId,
+    String? workspaceOwner,
     String remoteBridgeUrl = '',
     String remoteBridgeToken = '',
     String remoteCwd = '',
@@ -1745,6 +1757,7 @@ class AgentRuntimeService {
   }) {
     return _invokeMap('config/remote/fs/move', {
       if (agentId != null) 'agentId': agentId,
+      if (workspaceOwner != null) 'workspaceOwner': workspaceOwner,
       if (remoteBridgeUrl.trim().isNotEmpty)
         'remoteBridgeUrl': remoteBridgeUrl.trim(),
       if (remoteBridgeToken.trim().isNotEmpty)
