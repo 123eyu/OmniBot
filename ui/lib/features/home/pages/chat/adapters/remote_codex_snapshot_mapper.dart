@@ -26,7 +26,7 @@ List<ChatMessageModel> _mergeRemoteCodexSnapshotMessages({
   final mergedById = <String, ChatMessageModel>{};
   for (final snapshot in snapshotMessages) {
     final existing = existingById[snapshot.id];
-    mergedById[snapshot.id] = canonicalizeAgentHistoryMessage(
+    var merged = canonicalizeAgentHistoryMessage(
       existing != null &&
               _shouldPreferExistingRemoteMessage(
                 existing: existing,
@@ -37,6 +37,26 @@ List<ChatMessageModel> _mergeRemoteCodexSnapshotMessages({
           ? existing
           : snapshot,
     );
+    // Some servers store uploaded attachments as text references. Preserve the
+    // submitted content for this exact user-message ID when metadata is absent.
+    final localAttachments = existing?.content?['attachments'];
+    final remoteAttachments = snapshot.content?['attachments'];
+    if (existing?.user == 1 &&
+        existing?.type == 1 &&
+        snapshot.user == 1 &&
+        snapshot.type == 1 &&
+        localAttachments is List &&
+        localAttachments.isNotEmpty &&
+        (remoteAttachments is! List || remoteAttachments.isEmpty)) {
+      merged = merged.copyWith(
+        content: {
+          ...?merged.content,
+          'text': existing!.text ?? '',
+          'attachments': localAttachments,
+        },
+      );
+    }
+    mergedById[snapshot.id] = merged;
   }
   for (final existing in existingMessages) {
     if (snapshotById.containsKey(existing.id)) {
@@ -385,7 +405,8 @@ List<ChatMessageModel> _remoteCodexMessagesFromThreadResponse(
         if (text.trim().isEmpty && attachments.isEmpty) continue;
         // Adapters can retain the host's submitted message identity. This
         // also covers retries where user and prompt ids are unrelated.
-        final messageId = _asAgentString(item['hostMessageId']) ?? '$itemId-agent-user';
+        final messageId =
+            _asAgentString(item['hostMessageId']) ?? '$itemId-agent-user';
         final content = <String, dynamic>{
           'text': text,
           'id': messageId,

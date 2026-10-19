@@ -14,7 +14,11 @@ The native adapter reads durable run snapshots every 600 ms, emits normalized se
 
 Session loading returns cloud history using the same prompt/item identities as live updates. The existing snapshot mapper and coordinator merge it with committed App history, preserving live turns and user queries. Listing cloud sessions creates the ordinary local conversation bindings; opening them hydrates the shared chat.
 
-Na files use the existing remote workspace browser and file preview/save/share components. The native HTTP adapter maps `/workspace` to Na's files API. Text editing uses the existing editor and `PUT /api/files/content`; unsupported rename/delete actions are hidden. Download and upload limits remain 20 MiB and 10 MiB. Chat attachment upload is not yet mapped to the cloud workspace; the runtime reports this explicitly instead of submitting inaccessible Android file paths.
+Na files use the existing remote workspace browser and file preview/save/share components. The native HTTP adapter maps `/workspace` to Na's files API. Text editing uses the existing editor and `PUT /api/files/content`; unsupported rename/delete actions are hidden. Download and upload limits remain 20 MiB and 10 MiB.
+
+App chat attachments use the same authenticated binary upload endpoint. Each file is limited to 10 MiB (10,485,760 bytes), including providers with unknown or inaccurate size metadata. The existing prompt reservation stages all selected sources in private cache, uploads them sequentially to collision-resistant `attachment-<uuid>-<name>` paths, then submits one message with Na's existing `[附件]` references. Android paths and document URIs stay on the phone. Temporary copies are removed on success, failure or cancellation; account generation checks fence uploads and message admission after logout or account switching. PUT and message POST are never automatically replayed.
+
+If an upload fails, the message is not submitted. Files already uploaded before a later failure remain in the user's workspace and count toward its storage quota; the files API has no delete/rollback endpoint. A manual retry creates a new prompt reservation. Reopening the same local conversation preserves attachment cards under the original user-message ID; a device without local metadata sees the cloud file references.
 
 ## Checks
 

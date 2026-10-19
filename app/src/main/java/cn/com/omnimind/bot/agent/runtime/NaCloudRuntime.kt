@@ -10,6 +10,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -25,6 +26,9 @@ import java.io.IOException
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.UUID
 import java.io.ByteArrayOutputStream
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.io.InputStream
 import java.net.URLConnection
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
@@ -247,9 +251,11 @@ internal class NaCloudRuntime(
     }
 
     private suspend fun prompt(args: Map<String, Any?>): Map<String, Any?> {
-        require((args["attachments"] as? List<*>)?.isNotEmpty() != true) {
-            "Na 暂不支持从 App 上传附件，请先在云端工作区准备文件。"
-        }
+        val input = AcpPromptInputCompatibilityAdapter.normalize(args)
+        val attachments = (input["attachments"] as? List<*>)?.map { raw ->
+            require(raw is Map<*, *>) { "附件信息无效，请重新选择。" }
+            raw.entries.associate { it.key.toString() to it.value }
+        }.orEmpty()
         val id = resolveSession(args) ?: error("Na session is required")
         val reservation = args["requestId"]?.toString()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
         val connection = connection()
@@ -258,14 +264,29 @@ internal class NaCloudRuntime(
         val execution = mutex.withLock {
             prompts[key] ?: scope.async(connection) {
                 val local = bind(id, (args["conversationId"] as? Number)?.toLong(), null)
-                // One write per logical submission; GET reconnection never replays it.
-                val accepted = request("POST", "/api/conversations/${id.removePrefix(prefix)}/messages",
-                    mapOf("text" to args["text"], "clientMessageId" to reservation) +
-                        (args["userMessageId"]?.toString()?.takeIf { it.isNotBlank() }?.let { mapOf("clientUserMessageId" to it) } ?: emptyMap()))
-                val runId = accepted["runId"].toString()
-                activeRuns[id] = runId
-                val projector = NaItemProjection(reservation)
+                val promptContext = currentCoroutineContext()
+                val checkActive: () -> Unit = {
+                    promptContext.ensureActive()
+                    connection.account?.requireSessionGeneration(connection.generation)
+                    if (cancelPending.contains(id)) throw NaAttachmentCancelled()
+                }
+                var admittedRunId: String? = null
                 try {
+                    // One admission after all uploads; neither PUT nor POST is replayed.
+                    val accepted = naSubmitWithAttachments(
+                        input["text"]?.toString().orEmpty(), attachments, key, appContext.cacheDir,
+                        ::openAttachment,
+                        { path, file, active -> naUploadAttachment(connection, client, path, file, active) },
+                        checkActive,
+                    ) { text ->
+                        request("POST", "/api/conversations/${id.removePrefix(prefix)}/messages",
+                            mapOf("text" to text, "clientMessageId" to reservation) +
+                                (args["userMessageId"]?.toString()?.takeIf { it.isNotBlank() }?.let { mapOf("clientUserMessageId" to it) } ?: emptyMap()))
+                    }
+                    val runId = accepted["runId"].toString()
+                    admittedRunId = runId
+                    activeRuns[id] = runId
+                    val projector = NaItemProjection(reservation)
                     if (cancelPending.remove(id)) request("POST", "/api/runs/$runId/cancel", emptyMap())
                     withTimeout(31 * 60 * 1000L) {
                         while (true) {
@@ -290,13 +311,40 @@ internal class NaCloudRuntime(
                         }
                         @Suppress("UNREACHABLE_CODE") emptyMap<String, Any?>()
                     }
-                } finally { activeRuns.remove(id, runId); cancelPending.remove(id) }
+                } catch (_: NaAttachmentCancelled) {
+                    mapOf("sessionId" to id, "threadId" to id, "conversationId" to local,
+                        "turnId" to reservation, "stopReason" to "cancelled")
+                } finally { admittedRunId?.let { activeRuns.remove(id, it) }; cancelPending.remove(id) }
             }.also { promptOwners[key] = connection; prompts[key] = it }
         }
         try { return execution.await() } finally {
             // Retain completed reservations for concurrent duplicate callers, bounded.
             if (prompts.size > 128) prompts.entries.filter { it.value.isCompleted }.take(64)
                 .forEach { prompts.remove(it.key, it.value); promptOwners.remove(it.key) }
+        }
+    }
+
+    private fun openAttachment(attachment: Map<String, Any?>): InputStream {
+        val dataUrl = attachment["dataUrl"]?.toString().orEmpty()
+        if (dataUrl.isNotEmpty()) {
+            val separator = dataUrl.indexOf(',')
+            require(separator in 1..256 && dataUrl.substring(0, separator).endsWith(";base64")) { "附件编码无效。" }
+            require(dataUrl.length - separator - 1 <= ((NA_ATTACHMENT_MAX_BYTES + 2) / 3 * 4)) { "附件不能超过 10 MiB，请重新选择。" }
+            return ByteArrayInputStream(Base64.getDecoder().decode(dataUrl.substring(separator + 1)))
+        }
+        val path = attachment["path"]?.toString().orEmpty()
+        require(path.isNotBlank()) { "附件不可读，请重新选择。" }
+        val uri = android.net.Uri.parse(path)
+        return when (uri.scheme?.lowercase()) {
+            "content" -> appContext.contentResolver.openInputStream(uri)
+                ?: error("附件读取权限已失效，请重新选择。")
+            "file", null -> {
+                val file = File(if (uri.scheme == null) path else uri.path.orEmpty())
+                require(file.isAbsolute && file.isFile) { "附件不可读，请重新选择。" }
+                require(file.length() <= NA_ATTACHMENT_MAX_BYTES) { "附件不能超过 10 MiB，请重新选择。" }
+                file.inputStream()
+            }
+            else -> error("请从手机选择文件后上传附件。")
         }
     }
 

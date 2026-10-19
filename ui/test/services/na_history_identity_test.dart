@@ -2,8 +2,71 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ui/features/home/pages/chat/chat_page.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
 import 'package:ui/services/agent_event_reducer.dart';
+import 'package:ui/models/chat_message_model.dart';
 
 void main() {
+  test(
+    'Na reload preserves local attachment cards on the same user message',
+    () {
+      final local = ChatMessageModel(
+        id: 'user-attachment',
+        type: 1,
+        user: 1,
+        content: {
+          'text': 'Read the file',
+          'attachments': [
+            {
+              'id': 'file',
+              'name': 'report.txt',
+              'path': 'content://files/1',
+              'size': 17,
+            },
+          ],
+        },
+      );
+      final snapshot = ChatMessageModel(
+        id: local.id,
+        type: 1,
+        user: 1,
+        content: {
+          'text': 'Read the file\n\n[附件] attachment-uuid-report.txt',
+          'attachments': [],
+        },
+        streamMeta: {'sessionId': 'na:session', 'turnId': 'turn'},
+      );
+      final merged = mergeRemoteCodexSnapshotMessagesForTesting(
+        snapshotMessages: [snapshot],
+        existingMessages: [local],
+        activeTaskId: null,
+        isAiResponding: false,
+      );
+      expect(merged, hasLength(1));
+      expect(merged.single.text, local.text);
+      expect(
+        merged.single.content!['attachments'],
+        local.content!['attachments'],
+      );
+      expect(merged.single.sessionId, 'na:session');
+      final remote = snapshot.copyWith(
+        content: {
+          'text': 'remote',
+          'attachments': [
+            {'name': 'remote.txt'},
+          ],
+        },
+      );
+      expect(
+        mergeRemoteCodexSnapshotMessagesForTesting(
+          snapshotMessages: [remote],
+          existingMessages: [local],
+          activeTaskId: null,
+          isAiResponding: false,
+        ).single.content!['attachments'],
+        remote.content!['attachments'],
+      );
+    },
+  );
+
   test('Na history merges live tools once across repeated runner item ids', () {
     const session = 'na:instance:conversation';
     final runtime = ChatConversationRuntimeState(
