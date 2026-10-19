@@ -6,6 +6,7 @@ import 'package:ui/l10n/l10n.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/services/builtin_official_provider_catalog.dart';
+import 'package:ui/services/chatgpt_oauth_service.dart';
 import 'package:ui/services/agent_runtime_service.dart';
 import 'package:ui/services/model_provider_config_service.dart';
 import 'package:ui/services/model_vendor_catalog.dart';
@@ -17,6 +18,8 @@ import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
 import 'package:ui/widgets/settings_section_title.dart';
 import 'package:ui/widgets/settings_ui.dart';
+
+import 'chatgpt_account_section.dart';
 
 const double _kProviderSwitchPopupMaxHeight = 320;
 const double _kProviderTypePopupMinWidth = 200;
@@ -53,6 +56,15 @@ class _SelectionOption {
 }
 
 const List<_ProviderTypeOption> _kProviderTypeOptions = <_ProviderTypeOption>[
+  _ProviderTypeOption(
+    value: ChatGptOAuthService.sourceType,
+    label: 'ChatGPT',
+    sourceType: ChatGptOAuthService.sourceType,
+    baseUrl: ChatGptOAuthService.baseUrl,
+    providerName: 'ChatGPT',
+    protocolType: 'openai_compatible',
+    wireApi: 'responses',
+  ),
   _ProviderTypeOption(
     value: 'deepseek',
     label: 'DeepSeek',
@@ -186,6 +198,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
   bool _isSavingProfile = false;
   bool _saveQueued = false;
   bool _isSwitchingProfile = false;
+  bool _isSelectingProviderType = false;
   bool _apiKeyDirty = false;
   bool _customHeadersDirty = false;
   String _selectedSourceType = BuiltinOfficialProviderCatalog.customKey;
@@ -237,7 +250,11 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
   Color get _tertiaryTextColor =>
       _isDarkTheme ? context.omniPalette.textTertiary : AppColors.text50;
 
+  bool get _isChatGptProvider =>
+      _selectedSourceType == ChatGptOAuthService.sourceType;
+
   String get _selectedProviderValue {
+    if (_isChatGptProvider) return ChatGptOAuthService.sourceType;
     final officialProvider = BuiltinOfficialProviderCatalog.findByKey(
       _selectedSourceType,
     );
@@ -357,9 +374,8 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     }
     final entries = groups.entries.toList()
       ..sort((a, b) {
-        final orderCompare = ModelVendorCatalog.orderOf(
-          a.key,
-        ).compareTo(ModelVendorCatalog.orderOf(b.key));
+        final orderCompare = ModelVendorCatalog.orderOf(a.key)
+            .compareTo(ModelVendorCatalog.orderOf(b.key));
         if (orderCompare != 0) return orderCompare;
         return a.key.compareTo(b.key);
       });
@@ -490,7 +506,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
 
   void _scheduleAutoSave() {
     _autoSaveTimer?.cancel();
-    if (!_shouldAutoSaveDraft) {
+    if (_isSelectingProviderType || !_shouldAutoSaveDraft) {
       return;
     }
     _autoSaveTimer = Timer(_autoSaveDebounce, () {
@@ -545,6 +561,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
   }
 
   Future<bool> _persistProfileDraft() async {
+    if (_isSelectingProviderType) return false;
     final current = _currentProfile;
     if (current == null || current.readOnly) {
       return true;
@@ -597,8 +614,10 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
           id: current.id,
           name: nextName.isEmpty ? current.name : nextName,
           baseUrl: rawBaseUrl,
-          apiKey: _apiKeyDirty ? nextApiKey : null,
-          customHeaders: _customHeadersDirty ? nextCustomHeaders : null,
+          apiKey: !_isChatGptProvider && _apiKeyDirty ? nextApiKey : null,
+          customHeaders: !_isChatGptProvider && _customHeadersDirty
+              ? nextCustomHeaders
+              : null,
           sourceType: _selectedSourceType,
           protocolType: _selectedProtocolType,
           wireApi: _selectedWireApi,
@@ -764,7 +783,11 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     ModelProviderProfileSummary profile, {
     bool enrichMetadata = true,
   }) async {
-    if (!profile.configured) return const [];
+    if (!profile.configured ||
+        (profile.sourceType == ChatGptOAuthService.sourceType &&
+            !profile.ready)) {
+      return const [];
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _currentProfile?.id == profile.id) {
         unawaited(_fetchModelsLocalized(silentError: false));
@@ -1002,14 +1025,16 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
   }
 
   Future<void> _switchToProfile(String profileId) async {
-    if (_isSwitchingProfile || profileId == _editingProfileId) {
+    if (_isSwitchingProfile ||
+        _isSelectingProviderType ||
+        profileId == _editingProfileId) {
       return;
     }
     final index = _profiles.indexWhere((profile) => profile.id == profileId);
     if (index == -1) {
       return;
     }
-    _isSwitchingProfile = true;
+    setState(() => _isSwitchingProfile = true);
     try {
       if (_shouldAutoSaveDraft) {
         if (!await _persistProfileDraft()) return;
@@ -1045,7 +1070,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
         type: ToastType.error,
       );
     } finally {
-      _isSwitchingProfile = false;
+      if (mounted) setState(() => _isSwitchingProfile = false);
     }
   }
 
@@ -1112,7 +1137,11 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
 
   Future<void> _fetchModelsLocalized({bool silentError = false}) async {
     final current = _currentProfile;
-    if (current == null || _isFetchingModels) return;
+    if (current == null ||
+        _isFetchingModels ||
+        (_isChatGptProvider && !current.ready)) {
+      return;
+    }
     final baseUrl = _baseUrlController.text.trim();
 
     if (baseUrl.isEmpty) {
@@ -1479,12 +1508,30 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     }
   }
 
+  Future<void> _refreshChatGptProfile(String profileId) async {
+    final payload = await ModelProviderConfigService.listProfiles();
+    if (!mounted || _editingProfileId != profileId || !_isChatGptProvider) {
+      return;
+    }
+    setState(() {
+      _profiles = _byokProfiles(payload.profiles);
+      _remoteModels = const [];
+      _modelFetchError = null;
+    });
+    if (_currentProfile?.ready == true) {
+      await _fetchModelsLocalized(silentError: true);
+    }
+  }
+
   Future<void> _selectProviderType(String value) async {
+    if (_isSelectingProviderType) return;
     final selected = _kProviderTypeOptions.firstWhere(
       (option) => option.value == value,
       orElse: () => _kProviderTypeOptions[0],
     );
     final isOfficialSelection = selected.baseUrl.isNotEmpty;
+    final isChatGptSelection =
+        selected.sourceType == ChatGptOAuthService.sourceType;
     final isGenericOpenAiSelection = selected.value == 'openai_compatible';
     final nextProtocolType = selected.protocolType;
     final nextWireApi = isGenericOpenAiSelection
@@ -1499,12 +1546,14 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     if (current == null || current.readOnly) {
       return;
     }
+    _autoSaveTimer?.cancel();
     final previousSourceType = _selectedSourceType;
     final previousValue = _selectedProtocolType;
     final previousWireApi = _selectedWireApi;
     final previousName = _nameController.text;
     final previousBaseUrl = _baseUrlController.text;
     setState(() {
+      _isSelectingProviderType = true;
       _selectedSourceType = selected.sourceType;
       _selectedProtocolType = nextProtocolType;
       _selectedWireApi = nextWireApi;
@@ -1520,15 +1569,19 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
             ? current.name
             : _nameController.text.trim(),
         baseUrl: _baseUrlController.text.trim(),
-        apiKey: _apiKeyDirty ? _apiKeyController.text.trim() : null,
-        customHeaders: _customHeadersDirty
+        apiKey: !isChatGptSelection && _apiKeyDirty
+            ? _apiKeyController.text.trim()
+            : null,
+        clearApiKey: isChatGptSelection,
+        clearCustomHeaders: isChatGptSelection,
+        customHeaders: !isChatGptSelection && _customHeadersDirty
             ? (_validatedCustomHeadersDraft() ?? const <String, String>{})
             : null,
         sourceType: selected.sourceType,
         protocolType: nextProtocolType,
         wireApi: nextWireApi,
       );
-      if (!mounted) return;
+      if (!mounted || _editingProfileId != current.id) return;
       setState(() {
         _profiles = _profiles.map((p) => p.id == saved.id ? saved : p).toList();
         _selectedSourceType = saved.sourceType;
@@ -1538,10 +1591,18 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
           saved.wireApi,
         );
       });
+      if (isChatGptSelection) {
+        _syncController(_apiKeyController, '');
+        _replaceCustomHeaderEntries(const {});
+        setState(() {
+          _remoteModels = const [];
+          _modelFetchError = null;
+        });
+      }
       _apiKeyDirty = false;
       _customHeadersDirty = false;
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || _editingProfileId != current.id) return;
       setState(() {
         _selectedSourceType = previousSourceType;
         _selectedProtocolType = previousValue;
@@ -1549,6 +1610,8 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
       });
       _syncController(_nameController, previousName);
       _syncController(_baseUrlController, previousBaseUrl);
+    } finally {
+      if (mounted) setState(() => _isSelectingProviderType = false);
     }
   }
 
@@ -2870,7 +2933,10 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     return Builder(
       builder: (anchorContext) {
         final current = _currentProfile;
-        final enabled = !(current?.readOnly ?? false);
+        final enabled =
+            !(current?.readOnly ?? false) &&
+            !_isSelectingProviderType &&
+            !_isSwitchingProfile;
         return ConstrainedBox(
           constraints: BoxConstraints(maxWidth: math.max(0, maxWidth)),
           child: Opacity(
@@ -3072,80 +3138,94 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                             hint: context.l10n.modelProviderNameHint,
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _baseUrlController,
-                          focusNode: _baseUrlFocusNode,
-                          enabled: !(_currentProfile?.readOnly ?? false),
-                          style: context.omniInputTextStyle,
-                          decoration: _buildInputDecoration(
-                            label: 'Base URL',
-                            hint: context.l10n.modelProviderBaseUrlHint,
+                        if (_isChatGptProvider) ...[
+                          const SizedBox(height: 16),
+                          ChatGptAccountSection(
+                            key: ValueKey('chatgpt-account-$_editingProfileId'),
+                            profileId: _editingProfileId,
+                            enabled:
+                                !_isSelectingProviderType &&
+                                !_isSwitchingProfile,
+                            beforeLogin: _persistProfileDraft,
+                            onAccountChanged: _refreshChatGptProfile,
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        ValueListenableBuilder<TextEditingValue>(
-                          valueListenable: _baseUrlController,
-                          builder: (context, value, child) {
-                            final url = _buildBaseUrlHelperText(value.text);
-                            if (url == null) {
-                              return const SizedBox.shrink();
-                            }
-                            return Text(
-                              url,
-                              style: TextStyle(
-                                color: _tertiaryTextColor,
-                                fontSize: 12,
-                                fontFamily: 'PingFang SC',
-                              ),
-                            );
-                          },
-                        ),
-                        if (_selectedProviderValue == 'openai_compatible') ...[
+                        ] else ...[
                           const SizedBox(height: 12),
-                          _buildWireApiField(),
-                        ],
-                        const SizedBox(height: 14),
-                        TextField(
-                          controller: _apiKeyController,
-                          focusNode: _apiKeyFocusNode,
-                          enabled: !(_currentProfile?.readOnly ?? false),
-                          style: context.omniInputTextStyle,
-                          obscureText: _obscureApiKey,
-                          decoration: _buildInputDecoration(
-                            label: 'API Key',
-                            hint: 'e.g., sk-xxxx',
-                            suffixIcon: IconButton(
-                              key: const Key(
-                                'provider-api-key-visibility-button',
-                              ),
-                              splashRadius: 18,
-                              onPressed: () {
-                                setState(() {
-                                  _obscureApiKey = !_obscureApiKey;
-                                });
-                              },
-                              icon: Icon(
-                                _obscureApiKey
-                                    ? LucideIcons.eyeOff
-                                    : LucideIcons.eye,
-                                color: _tertiaryTextColor,
-                                size: 18,
+                          TextField(
+                            controller: _baseUrlController,
+                            focusNode: _baseUrlFocusNode,
+                            enabled: !(_currentProfile?.readOnly ?? false),
+                            style: context.omniInputTextStyle,
+                            decoration: _buildInputDecoration(
+                              label: 'Base URL',
+                              hint: context.l10n.modelProviderBaseUrlHint,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ValueListenableBuilder<TextEditingValue>(
+                            valueListenable: _baseUrlController,
+                            builder: (context, value, child) {
+                              final url = _buildBaseUrlHelperText(value.text);
+                              if (url == null) {
+                                return const SizedBox.shrink();
+                              }
+                              return Text(
+                                url,
+                                style: TextStyle(
+                                  color: _tertiaryTextColor,
+                                  fontSize: 12,
+                                  fontFamily: 'PingFang SC',
+                                ),
+                              );
+                            },
+                          ),
+                          if (_selectedProviderValue ==
+                              'openai_compatible') ...[
+                            const SizedBox(height: 12),
+                            _buildWireApiField(),
+                          ],
+                          const SizedBox(height: 14),
+                          TextField(
+                            controller: _apiKeyController,
+                            focusNode: _apiKeyFocusNode,
+                            enabled: !(_currentProfile?.readOnly ?? false),
+                            style: context.omniInputTextStyle,
+                            obscureText: _obscureApiKey,
+                            decoration: _buildInputDecoration(
+                              label: 'API Key',
+                              hint: 'e.g., sk-xxxx',
+                              suffixIcon: IconButton(
+                                key: const Key(
+                                  'provider-api-key-visibility-button',
+                                ),
+                                splashRadius: 18,
+                                onPressed: () {
+                                  setState(() {
+                                    _obscureApiKey = !_obscureApiKey;
+                                  });
+                                },
+                                icon: Icon(
+                                  _obscureApiKey
+                                      ? LucideIcons.eyeOff
+                                      : LucideIcons.eye,
+                                  color: _tertiaryTextColor,
+                                  size: 18,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          context.l10n.modelProviderApiKeyHint,
-                          style: TextStyle(
-                            color: _tertiaryTextColor,
-                            fontSize: 12,
-                            fontFamily: 'PingFang SC',
+                          const SizedBox(height: 8),
+                          Text(
+                            context.l10n.modelProviderApiKeyHint,
+                            style: TextStyle(
+                              color: _tertiaryTextColor,
+                              fontSize: 12,
+                              fontFamily: 'PingFang SC',
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildCustomHeadersEditor(),
+                          const SizedBox(height: 16),
+                          _buildCustomHeadersEditor(),
+                        ],
                       ],
                     ),
                   ),
@@ -3180,7 +3260,10 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                             const SizedBox(width: 8),
                             _buildModelActionButton(
                               icon: LucideIcons.arrowBigDown,
-                              onPressed: _isFetchingModels
+                              onPressed:
+                                  _isFetchingModels ||
+                                      (_isChatGptProvider &&
+                                          _currentProfile?.ready != true)
                                   ? null
                                   : _fetchModelsLocalized,
                               highlighted: true,
@@ -3235,7 +3318,8 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                                         ),
                                         const SizedBox(height: 10),
                                         Text(
-                                          _modelFetchError ?? context.l10n.modelAddPrompt,
+                                          _modelFetchError ??
+                                              context.l10n.modelAddPrompt,
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
                                             color: _secondaryTextColor,
@@ -3247,8 +3331,12 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                                         if (_modelFetchError != null) ...[
                                           const SizedBox(height: 8),
                                           TextButton(
-                                            onPressed: _isFetchingModels ? null : _fetchModelsLocalized,
-                                            child: Text(_headerText('重试', 'Retry')),
+                                            onPressed: _isFetchingModels
+                                                ? null
+                                                : _fetchModelsLocalized,
+                                            child: Text(
+                                              _headerText('重试', 'Retry'),
+                                            ),
                                           ),
                                         ],
                                       ],

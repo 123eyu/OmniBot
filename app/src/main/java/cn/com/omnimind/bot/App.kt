@@ -88,6 +88,7 @@ class App : BaseApplication() {
         CredentialEndpointSecurity.configureDebugLoopback(BuildConfig.DEBUG)
         AppSecretStore.initialize(this)
         ModelProviderConfigStore.initialize(this)
+        cn.com.omnimind.baselib.llm.chatgpt.ChatGptOAuthManager.initialize(this)
         DebugOmniMindProviderBootstrap.install(this)
         OfficialOmniPluginProviders.register()
         OmniAccount.initialize(

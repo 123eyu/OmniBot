@@ -5,6 +5,10 @@
 # optimized Android defaults or by dependency consumer rules. Keep this file
 # limited to reflection that is owned by this application.
 
+# Keep readable class/member names for this open-source app. Code optimization,
+# dead-code elimination and resource shrinking remain enabled.
+-dontobfuscate
+
 # Runtime metadata used by Gson, Kotlin, and reflective generic type lookup.
 -keepattributes RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations,AnnotationDefault
 -keepattributes Signature,InnerClasses,EnclosingMethod
