@@ -2,9 +2,9 @@
 
 Na is a built-in Agent profile (`na-cloud`) in the native catalog. Select **Na** from the existing chat mode menu. It uses the existing `ChatPage`, composer, message/tool cards, conversation drawer, cancellation, and `ChatConversationRuntimeCoordinator` / `AgentEventReducer`. There is no `/home/na` route or separate Na chat/configuration page.
 
-Open **Settings → Agent mode → Na → Configure**. This opens the existing `AgentConfigPage`, with the service address and account access token. The App never receives the model-provider API key. Na's model, reasoning, tools and execution permissions remain server-owned; device Provider/model selectors and permission controls are hidden for Na.
+Sign in to the App account and select Na. Managed mode uses the current account credentials to claim the account's authorized workspace and refresh access tokens automatically. `OMNIBOT_CLOUD_URL` defaults to `https://na.omnimind.com.cn`; users do not enter a container address or token. The separate `cloud.omnimind.com.cn` New API/image service keeps its existing address. The App never receives the model-provider API key. Na's model, reasoning, tools and execution permissions remain server-owned; device Provider/model selectors and permission controls are hidden for Na.
 
-The default address is `http://127.0.0.1:8787`, suitable for a physical test device with `adb reverse tcp:8787 tcp:8787`. On an Android emulator, set `http://10.0.2.2:8787` in the same Agent settings. A deployed instance uses its HTTPS address. The URL is saved in the native connection preferences. The account token stays in the App process and must be entered again after a cold restart, until cloud-account short-lived credentials are integrated.
+Debug builds additionally expose an explicit development connection mode in **Settings → Agent mode → Na → Configure**. Its standalone default is `http://127.0.0.1:8787`, suitable for a physical test device with `adb reverse tcp:8787 tcp:8787`. The development URL is saved locally, while its manually entered token stays only in the App process. Managed mode instead uses encrypted account credentials, including after restart. Account and endpoint ownership checks isolate Na history across logout, account switches and service changes. See [account integration](account-client.zh-CN.md) for the managed connection contract.
 
 ## Runtime boundary
 

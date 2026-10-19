@@ -26,7 +26,7 @@ val omnibotImageModel = prop("OMNIBOT_IMAGE_MODEL")
     .ifBlank { "gpt-image-2" }
 val omnibotImageApiKey = prop("OMNIBOT_IMAGE_API_KEY")
 val omnibotBaseUrl = prop("OMNIBOT_BASE_URL")
-val omnibotCloudUrl = prop("OMNIBOT_CLOUD_URL").ifBlank { "https://cloud.omnimind.com.cn" }
+val omnibotCloudUrl = prop("OMNIBOT_CLOUD_URL").ifBlank { "https://na.omnimind.com.cn" }
 val appUpdateWorkerUrl = prop("OMNIBOT_UPDATE_WORKER_URL")
     .ifBlank { "https://omnibot.omnimind.com.cn" }
 val llmThuApiBase = prop("LLMTHU_API_BASE")

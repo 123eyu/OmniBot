@@ -43,7 +43,8 @@ OMNIBOT_BASE_URL=https://account.omnimind.com.cn
 升级前不能证明归属的 Na 记录保留在本机，但不会自动分配给下一位登录用户。
 
 `OMNIBOT_CLOUD_URL` 指定 Cloud 的 HTTPS 入口，默认值为
-`https://cloud.omnimind.com.cn`。正式模式使用当前账号登录凭证，用户无需填写
+`https://na.omnimind.com.cn`。`cloud.omnimind.com.cn` 仍用于现有 New API/图片服务，
+不要将其地址一起替换。正式模式使用当前账号登录凭证，用户无需填写
 容器地址或访问令牌。初次使用通过 `GET /v1/cloud/workspace` 检查空间，必要时
 以空请求体调用 `POST /v1/cloud/workspace/claim`；授权、名额和执行就绪状态
 均由服务器决定，只有 `executionAvailable=true` 才访问 `/v1/cloud/na/api/*`。
