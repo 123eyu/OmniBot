@@ -3,6 +3,8 @@ package cn.com.omnimind.bot.agent.runtime
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withTimeout
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -28,10 +30,13 @@ internal suspend fun <T> naSubmitWithAttachments(
     open: (Map<String, Any?>) -> InputStream,
     upload: suspend (String, File, () -> Unit) -> Unit,
     checkActive: () -> Unit,
+    includeReferences: Boolean = true,
+    cleanup: suspend () -> Unit = {},
     submit: suspend (String) -> T,
 ): T = withContext(Dispatchers.IO) {
     checkActive()
     if (attachments.isEmpty()) return@withContext submit(text)
+    require(attachments.size <= 20) { "一次最多上传 20 个附件。" }
     val paths = attachments.mapIndexed { index, attachment ->
         val size = (attachment["size"] as? Number)?.toLong()
         require(size == null || size <= NA_ATTACHMENT_MAX_BYTES) { "附件不能超过 10 MiB，请重新选择。" }
@@ -67,7 +72,12 @@ internal suspend fun <T> naSubmitWithAttachments(
             upload(paths[index], file, checkActive)
         }
         checkActive()
-        submit(message)
+        submit(if (includeReferences) message else text.trim())
+    } catch (error: Throwable) {
+        // The server owns the committed/pending distinction, including a lost
+        // POST response. Logout/offline failures are covered by its expiry job.
+        withContext(NonCancellable) { runCatching { withTimeout(10000) { cleanup() } } }
+        throw error
     } finally {
         staged.forEach { it.delete() }
     }
@@ -91,9 +101,15 @@ internal fun naAttachmentFilename(raw: String): String {
 
 internal suspend fun naUploadAttachment(
     connection: NaCloudConnection, client: OkHttpClient, path: String, file: File, checkActive: () -> Unit,
+    owner: Map<String, String> = emptyMap(),
 ) {
-    val url = (connection.apiBaseUrl + "/api/files/content").toHttpUrl().newBuilder()
+    val id = path.removePrefix("attachment-").take(36)
+    val url = if (owner.isEmpty()) (connection.apiBaseUrl + "/api/files/content").toHttpUrl().newBuilder()
         .addQueryParameter("path", path).build()
+    else (connection.apiBaseUrl + "/api/files/uploads/$id").toHttpUrl().newBuilder().apply {
+        owner.forEach { (key, value) -> addQueryParameter(key, value) }
+        addQueryParameter("name", path.removePrefix("attachment-$id-"))
+    }.build()
     val body = object : RequestBody() {
         override fun contentType() = "application/octet-stream".toMediaType()
         override fun contentLength() = file.length()

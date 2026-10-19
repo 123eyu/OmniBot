@@ -2,15 +2,18 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'dart:typed_data';
+
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:ui/features/home/pages/omnibot_workspace/omnibot_artifact_preview_page.dart';
+import 'package:ui/features/home/pages/agent/codex_remote_file_preview_page.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/models/chat_link_preview.dart';
 import 'package:ui/services/omnibot_resource_service.dart';
 import 'package:ui/widgets/image_preview_overlay.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../../../../../models/chat_message_model.dart';
 import '../../../../../services/app_background_service.dart';
 import '../../../../../services/voice_playback_coordinator.dart';
@@ -18,7 +21,9 @@ import '../../../../../services/voice_playback_channel_service.dart';
 import '../../../../../theme/theme_context.dart';
 import '../../../../../widgets/streaming_text.dart';
 import 'thinking_dots_indicator.dart';
+import 'na_attachment_preview.dart';
 import 'cards/card_widget_factory.dart';
+
 import 'package:flutter_svg/flutter_svg.dart';
 
 export 'package:ui/widgets/streaming_text.dart'
@@ -335,6 +340,29 @@ class MessageBubble extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: attachments.map((item) {
+        if (item['source'] == 'na-cloud') {
+          return GestureDetector(
+            onTap: item['deleted'] == true
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => CodexRemoteFilePreviewPage(
+                          agentId: 'na-cloud',
+                          sessionId: item['sessionId'] as String?,
+                          path: item['path'] as String,
+                          title: item['name'] as String?,
+                          remoteCwd: '/workspace',
+                        ),
+                      ),
+                    );
+                  },
+            child: NaAttachmentPreview(
+              attachment: item,
+              child: _buildFileAttachmentChip(context, item),
+            ),
+          );
+        }
         if (_isImageAttachment(item)) {
           final imageIndex = imageAttachments.indexOf(item);
           return _buildImageAttachmentTile(
@@ -475,7 +503,11 @@ class MessageBubble extends StatelessWidget {
     Map<String, dynamic> item,
   ) {
     final displayName = _resolveAttachmentDisplayName(item);
-    final sizeText = _formatAttachmentSize(item['size']);
+    final sizeText = item['deleted'] == true
+        ? (Localizations.localeOf(context).languageCode == 'en'
+              ? 'Deleted'
+              : '已删除')
+        : _formatAttachmentSize(item['size']);
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 220, minHeight: 40),
@@ -970,9 +1002,8 @@ class MessageBubble extends StatelessWidget {
     if (onEditTap == null) {
       return textWidget;
     }
-    final underlineColor = _resolvedUserPrimaryTextColor(
-      context,
-    ).withValues(alpha: 0.52);
+    final underlineColor = _resolvedUserPrimaryTextColor(context)
+        .withValues(alpha: 0.52);
     return Semantics(
       button: true,
       label: context.trLegacy('编辑消息'),
@@ -1110,9 +1141,8 @@ class MessageBubble extends StatelessWidget {
             '${speed.toStringAsFixed(1)} tok/s',
             style: TextStyle(
               fontSize: 11,
-              color: _resolvedAiSecondaryTextColor(
-                context,
-              ).withValues(alpha: 0.6),
+              color: _resolvedAiSecondaryTextColor(context)
+                  .withValues(alpha: 0.6),
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -1317,9 +1347,8 @@ class MessageBubble extends StatelessWidget {
     final durationMs = _readIntValue(usage['durationMs']);
     final hasUsage = input != null || output != null || cache != null;
     if (!hasUsage && endedAt == null) return null;
-    final textColor = _resolvedAiSecondaryTextColor(
-      context,
-    ).withValues(alpha: 0.72);
+    final textColor = _resolvedAiSecondaryTextColor(context)
+        .withValues(alpha: 0.72);
     final ended = endedAt == null
         ? null
         : DateTime.fromMillisecondsSinceEpoch(endedAt).toLocal();

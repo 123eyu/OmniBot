@@ -283,7 +283,8 @@ class CodexRemoteWorkspaceBrowserState
                     ),
                     const SizedBox(height: 8),
                   ],
-                  if (widget.allowFileMutations)
+                  if (widget.allowFileMutations &&
+                      !(widget.agentId == 'na-cloud' && isDirectory))
                     _buildActionTile(
                       context: sheetContext,
                       icon: Icons.drive_file_rename_outline_rounded,
@@ -298,7 +299,8 @@ class CodexRemoteWorkspaceBrowserState
                     action: _RemoteWorkspaceEntryAction.copyPath,
                   ),
                   const SizedBox(height: 8),
-                  if (widget.allowFileMutations)
+                  if (widget.allowFileMutations &&
+                      !(widget.agentId == 'na-cloud' && isDirectory))
                     _buildActionTile(
                       context: sheetContext,
                       icon: Icons.delete_outline_rounded,
@@ -413,6 +415,7 @@ class CodexRemoteWorkspaceBrowserState
     final destinationPath = '$parentPath/$nextName';
     try {
       final result = await AgentRuntimeService.moveRemotePath(
+        agentId: widget.agentId,
         remoteBridgeUrl: widget.remoteBridgeUrl,
         remoteBridgeToken: widget.remoteBridgeToken,
         remoteCwd: _rootPath,
@@ -441,7 +444,7 @@ class CodexRemoteWorkspaceBrowserState
           : (_isEnglish ? 'Delete file' : '删除文件'),
       content: _isEnglish
           ? 'Delete "${entry.name}" from the remote PC? This cannot be undone.'
-          : '确认从远程 PC 删除“${entry.name}”？删除后不可恢复。',
+          : '确认从${widget.agentId == 'na-cloud' ? '云端空间' : '远程 PC'}删除“${entry.name}”？删除后不可恢复。',
       cancelText: _isEnglish ? 'Cancel' : '取消',
       confirmText: _isEnglish ? 'Delete' : '删除',
       confirmButtonColor: const Color(0xFFE53935),
@@ -449,6 +452,7 @@ class CodexRemoteWorkspaceBrowserState
     if (confirmed != true) return;
     try {
       final result = await AgentRuntimeService.deleteRemotePath(
+        agentId: widget.agentId,
         remoteBridgeUrl: widget.remoteBridgeUrl,
         remoteBridgeToken: widget.remoteBridgeToken,
         remoteCwd: _rootPath,

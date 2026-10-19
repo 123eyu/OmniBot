@@ -23,6 +23,18 @@ List<ChatMessageModel> _mergeRemoteCodexSnapshotMessages({
     snapshotUserTextCounts: _remoteUserMessageTextCounts(snapshotMessages),
   );
   final snapshotTaskIds = _remoteSnapshotTaskIds(snapshotMessages);
+  // A later authoritative terminal snapshot may settle a remote turn after
+  // the phone's prompt transport failed. Retire only that turn's local error
+  // placeholder; a running/incomplete snapshot cannot erase the failure.
+  final settledTaskIds = <String>{
+    for (final message in snapshotMessages)
+      if (const {
+            'end_turn',
+            'cancelled',
+          }.contains(message.streamMeta?['stopReason']) &&
+          _messageTaskId(message) != null)
+        _messageTaskId(message)!,
+  };
   final mergedById = <String, ChatMessageModel>{};
   for (final snapshot in snapshotMessages) {
     final existing = existingById[snapshot.id];
@@ -60,6 +72,11 @@ List<ChatMessageModel> _mergeRemoteCodexSnapshotMessages({
   }
   for (final existing in existingMessages) {
     if (snapshotById.containsKey(existing.id)) {
+      continue;
+    }
+    if (isAgentTurnFailureMessage(existing) &&
+        settledTaskIds.contains(_messageTaskId(existing)) &&
+        !(isAiResponding && _messageBelongsToTask(existing, activeTaskId))) {
       continue;
     }
     if (existing.type == 1 && existing.user == 1) {
@@ -354,6 +371,7 @@ List<ChatMessageModel> _remoteCodexMessagesFromThreadResponse(
     return const <ChatMessageModel>[];
   }
   final chronological = <ChatMessageModel>[];
+  final terminalReasons = <String, String>{};
   final effectiveActiveTurnId =
       activeTurnId ??
       (active ? _remoteCodexLatestTurnIdFromThreadResponse(response) : null);
@@ -365,6 +383,10 @@ List<ChatMessageModel> _remoteCodexMessagesFromThreadResponse(
     }
     final turnId =
         _remoteCodexTurnIdAt(rawTurns, turnIndex) ?? 'turn-$turnIndex';
+    final stopReason = _asAgentString(turn['stopReason']);
+    if (const {'end_turn', 'cancelled', 'error'}.contains(stopReason)) {
+      terminalReasons[turnId] = stopReason!;
+    }
     final isActiveTurn =
         active &&
         ((effectiveActiveTurnId != null && turnId == effectiveActiveTurnId) ||
@@ -685,7 +707,11 @@ List<ChatMessageModel> _remoteCodexMessagesFromThreadResponse(
         );
         final isRunning = isActiveTurn && itemActivity?.active != false;
         final normalizedStatus = toolInfo.status == 'running' && !isRunning
-            ? 'success'
+            ? switch (stopReason) {
+                'cancelled' => 'cancelled',
+                'error' => 'error',
+                _ => 'success',
+              }
             : toolInfo.status;
         final status = isRunning ? 'running' : normalizedStatus;
         final toolTitle = toolInfo.toolTitle;
@@ -796,7 +822,14 @@ List<ChatMessageModel> _remoteCodexMessagesFromThreadResponse(
       )
       .map(
         (message) => _withAcpAgentIdentity(
-          message,
+          terminalReasons.containsKey(_messageTaskId(message))
+              ? message.copyWith(
+                  streamMeta: {
+                    ...?message.streamMeta,
+                    'stopReason': terminalReasons[_messageTaskId(message)],
+                  },
+                )
+              : message,
           agentId: agentId,
           agentName: agentName,
         ),

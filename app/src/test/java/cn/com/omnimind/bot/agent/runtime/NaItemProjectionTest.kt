@@ -10,6 +10,34 @@ import java.net.ServerSocket
 import java.util.concurrent.atomic.AtomicInteger
 
 class NaItemProjectionTest {
+    @Test fun onlyServerTerminalStatesSetHistoryOutcome() {
+        for ((status, reason) in mapOf("completed" to "end_turn", "cancelled" to "cancelled", "failed" to "error", "running" to null, "queued" to null)) {
+            val snapshot = naThreadSnapshot("na:instance:conversation", mapOf("runs" to listOf(
+                mapOf("id" to "run", "status" to status, "input" to "test")
+            )))
+            assertEquals(reason, ((snapshot["turns"] as List<*>).single() as Map<*, *>)["stopReason"])
+        }
+    }
+    @Test fun freshDeviceHistoryRestoresScopedFileCardsWithoutPhoneLocalState() {
+        val file = mapOf("id" to "attachment-id", "name" to "report.txt", "path" to "attachment-id-report.txt", "size" to 17, "mimeType" to "text/plain")
+        val snapshot = naThreadSnapshot("na:alice:conversation", mapOf("runs" to listOf(mapOf(
+            "id" to "server-run", "clientMessageId" to "host-turn", "clientUserMessageId" to "host-user",
+            "input" to "read\n\n[附件] attachment-id-report.txt", "userText" to "read", "attachments" to listOf(file)))))
+        val normalized = RemoteHistoryCompatibility.normalizeResponse(mapOf("thread" to snapshot))["thread"] as Map<*, *>
+        val turn = (normalized["turns"] as List<*>).single() as Map<*, *>
+        val user = (turn["items"] as List<*>).single() as Map<*, *>
+        assertEquals("host-user", user["hostMessageId"])
+        assertEquals("read", user["content"])
+        val card = (user["attachments"] as List<*>).single() as Map<*, *>
+        assertEquals("report.txt", card["name"])
+        assertEquals("/workspace/attachment-id-report.txt", card["path"])
+        assertEquals("na:alice:conversation", card["sessionId"])
+        assertEquals("na-cloud", card["source"])
+        assertFalse(card.containsKey("token"))
+        for (bad in listOf("../private", ".na-uploads/id", "folder/../private", "/data/private", "folder\\private")) {
+            assertTrue(naHistoryAttachments("na:alice:conversation", listOf(file + ("path" to bad))).isEmpty())
+        }
+    }
     // A peer dropping a reused/read connection must recover, but a lost
     // submission response must never replay the admitted logical prompt.
     private fun droppingPeer(): Pair<ServerSocket, AtomicInteger> {

@@ -19,6 +19,7 @@ class CodexRemoteFilePreviewPage extends StatefulWidget {
     required this.path,
     this.title,
     this.agentId,
+    this.sessionId,
     this.remoteBridgeUrl = '',
     this.remoteBridgeToken = '',
     this.remoteCwd = '',
@@ -27,6 +28,7 @@ class CodexRemoteFilePreviewPage extends StatefulWidget {
 
   final String path;
   final String? agentId;
+  final String? sessionId;
   final String? title;
   final String remoteBridgeUrl;
   final String remoteBridgeToken;
@@ -98,6 +100,7 @@ class _CodexRemoteFilePreviewPageState
     try {
       final payload = await AgentRuntimeService.readRemoteFile(
         agentId: widget.agentId,
+        sessionId: widget.sessionId,
         remoteBridgeUrl: widget.remoteBridgeUrl,
         remoteBridgeToken: widget.remoteBridgeToken,
         remoteCwd: widget.remoteCwd,
@@ -210,6 +213,7 @@ class _CodexRemoteFilePreviewPageState
       final savedText = _editorController.text;
       final response = await AgentRuntimeService.writeRemoteFile(
         agentId: widget.agentId,
+        sessionId: widget.sessionId,
         remoteBridgeUrl: widget.remoteBridgeUrl,
         remoteBridgeToken: widget.remoteBridgeToken,
         remoteCwd: widget.remoteCwd,

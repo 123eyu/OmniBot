@@ -3,8 +3,60 @@ import 'package:ui/features/home/pages/chat/chat_page.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
 import 'package:ui/services/agent_event_reducer.dart';
 import 'package:ui/models/chat_message_model.dart';
+import 'package:ui/features/home/pages/chat/utils/agent_run_timeline.dart';
 
 void main() {
+  for (final reason in [null, 'end_turn', 'cancelled']) {
+    test(
+      'Na terminal history reconciles transport failure, outcome=$reason',
+      () {
+        final runtime = ChatConversationRuntimeState(
+          conversationId: 42,
+          mode: kChatRuntimeModeAgent,
+        );
+        addTearDown(runtime.dispose);
+        runtime.currentDispatchTurnId = 'prompt';
+        runtime.activeAcpTurnId = 'prompt';
+        runtime.activeAcpSessionId = 'na:session';
+        const AgentEventReducer().reducePromptResponse(
+          runtime: runtime,
+          sessionId: 'na:session',
+          turnId: 'prompt',
+          stopReason: 'error',
+          error: 'Network unavailable',
+        );
+        expect(runtime.messages.any(isAgentTurnFailureMessage), true);
+        final snapshot = remoteCodexMessagesFromThreadResponseForTesting({
+          'id': 'na:session',
+          'agentId': 'na-cloud',
+          'turns': [
+            {
+              'id': 'prompt',
+              'status': reason == null ? 'running' : 'completed',
+              'stopReason': reason,
+              'items': [
+                {
+                  'id': 'prompt-reply',
+                  'type': 'agentMessage',
+                  'text': 'remote result',
+                },
+              ],
+            },
+          ],
+        });
+        final merged = mergeRemoteCodexSnapshotMessagesForTesting(
+          snapshotMessages: snapshot,
+          existingMessages: runtime.messages,
+          activeTaskId: null,
+          isAiResponding: false,
+        );
+        expect(merged.any(isAgentTurnFailureMessage), reason == null);
+        expect(merged.where((m) => m.text == 'remote result'), hasLength(1));
+        if (reason != null)
+          expect(merged.single.streamMeta?['stopReason'], reason);
+      },
+    );
+  }
   test(
     'Na reload preserves local attachment cards on the same user message',
     () {

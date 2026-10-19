@@ -177,6 +177,10 @@ internal class NaCloudRuntime(
         "config/remote/fs/list" -> listFiles(args)
         "config/remote/fs/read" -> fileContent(args, write = false)
         "config/remote/fs/write" -> fileContent(args, write = true)
+        "config/remote/fs/move" -> request("POST", "/api/files/rename", mapOf("path" to relativePath(args),
+            "destination" to relativePath(mapOf("path" to args["destinationPath"]))))
+        "config/remote/fs/delete" -> request("DELETE", "/api/files/content?path=" +
+            java.net.URLEncoder.encode(relativePath(args), "UTF-8"))
         "session/new" -> mutex.withLock { load(args, create = true) }
         "session/load", "session/resume", "session/read" -> mutex.withLock { load(args, create = false) }
         "session/list" -> list()
@@ -272,15 +276,29 @@ internal class NaCloudRuntime(
                 }
                 var admittedRunId: String? = null
                 try {
+                    val uploadOwner = mapOf("conversationId" to id.removePrefix(prefix), "clientMessageId" to reservation)
+                    val attachmentIds = mutableListOf<String>()
+                    if (attachments.isNotEmpty()) {
+                        val capabilities = request("GET", "/api/status")["capabilities"] as? List<*>
+                        check(capabilities?.contains("attachments") == true) { "云端附件服务尚未更新，请稍后再试。" }
+                    }
                     // One admission after all uploads; neither PUT nor POST is replayed.
                     val accepted = naSubmitWithAttachments(
                         input["text"]?.toString().orEmpty(), attachments, key, appContext.cacheDir,
                         ::openAttachment,
-                        { path, file, active -> naUploadAttachment(connection, client, path, file, active) },
+                        { path, file, active ->
+                            val attachment = attachments[attachmentIds.size]
+                            attachmentIds += path.removePrefix("attachment-").take(36)
+                            val mime = attachment["mimeType"]?.toString()?.takeIf { it.matches(Regex("[a-zA-Z0-9.+_-]+/[a-zA-Z0-9.+_-]+")) }
+                                ?: "application/octet-stream"
+                            naUploadAttachment(connection, client, path, file, active, uploadOwner + ("mimeType" to mime))
+                        },
                         checkActive,
+                        includeReferences = false,
+                        cleanup = { request("DELETE", "/api/files/uploads", uploadOwner) },
                     ) { text ->
                         request("POST", "/api/conversations/${id.removePrefix(prefix)}/messages",
-                            mapOf("text" to text, "clientMessageId" to reservation) +
+                            mapOf("text" to text, "clientMessageId" to reservation, "attachmentIds" to attachmentIds) +
                                 (args["userMessageId"]?.toString()?.takeIf { it.isNotBlank() }?.let { mapOf("clientUserMessageId" to it) } ?: emptyMap()))
                     }
                     val runId = accepted["runId"].toString()
@@ -385,6 +403,7 @@ internal class NaCloudRuntime(
     }
 
     private suspend fun fileContent(args: Map<String, Any?>, write: Boolean): Map<String, Any?> = withContext(Dispatchers.IO) {
+        if (args["sessionId"] != null) resolveSession(args)
         val relative = relativePath(args)
         require(relative.isNotEmpty()) { "File path is required" }
         val connection = connection()
@@ -485,7 +504,8 @@ internal fun naThreadSnapshot(sessionId: String, response: Map<String, Any?>): M
     val turns = (response["runs"] as? List<*>)?.filterIsInstance<Map<*, *>>()?.map { run ->
         val turnId = (run["clientMessageId"] ?: run["id"]).toString()
         val items = mutableListOf<Map<String, Any?>>(mapOf("id" to "$turnId-user", "type" to "userMessage",
-            "content" to listOf(mapOf("type" to "text", "text" to run["input"])), "createdAt" to run["createdAt"],
+            "content" to listOf(mapOf("type" to "text", "text" to (run["userText"] ?: run["input"]))), "createdAt" to run["createdAt"],
+            "attachments" to naHistoryAttachments(sessionId, run["attachments"]),
             "hostMessageId" to run["clientUserMessageId"]))
         (run["items"] as? List<*>)?.filterIsInstance<Map<*, *>>()?.forEach { item ->
             val itemId = "$turnId-${item["id"]}"
@@ -493,10 +513,27 @@ internal fun naThreadSnapshot(sessionId: String, response: Map<String, Any?>): M
                 else mapOf("sessionId" to sessionId, "turnId" to turnId, "toolCallId" to itemId)
             items += item.entries.associate { it.key.toString() to it.value } + ("id" to itemId) + identity
         }
-        mapOf("id" to turnId, "status" to run["status"], "startedAt" to run["createdAt"], "items" to items)
+        mapOf("id" to turnId, "status" to run["status"], "startedAt" to run["createdAt"], "items" to items,
+            "stopReason" to when (run["status"]) {
+                "completed" -> "end_turn"
+                "cancelled" -> "cancelled"
+                "failed" -> "error"
+                else -> null
+            })
     } ?: emptyList()
     return mapOf("id" to sessionId, "agentId" to NA_AGENT_ID, "agentName" to "Na", "title" to conversation["title"], "turns" to turns)
 }
+
+internal fun naHistoryAttachments(sessionId: String, value: Any?): List<Map<String, Any?>> =
+    (value as? List<*>)?.filterIsInstance<Map<*, *>>()?.mapNotNull { row ->
+        val path = row["path"] as? String ?: return@mapNotNull null
+        if (path.startsWith('/') || path.contains('\\') || path.split('/').any { it.isEmpty() || it.startsWith('.') }) return@mapNotNull null
+        val size = (row["size"] as? Number)?.toLong() ?: return@mapNotNull null
+        if (size < 0 || size > NA_ATTACHMENT_MAX_BYTES) return@mapNotNull null
+        mapOf("id" to row["id"], "name" to row["name"], "size" to size, "mimeType" to row["mimeType"],
+            "path" to "/workspace/$path", "source" to "na-cloud", "sessionId" to sessionId,
+            "isImage" to false, "deleted" to (row["deleted"] == true), "sendToModel" to false)
+    }.orEmpty()
 
 /** One transport owner for safe reads. Writes, including a lost prompt POST
  * response, are never retried. A read snapshot cannot admit another turn. */
