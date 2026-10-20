@@ -609,8 +609,8 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
         const SizedBox(height: 12),
         Text(
           _text(
-            'Base URL 和 API Key 自动来自 Provider 配置。官方配置文件：$_configPath；认证文件：$_authPath',
-            'Base URL and API key come from the selected Provider. Official config: $_configPath; auth: $_authPath',
+            '连接与认证由所选 Provider 管理，ChatGPT 登录无需另填 API Key。官方配置文件：$_configPath；认证文件：$_authPath',
+            'The selected Provider manages the connection and authentication. ChatGPT sign-in requires no separate API key. Official config: $_configPath; auth: $_authPath',
           ),
           style: Theme.of(context).textTheme.bodySmall,
         ),

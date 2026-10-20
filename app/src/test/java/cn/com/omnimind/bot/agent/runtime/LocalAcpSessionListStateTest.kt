@@ -22,7 +22,7 @@ class LocalAcpSessionListStateTest {
         val ownership = AcpTurnOwnershipRegistry()
         val repository = mock(AgentSessionBindingRepository::class.java)
         val runtime = LocalAcpRuntime(context, scope, repository,
-            AcpAgentProfileStore(context), prepareLaunchEnvironment = { emptyMap() },
+            AcpAgentProfileStore(context), prepareLaunchEnvironment = { _, _ -> PreparedAcpLaunch(emptyMap()) },
             buildHandoffContext = { _, _ -> null },
             scheduleToolBridge = mock(AgentScheduleToolBridge::class.java),
             onMessage = { error("Listing must not emit lifecycle events") }, turnOwnership = ownership)

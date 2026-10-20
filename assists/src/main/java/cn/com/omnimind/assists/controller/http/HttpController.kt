@@ -19,6 +19,7 @@ import cn.com.omnimind.baselib.database.TokenUsageRecord
 import cn.com.omnimind.baselib.llm.ModelProviderConfig
 import cn.com.omnimind.baselib.llm.ModelProviderProfile
 import cn.com.omnimind.baselib.llm.ChatGptOAuthProvider
+import cn.com.omnimind.baselib.llm.chatgpt.ChatGptResponsesRequest
 import cn.com.omnimind.baselib.llm.chatgpt.ChatGptOAuthManager
 import cn.com.omnimind.baselib.llm.ModelProviderConfigStore
 import cn.com.omnimind.baselib.util.OmniLog
@@ -3226,27 +3227,12 @@ object HttpController {
         resolvedModel: String,
     ): KxJsonObject {
         val responses = buildOpenAIResponsesRequestPayload(root, resolvedModel, ProviderRequestCapabilities())
-        val tools = responses["tools"] as? KxJsonArray ?: KxJsonArray(emptyList())
         val history = responses["input"] as? KxJsonArray ?: KxJsonArray(emptyList())
-        return buildJsonObject {
-            responses.forEach { (key, value) ->
-                if (key !in setOf("max_output_tokens", "tools", "input", "stream")) put(key, value)
-            }
-            put("store", false)
-            put("stream", true)
-            put("input", buildJsonArray {
-                if (tools.isNotEmpty()) add(buildJsonObject {
-                    put("type", "additional_tools")
-                    put("role", "developer")
-                    put("tools", tools)
-                })
-                // Plain reasoning text is not a replayable OpenAI reasoning item:
-                // it lacks the provider's encrypted state/signature. Preserve the
-                // actual messages and function-call/result history instead.
-                history.filterNot { (it as? KxJsonObject)?.text("type") == "reasoning" }
-                    .forEach(::add)
-            })
-        }
+        // Native chat-completion history has plain reasoning text, not replayable signed items.
+        val replayableHistory = KxJsonArray(history.filterNot {
+            (it as? KxJsonObject)?.text("type") == "reasoning"
+        })
+        return ChatGptResponsesRequest.normalize(KxJsonObject(responses + ("input" to replayableHistory)))
     }
 
     private fun buildResponsesInputItems(messages: List<ChatCompletionMessage>): List<JsonElement> {

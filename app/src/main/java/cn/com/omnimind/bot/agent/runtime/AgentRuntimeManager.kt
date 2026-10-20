@@ -267,9 +267,9 @@ class AgentRuntimeManager private constructor(
         bindingRepository = bindingRepository,
         profileStore = acpAgentProfileStore,
         prepareLaunchEnvironment = ::prepareLocalAcpLaunch,
-        resolveSessionMcpEnabled = { profile ->
+        resolveSessionMcpEnabled = { profile, providerAccess ->
             AcpHarnessAdapters.forProfile(profile)
-                .supportsSessionMcp(currentAgentProviderCredentials())
+                .supportsSessionMcp(providerAccess?.credentials ?: currentAgentProviderCredentials())
         },
         prepareSharedProviderBinding = ::prepareSharedProviderBinding,
         buildHandoffContext = ::buildLocalAcpHandoffContext,
@@ -1545,6 +1545,7 @@ class AgentRuntimeManager private constructor(
                 provider = currentAgentProviderCredentials(),
                 model = currentAgentBoundModel(),
                 harnessAdapter = harnessAdapter,
+                providerProfile = currentAgentProviderProfile(),
             ),
             access = object : AgentConfigFileAccess {
                 override suspend fun read(path: String, executorKey: String): String =
@@ -1568,7 +1569,17 @@ class AgentRuntimeManager private constructor(
             ?: throw IllegalArgumentException("agentId is required.")
         val profile = acpAgentProfileStore.list().firstOrNull { it.id == agentId }
             ?: throw IllegalArgumentException("Unknown ACP agent: $agentId")
-        validateExpectedConfigRevision(agentId, args)
+        return localRuntimeFor(agentId).withLaunchConfiguration { providerAccess ->
+            validateExpectedConfigRevision(agentId, args)
+            writeAgentConfigFiles(profile, args, providerAccess)
+        }
+    }
+
+    private suspend fun writeAgentConfigFiles(
+        profile: AcpAgentProfile,
+        args: Map<String, Any?>,
+        providerAccess: AgentProviderAccess?,
+    ): Map<String, Any?> {
         val harnessAdapter = AcpHarnessAdapters.forProfile(profile)
         val harnessConfigPath = harnessAdapter.launchConfigPath
         if (harnessConfigPath != null) {
@@ -1597,8 +1608,11 @@ class AgentRuntimeManager private constructor(
             return readAgentConfig(mapOf("agentId" to profile.id))
         }
         val providerProfile = currentAgentProviderProfile()
-        val configuredProvider = currentAgentProviderCredentials()
+        val configuredProvider = if (ChatGptOAuthProvider.isOAuth(providerProfile?.sourceType)) {
+            providerAccess?.takeIf { it.profile.id == providerProfile?.id }?.credentials
+        } else currentAgentProviderCredentials()
         val writeProvider = configuredProvider ?: run {
+            if (ChatGptOAuthProvider.isOAuth(providerProfile?.sourceType)) return@run null
             val baseUrl = args.stringValue("baseUrl")
                 ?: ""
             val apiKey = args.stringValue("apiKey")
@@ -1620,6 +1634,7 @@ class AgentRuntimeManager private constructor(
                 provider = writeProvider,
                 model = args.stringValue("model") ?: currentAgentBoundModel(),
                 harnessAdapter = harnessAdapter,
+                providerProfile = providerProfile,
             ),
             args = args,
             providerModels = providerModels,
@@ -1649,24 +1664,29 @@ class AgentRuntimeManager private constructor(
             ?: throw IllegalArgumentException("agentId is required.")
         val profile = acpAgentProfileStore.list().firstOrNull { it.id == agentId }
             ?: throw IllegalArgumentException("Unknown ACP agent: $agentId")
-        validateExpectedConfigRevision(agentId, args)
-        val targetRevision = args.longValue("targetRevision")
-            ?: throw IllegalArgumentException("targetRevision is required.")
-        val snapshot = acpAgentProfileStore.configSnapshot(agentId, targetRevision)
-        require(snapshot.isNotEmpty()) { "Agent config revision has no files." }
-        snapshot.forEach { (path, content) ->
-            writeTerminalTextFile(
-                path = path,
-                content = content,
-                executorKey = "agent-config-rollback-${profile.id}",
+        return localRuntimeFor(agentId).withLaunchConfiguration { providerAccess ->
+            validateExpectedConfigRevision(agentId, args)
+            val targetRevision = args.longValue("targetRevision")
+                ?: throw IllegalArgumentException("targetRevision is required.")
+            val snapshot = acpAgentProfileStore.configSnapshot(agentId, targetRevision)
+            require(snapshot.isNotEmpty()) { "Agent config revision has no files." }
+            snapshot.forEach { (path, content) ->
+                writeTerminalTextFile(
+                    path = path,
+                    content = content,
+                    executorKey = "agent-config-rollback-${profile.id}",
+                )
+            }
+            // Historical files can contain a previous process's loopback URL. Configuration
+            // rollback never restores authorization; the connected process keeps its own grant.
+            if (providerAccess != null) writeLocalAcpConfiguration(profile, providerAccess)
+            recordAgentConfigRevision(
+                agentId = profile.id,
+                operation = "rollback",
+                paths = snapshot.keys.toList(),
             )
+            readAgentConfig(mapOf("agentId" to profile.id))
         }
-        recordAgentConfigRevision(
-            agentId = profile.id,
-            operation = "rollback",
-            paths = snapshot.keys.toList(),
-        )
-        return readAgentConfig(mapOf("agentId" to profile.id))
     }
 
     private fun validateExpectedConfigRevision(
@@ -1969,6 +1989,49 @@ class AgentRuntimeManager private constructor(
 
     private suspend fun prepareLocalAcpLaunch(
         profile: AcpAgentProfile,
+        preparation: AcpLaunchPreparation,
+    ): PreparedAcpLaunch {
+        val provider = currentAgentProviderProfile()
+        if (!AcpAgentProfileStore.usesSharedProvider(profile) ||
+            !ChatGptOAuthProvider.isOAuth(provider?.sourceType)) {
+            return PreparedAcpLaunch(writeLocalAcpConfiguration(profile))
+        }
+        require(AgentConfigAdapterRegistry.supportsHostManagedResponses(AcpHarnessAdapters.forProfile(profile))) {
+            "${profile.name} does not support the ChatGPT Responses Provider. " +
+                "Choose a compatible Agent or an API-key Provider supported by this Agent."
+        }
+        val selectedProvider = checkNotNull(provider)
+        // An installation probe can prepare another profile while its process is already online.
+        // Borrow that process's grant; a probe must never rotate or own its authorization.
+        if (preparation == AcpLaunchPreparation.PROBE) {
+            return localRuntimeFor(profile.id).withLaunchConfiguration { existing ->
+                if (existing != null) {
+                    check(existing.profile.id == selectedProvider.id) { "Provider changed; reconnect this Agent." }
+                    PreparedAcpLaunch(writeLocalAcpConfiguration(profile, existing))
+                } else {
+                    prepareChatGptAcpLaunch(profile, selectedProvider)
+                }
+            }
+        }
+        return prepareChatGptAcpLaunch(profile, selectedProvider)
+    }
+
+    private suspend fun prepareChatGptAcpLaunch(
+        profile: AcpAgentProfile,
+        selectedProvider: ModelProviderProfile,
+    ): PreparedAcpLaunch {
+        val access = ChatGptAgentProviderAccess.open(selectedProvider)
+        try {
+            return PreparedAcpLaunch(writeLocalAcpConfiguration(profile, access), access)
+        } catch (error: Throwable) {
+            access.close()
+            throw error
+        }
+    }
+
+    private suspend fun writeLocalAcpConfiguration(
+        profile: AcpAgentProfile,
+        providerAccess: AgentProviderAccess? = null,
         providerModelsOverride: List<ProviderModelOption>? = null,
     ): Map<String, String> {
         val usesSharedProvider = AcpAgentProfileStore
@@ -1977,12 +2040,8 @@ class AgentRuntimeManager private constructor(
         // This path only builds launch environment for an already installed
         // Harness.  Dependency installation belongs exclusively to the
         // explicit `agent/prepare` request above.
-        val sharedProviderProfile = currentAgentProviderProfile()
-        require(!usesSharedProvider || !ChatGptOAuthProvider.isOAuth(sharedProviderProfile?.sourceType)) {
-            "ChatGPT OAuth currently supports Xiaowan and built-in model requests. " +
-                "Use the Agent's own ChatGPT login or an API-key provider for this external Harness."
-        }
-        val sharedProvider = currentAgentProviderCredentials()
+        val sharedProviderProfile = providerAccess?.profile ?: currentAgentProviderProfile()
+        val sharedProvider = providerAccess?.credentials ?: currentAgentProviderCredentials()
         val boundModel = currentAgentBoundModel()
         if (usesSharedProvider) {
             checkNotNull(sharedProviderProfile) {
@@ -2522,7 +2581,13 @@ class AgentRuntimeManager private constructor(
             check(currentAgentProviderProfile() == provider) { "模型配置已更改，请重新打开模型列表" }
             check(!targetRuntime.hasActiveTurns()) { "本轮结束后可刷新模型列表" }
             ModelProviderConfigStore.rememberModels(appContext, provider, models)
-            prepareLocalAcpLaunch(targetProfile, providerModelsOverride = models)
+            targetRuntime.withLaunchConfiguration { providerAccess ->
+                check(targetRuntime.isConnected && !targetRuntime.hasActiveTurns()) {
+                    "Agent 状态已更改，请重新打开模型列表"
+                }
+                check(currentAgentProviderProfile() == provider) { "模型配置已更改，请重新打开模型列表" }
+                writeLocalAcpConfiguration(targetProfile, providerAccess, providerModelsOverride = models)
+            }
         }
         if (conversationId != null) {
             if (normalConversation && conversationAgentId != targetProfile.id) {
@@ -4108,40 +4173,6 @@ internal fun isRecoverableAgentThreadError(message: String): Boolean {
                 normalized.contains("missing") ||
                 normalized.contains("does not exist")
             )
-}
-
-internal fun buildCodexConfigToml(
-    baseUrl: String,
-    model: String,
-    wireApi: String = OpenAiWireApi.RESPONSES,
-    modelCatalogPath: String? = null,
-    envHttpHeaders: Map<String, String> = emptyMap(),
-): String {
-    val codexWireApi = if (OpenAiWireApi.isResponses(wireApi)) {
-        OpenAiWireApi.RESPONSES
-    } else {
-        "chat"
-    }
-    val lines = mutableListOf(
-        "model_provider = \"omnimind\"",
-        "model = ${tomlString(model.trim())}",
-        "disable_response_storage = true",
-        modelCatalogPath?.trim()?.takeIf { it.isNotEmpty() }
-            ?.let { "model_catalog_json = ${tomlString(it)}" }
-            .orEmpty(),
-        "",
-        "[model_providers.omnimind]",
-        "name = \"omnimind\"",
-        "base_url = ${tomlString(baseUrl.trim())}",
-        "wire_api = \"$codexWireApi\"",
-        "requires_openai_auth = true",
-        envHttpHeaders.takeIf { it.isNotEmpty() }?.let { headers ->
-            "env_http_headers = { " + headers.entries.joinToString(", ") {
-                "${tomlString(it.key)} = ${tomlString(it.value)}"
-            } + " }"
-        }.orEmpty(),
-    )
-    return lines.joinToString(separator = "\n", postfix = "\n")
 }
 
 internal fun buildCodexAuthJson(apiKey: String): String {

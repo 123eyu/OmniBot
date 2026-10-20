@@ -1,6 +1,8 @@
 package cn.com.omnimind.bot.agent.runtime
 
 import cn.com.omnimind.baselib.llm.ProviderModelOption
+import cn.com.omnimind.baselib.llm.ModelProviderProfile
+import cn.com.omnimind.baselib.llm.ChatGptOAuthProvider
 import cn.com.omnimind.baselib.llm.DeepSeekProvider
 import cn.com.omnimind.baselib.llm.OpenAiWireApi
 import cn.com.omnimind.baselib.llm.ProviderCustomHeaderUtils
@@ -16,6 +18,12 @@ import com.google.gson.JsonParser
  * values into the official runtime surface. It does not define another
  * protocol or another agent implementation.
  */
+internal enum class AgentProviderAuthentication {
+    API_KEY,
+    /** A process-scoped local grant; upstream OAuth tokens stay in the host. */
+    HOST_MANAGED,
+}
+
 internal data class AgentProviderCredentials(
     val baseUrl: String,
     val apiKey: String,
@@ -24,7 +32,11 @@ internal data class AgentProviderCredentials(
     val protocolType: String = "openai_compatible",
     /** First-party Responses endpoints understand Codex's namespace tools. */
     val supportsNamespaceTools: Boolean = false,
-)
+    val authentication: AgentProviderAuthentication = AgentProviderAuthentication.API_KEY,
+) {
+    val isHostManaged: Boolean
+        get() = authentication == AgentProviderAuthentication.HOST_MANAGED
+}
 
 /**
  * Provider settings are shared by every Harness. Normalize them once at the
@@ -36,6 +48,21 @@ internal fun AgentProviderCredentials.normalized(): AgentProviderCredentials {
     require(normalizedBaseUrl.isNotEmpty()) { "Provider base URL is empty." }
     require(!normalizedBaseUrl.any(Char::isWhitespace)) {
         "Provider base URL contains whitespace."
+    }
+    if (isHostManaged) {
+        val endpoint = runCatching { java.net.URI(normalizedBaseUrl) }.getOrNull()
+        require(endpoint != null && endpoint.scheme == "http" && endpoint.host == "127.0.0.1" &&
+            endpoint.port in 1..65535 && endpoint.rawUserInfo == null &&
+            endpoint.rawQuery == null && endpoint.rawFragment == null) {
+            "Host-managed Provider requires its local relay endpoint."
+        }
+        require(OpenAiWireApi.isResponses(wireApi) &&
+            protocolType.trim().lowercase() == "openai_compatible") {
+            "Host-managed Provider requires the Responses protocol."
+        }
+        require(apiKey.isNotBlank() && customHeaders.isEmpty()) {
+            "Host-managed Provider requires its local grant without header overrides."
+        }
     }
     val normalizedHeaders = ProviderCustomHeaderUtils
         .sanitizeCustomHeaders(customHeaders)
@@ -56,7 +83,12 @@ internal data class AgentProviderMappingInput(
     val harnessAdapter: AcpHarnessAdapter = AcpHarnessAdapters.standard,
     val deepSeekConfig: DeepSeekHarnessConfig = DeepSeekHarnessConfig(),
     val rawHarnessConfig: String? = null,
-)
+    /** Selected Provider metadata for offline settings; never a launch credential. */
+    val providerProfile: ModelProviderProfile? = null,
+) {
+    val usesHostManagedProvider: Boolean
+        get() = provider?.isHostManaged == true || ChatGptOAuthProvider.isOAuth(providerProfile?.sourceType)
+}
 
 internal data class AgentProviderMapping(
     val environment: Map<String, String> = emptyMap(),
@@ -166,8 +198,11 @@ internal object AgentConfigAdapterRegistry {
         "open-code" to OpenCodeConfigAdapter,
     )
 
+    fun supportsHostManagedResponses(adapter: AcpHarnessAdapter): Boolean =
+        adapter.supportsHostManagedResponses && adapter.configAdapterId in adaptersById
+
     fun map(input: AgentProviderMappingInput): AgentProviderMapping {
-        val normalizedInput = input.normalized()
+        val normalizedInput = input.normalized(forLaunch = true)
         return adapterFor(normalizedInput)
             ?.map(normalizedInput)
             ?: AgentProviderMapping()
@@ -202,7 +237,7 @@ internal object AgentConfigAdapterRegistry {
         providerModels: List<ProviderModelOption>,
         existingConfig: String,
     ): List<AgentConfigWrite> {
-        val normalizedInput = input.normalized()
+        val normalizedInput = input.normalized(forLaunch = true)
         return adapterFor(normalizedInput)
         ?.launchConfigWrites(
             input = normalizedInput,
@@ -221,10 +256,24 @@ internal object AgentConfigAdapterRegistry {
     }
 }
 
-private fun AgentProviderMappingInput.normalized(): AgentProviderMappingInput = copy(
-    provider = provider?.normalized(),
-    model = model?.trim()?.takeIf { it.isNotEmpty() },
-)
+private fun AgentProviderMappingInput.normalized(forLaunch: Boolean = false): AgentProviderMappingInput {
+    val normalizedProvider = provider?.normalized()
+    if (forLaunch && usesHostManagedProvider) {
+        require(AgentConfigAdapterRegistry.supportsHostManagedResponses(harnessAdapter)) {
+            "This ACP Agent does not support the host-managed Responses Provider."
+        }
+        require(normalizedProvider?.isHostManaged == true) {
+            "Host-managed Provider launch requires an active local grant."
+        }
+    }
+    require(!usesHostManagedProvider || normalizedProvider == null || normalizedProvider.isHostManaged) {
+        "Host-managed Provider cannot use API-key configuration."
+    }
+    return copy(
+        provider = normalizedProvider,
+        model = model?.trim()?.takeIf { it.isNotEmpty() },
+    )
+}
 
 internal fun syncAgentProviderCredentials(
     config: DeepSeekHarnessConfig,

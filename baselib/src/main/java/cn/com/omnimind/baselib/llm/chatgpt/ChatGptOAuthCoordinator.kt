@@ -137,10 +137,19 @@ internal class ChatGptOAuthCoordinator(
             "revision" to (current?.accountRevision ?: 0L))
     }
 
-    suspend fun accessToken(profileId: String): String {
+    fun credentialBinding(profileId: String): ChatGptOAuthCredentialBinding = synchronized(lock) {
+        val current = store.read(profileId)?.takeIf { it.hasTokens } ?: throw signInRequired()
+        if (!current.planEnabled) throw planDisabled()
+        ChatGptOAuthCredentialBinding(profileId, generation(profileId))
+    }
+
+    suspend fun accessToken(profileId: String, binding: ChatGptOAuthCredentialBinding? = null): String {
         val mutex = synchronized(lock) { refreshLocks.getOrPut(profileId) { Mutex() } }
         return mutex.withLock {
             val (current, version) = synchronized(lock) {
+                if (binding != null && (binding.profileId != profileId || binding.generation != generation(profileId))) {
+                    throw cancelled()
+                }
                 val value = store.read(profileId)?.takeIf { it.hasTokens } ?: throw signInRequired()
                 value to generation(profileId)
             }

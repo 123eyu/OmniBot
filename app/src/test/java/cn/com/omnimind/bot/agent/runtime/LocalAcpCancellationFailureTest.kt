@@ -24,7 +24,7 @@ class LocalAcpCancellationFailureTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val ownership = AcpTurnOwnershipRegistry()
         val runtime = LocalAcpRuntime(context, scope, mock(AgentSessionBindingRepository::class.java),
-            AcpAgentProfileStore(context), prepareLaunchEnvironment = { emptyMap() },
+            AcpAgentProfileStore(context), prepareLaunchEnvironment = { _, _ -> PreparedAcpLaunch(emptyMap()) },
             buildHandoffContext = { _, _ -> null },
             scheduleToolBridge = mock(AgentScheduleToolBridge::class.java),
             onMessage = { error("Listing must not emit lifecycle events") }, turnOwnership = ownership)

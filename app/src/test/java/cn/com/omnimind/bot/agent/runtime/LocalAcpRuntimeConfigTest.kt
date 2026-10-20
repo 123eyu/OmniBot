@@ -50,7 +50,7 @@ class LocalAcpRuntimeConfigTest {
         val store = AcpAgentProfileStore(context)
         fun runtime() = LocalAcpRuntime(
             context, scope, mock(AgentSessionBindingRepository::class.java),
-            AcpAgentProfileStore(context), prepareLaunchEnvironment = { emptyMap() },
+            AcpAgentProfileStore(context), prepareLaunchEnvironment = { _, _ -> PreparedAcpLaunch(emptyMap()) },
             buildHandoffContext = { _, _ -> null },
             scheduleToolBridge = mock(AgentScheduleToolBridge::class.java), onMessage = {},
         )
@@ -152,8 +152,8 @@ class LocalAcpRuntimeConfigTest {
             scope = scope,
             bindingRepository = mock(AgentSessionBindingRepository::class.java),
             profileStore = store,
-            prepareLaunchEnvironment = {
-                launches.add(it)
+            prepareLaunchEnvironment = { profile, _ ->
+                launches.add(profile)
                 throw stopBeforeProcessLaunch
             },
             buildHandoffContext = { _, _ -> null },

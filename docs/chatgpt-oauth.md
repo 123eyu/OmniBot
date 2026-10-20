@@ -36,6 +36,14 @@ browser is open, reopen settings and start authorization again.
   immediately before each request. Refreshes are serialized per profile and
   rotating credentials are replaced together. Cancellation/generation checks
   prevent late callbacks or refreshes from restoring removed credentials.
+- Compatible local ACP Agents use a native loopback relay for the same selected
+  Provider. The OAuth owner continues to obtain and refresh upstream tokens;
+  those tokens are not copied into Agent launch configuration or environment.
+  Each process owns a revocable local grant, bound to that account authorization.
+  Token refresh preserves the grant; a later login cannot reuse it. Process exit
+  revokes it, while closing an individual ACP session leaves other sessions usable.
+  Configuration writes reuse the active grant under the runtime's connection lock.
+  The relay handles provider HTTP transport, not ACP sessions, turns or items.
 - Account changes invalidate the provider model catalog through its revision.
   Model choices come from the selected account's `/v1/models` catalog, preserving
   server order and only entries with `visibility=list`.
@@ -50,16 +58,30 @@ the provider removes its local registration as well.
 
 ## Supported scope
 
-This provider supports Xiaowan conversations and native text/image-understanding
-requests through `HttpController`, including tool calls and context compaction.
-Requests use the public `https://api.openai.com/v1/responses` endpoint with
+This provider supports Xiaowan conversations, native text/image-understanding
+requests through `HttpController`, and compatible local ACP Agents through the
+native provider relay. These routes include tool calls and context compaction.
+Upstream requests use the public `https://api.openai.com/v1/responses` endpoint with
 `store=false`, `stream=true`, explicit context, and client-executed function tools.
-Only the official `response.completed` event is successful. Errors, incomplete
-responses and interrupted streams use the existing error path.
+Native response handling requires the official `response.completed` event for
+success. External Agents retain their own Responses/ACP completion handling;
+the relay forwards provider events and errors without synthesizing terminal events.
 
-External CLI Harnesses still manage their own ChatGPT authentication, or use an
-API-key provider. OmniBot does not copy OAuth tokens into their static launch
-configuration. This flow does not provide image generation, speech APIs,
+Choose the signed-in ChatGPT Provider and model in the shared Agent model
+selector. The native adapter determines compatibility; the UI does not maintain
+a separate Agent allowlist.
+
+| Agent | Shared ChatGPT OAuth Provider |
+| --- | --- |
+| Xiaowan | Supported through the native model client. |
+| Codex, OpenCode, Kimi, DeepSeek Harness (DSH) | Supported through the native relay and their Responses custom-provider adapters. |
+| Claude Code | Unsupported: its Messages protocol is incompatible with this Responses route. Select a compatible provider or another Agent. |
+| Custom ACP Agent | Requires a shared-provider adapter that supports this Responses route; an arbitrary launch command is insufficient. |
+| Remote PC Bridge | Manages authentication on the remote computer; it cannot use the Android loopback relay. |
+
+An incompatible adapter fails explicitly. OmniBot does not silently switch to
+another provider or copy OAuth tokens into static CLI configuration. This flow
+does not provide image generation, speech APIs,
 embeddings, or the unsupported hosted Responses tools. Existing providers remain
 available for those capabilities. Model/plan availability is determined by
 OpenAI and the selected account's granted permissions.
@@ -83,6 +105,9 @@ account isolation and the settings flow. Live account validation additionally
 requires a user to complete browser authorization on Android, send a message,
 execute a tool, reauthorize, and sign out. Automated tests do not establish live
 account eligibility or server acceptance.
+For each supported external Agent, live validation also requires selecting the
+same ChatGPT Provider, sending a prompt, completing a function-tool round trip,
+and confirming that sign-out prevents subsequent provider requests.
 
 ### Release credential regression (2026-10-17)
 
