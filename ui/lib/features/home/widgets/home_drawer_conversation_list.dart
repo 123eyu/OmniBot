@@ -91,7 +91,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
           : _buildEmptySearchResult();
     }
     return ListView.builder(
-      padding: EdgeInsets.zero,
+      padding: EdgeInsets.only(bottom: widget.homePage ? 112 : 0),
       itemCount: results.length + 1,
       itemBuilder: (context, index) => index == 0
           ? _buildSearchResultHeader(results.length)
@@ -109,7 +109,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     final omniAiResults = <_ConversationSearchResult>[];
     for (final result in results) {
       final mode = result.conversation.mode;
-      if (mode == ConversationMode.chatOnly) {
+      if (mode == ConversationMode.chatOnly && !widget.homePage) {
         chatOnlyResults.add(result);
       } else {
         // Agent、Xiaowan、SubAgent 和 OpenClaw 共用一个会话入口。
@@ -127,7 +127,9 @@ extension _HomeDrawerConversationList on HomeDrawerState {
       sections.add(section);
     }
 
-    final scheduledGroups = _scheduledConversationGroups;
+    final scheduledGroups = _scheduledConversationGroups
+        .where((group) => _matchesHomeFilter(group.parent))
+        .toList(growable: false);
     final pinnedResults = _pinnedConversationResults;
     if (scheduledGroups.isNotEmpty) {
       addSection(_buildScheduledConversationSection(scheduledGroups));
@@ -162,43 +164,55 @@ extension _HomeDrawerConversationList on HomeDrawerState {
       return _buildEmptyConversation();
     }
     // 所有区块共用同一个滚动列表：任何区块展开条目过多时整体滚动，不再溢出。
-    return CustomScrollView(slivers: sections);
+    return CustomScrollView(
+      slivers: [
+        ...sections,
+        if (widget.homePage)
+          const SliverToBoxAdapter(child: SizedBox(height: 112)),
+      ],
+    );
   }
 
   Widget _buildEmptyConversation() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              context.l10n.chatHistoryEmpty,
-              style: TextStyle(fontSize: 14, color: _drawerSecondaryTextColor),
-            ),
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: _openNewConversation,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                context.l10n.chatHistoryEmpty,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: _drawerSecondaryTextColor,
                 ),
-                decoration: BoxDecoration(
-                  color: context.omniPalette.accentPrimary,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  context.l10n.chatHistoryStartConversation,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Theme.of(context).colorScheme.onPrimary,
+              ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: _openNewConversation,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.omniPalette.accentPrimary,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    context.l10n.chatHistoryStartConversation,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -206,29 +220,32 @@ extension _HomeDrawerConversationList on HomeDrawerState {
 
   Widget _buildSearchingConversationState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.2,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                context.omniPalette.accentPrimary,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  context.omniPalette.accentPrimary,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            context.l10n.homeDrawerSearching,
-            style: TextStyle(
-              fontSize: 14,
-              color: _drawerSecondaryTextColor,
-              fontFamily: 'PingFang SC',
+            const SizedBox(height: 14),
+            Text(
+              context.l10n.homeDrawerSearching,
+              style: TextStyle(
+                fontSize: 14,
+                color: _drawerSecondaryTextColor,
+                fontFamily: 'PingFang SC',
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -238,71 +255,74 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: context.isDarkTheme
-                    ? palette.surfaceSecondary
-                    : palette.previewFallback,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.search_off_rounded,
-                size: 22,
-                color: palette.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              context.l10n.homeDrawerNoResults,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: _drawerTextColor,
-                fontFamily: 'PingFang SC',
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              context.l10n.homeDrawerSearchHint2,
-              style: TextStyle(
-                fontSize: 12,
-                color: _drawerSecondaryTextColor,
-                fontFamily: 'PingFang SC',
-              ),
-            ),
-            const SizedBox(height: 14),
-            GestureDetector(
-              onTap: _searchController.clear,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: context.isDarkTheme
                       ? palette.surfaceSecondary
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: palette.borderSubtle),
+                      : palette.previewFallback,
+                  shape: BoxShape.circle,
                 ),
-                child: Text(
-                  context.l10n.homeDrawerClearSearch,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: _drawerTextColor,
-                    fontFamily: 'PingFang SC',
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.search_off_rounded,
+                  size: 22,
+                  color: palette.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                context.l10n.homeDrawerNoResults,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: _drawerTextColor,
+                  fontFamily: 'PingFang SC',
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                context.l10n.homeDrawerSearchHint2,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: _drawerSecondaryTextColor,
+                  fontFamily: 'PingFang SC',
+                ),
+              ),
+              const SizedBox(height: 14),
+              GestureDetector(
+                onTap: _searchController.clear,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.isDarkTheme
+                        ? palette.surfaceSecondary
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: palette.borderSubtle),
+                  ),
+                  child: Text(
+                    context.l10n.homeDrawerClearSearch,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _drawerTextColor,
+                      fontFamily: 'PingFang SC',
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -520,8 +540,8 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     required List<_ConversationSearchResult> results,
   }) {
     return SliverPadding(
-      padding: const EdgeInsets.only(
-        left: _kModeSectionTimelineLeadingInset,
+      padding: EdgeInsets.only(
+        left: widget.homePage ? 0 : _kModeSectionTimelineLeadingInset,
         top: 2,
       ),
       sliver: SliverMainAxisGroup(
@@ -772,7 +792,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
       toggled: expanded,
       onTap: onTap,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 28),
+        constraints: BoxConstraints(minHeight: widget.homePage ? 44 : 28),
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.fromLTRB(4, 5, 4, 5),
         child: Row(
@@ -801,23 +821,24 @@ extension _HomeDrawerConversationList on HomeDrawerState {
             Text(
               label,
               style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
+                fontSize: widget.homePage ? 16 : 11.5,
+                fontWeight: widget.homePage ? FontWeight.w400 : FontWeight.w600,
                 letterSpacing: 0.2,
                 color: palette.textTertiary,
                 fontFamily: 'PingFang SC',
               ),
             ),
             const SizedBox(width: 6),
-            Text(
-              '$itemCount',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: palette.textTertiary.withValues(alpha: 0.8),
-                fontFamily: 'PingFang SC',
+            if (!widget.homePage)
+              Text(
+                '$itemCount',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: palette.textTertiary.withValues(alpha: 0.8),
+                  fontFamily: 'PingFang SC',
+                ),
               ),
-            ),
             if (showExpandChevron) ...[
               const SizedBox(width: 4),
               AnimatedRotation(
@@ -826,7 +847,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
                 curve: Curves.easeInOutCubicEmphasized,
                 child: Icon(
                   LucideIcons.chevronDown,
-                  size: 13,
+                  size: widget.homePage ? 16 : 13,
                   color: palette.textTertiary.withValues(alpha: 0.8),
                 ),
               ),
@@ -960,13 +981,43 @@ extension _HomeDrawerConversationList on HomeDrawerState {
                   splashColor: palette.accentPrimary.withValues(alpha: 0.08),
                   highlightColor: palette.accentPrimary.withValues(alpha: 0.04),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 9, 2, 9),
+                    padding: EdgeInsets.fromLTRB(
+                      4,
+                      widget.homePage ? 16 : 9,
+                      2,
+                      widget.homePage ? 16 : 9,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
+                            if (widget.homePage) ...[
+                              Tooltip(
+                                message: [
+                                  ?agentLabel,
+                                  if (isExecuting)
+                                    context.trLegacy('执行中')
+                                  else if (isCompleted)
+                                    context.trLegacy('已完成'),
+                                ].join(' · '),
+                                child: Container(
+                                  key: ValueKey(
+                                    'home-status-${conversation.threadKey}',
+                                  ),
+                                  width: 7,
+                                  height: 7,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isExecuting
+                                        ? palette.accentPrimary
+                                        : palette.borderSubtle,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 20),
+                            ],
                             Expanded(
                               child: _buildEditableConversationTitle(
                                 title: title,
@@ -977,7 +1028,9 @@ extension _HomeDrawerConversationList on HomeDrawerState {
                               const SizedBox(width: 10),
                               _buildArchivedBadge(),
                             ],
-                            if (agentLabel != null && !isEditing) ...[
+                            if (!widget.homePage &&
+                                agentLabel != null &&
+                                !isEditing) ...[
                               const SizedBox(width: 10),
                               _buildConversationAgentBadge(
                                 conversation: conversation,
@@ -1146,8 +1199,8 @@ extension _HomeDrawerConversationList on HomeDrawerState {
         cursorColor: _drawerTextColor.withValues(alpha: 0.6),
         cursorWidth: 1.5,
         style: TextStyle(
-          fontSize: 13,
-          fontWeight: fontWeight,
+          fontSize: widget.homePage ? 17 : 13,
+          fontWeight: widget.homePage ? FontWeight.w400 : fontWeight,
           color: _drawerTextColor,
           height: 1.35,
           fontFamily: 'PingFang SC',
@@ -1172,8 +1225,8 @@ extension _HomeDrawerConversationList on HomeDrawerState {
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
-        fontSize: 13,
-        fontWeight: fontWeight,
+        fontSize: widget.homePage ? 17 : 13,
+        fontWeight: widget.homePage ? FontWeight.w400 : fontWeight,
         color: _drawerTextColor,
         height: 1.35,
         fontFamily: 'PingFang SC',

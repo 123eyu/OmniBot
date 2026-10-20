@@ -17,6 +17,7 @@ import 'package:ui/models/conversation_thread_target.dart';
 import 'package:ui/models/habitual_hand.dart';
 import 'package:ui/services/scheduled_task_storage_service.dart';
 import 'package:ui/services/storage_service.dart';
+import 'package:ui/theme/app_theme.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
 
 class _SvgTestAssetBundle extends CachingAssetBundle {
@@ -59,6 +60,9 @@ void main() {
     'cn.com.omnimind.bot/AssistCoreEvent',
   );
   const pluginChannel = MethodChannel('cn.com.omnimind.bot/PluginPlatform');
+  const agentEventsChannel = MethodChannel(
+    'cn.com.omnimind.bot/AgentRuntimeEvents',
+  );
   late List<Map<String, Object?>> nativeConversations;
 
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -67,6 +71,8 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await StorageService.init();
     nativeConversations = <Map<String, Object?>>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(agentEventsChannel, (call) async => null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(assistCoreChannel, (call) async {
           switch (call.method) {
@@ -94,6 +100,322 @@ void main() {
         .setMockMethodCallHandler(assistCoreChannel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pluginChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(agentEventsChannel, null);
+  });
+
+  testWidgets('home filters and opens the original conversation identity', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    LegacyTextLocalizer.setResolvedLocale(const Locale('zh'));
+    final now = DateTime.now().millisecondsSinceEpoch;
+    nativeConversations = [
+      {
+        'id': 101,
+        'title': '查看当前工作环境',
+        'agentId': 'codex-acp',
+        'mode': 'agent',
+        'status': 0,
+        'messageCount': 0,
+        'createdAt': now,
+        'updatedAt': now,
+      },
+      {
+        'id': 102,
+        'title': '简单问候',
+        'mode': 'chat_only',
+        'status': 0,
+        'messageCount': 0,
+        'createdAt': now,
+        'updatedAt': now,
+      },
+    ];
+    ConversationThreadTarget? selected;
+    await tester.pumpWidget(
+      _buildProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeDrawer(
+            homePage: true,
+            embedded: true,
+            closeOnNavigate: false,
+            onThreadTargetSelected: (target) => selected = target,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('查看当前工作环境'), findsOneWidget);
+    expect(find.text('简单问候'), findsOneWidget);
+    await tester.tap(find.text('今天'));
+    await tester.pumpAndSettle();
+    expect(find.text('查看当前工作环境'), findsNothing);
+    await tester.tap(find.text('今天'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('查看当前工作环境'));
+    expect(selected?.conversationId, 101);
+    expect(selected?.agentId, 'codex-acp');
+    await tester.tap(find.byKey(const ValueKey('home-filter-chat')));
+    await tester.pumpAndSettle();
+    expect(find.text('查看当前工作环境'), findsNothing);
+    expect(find.text('简单问候'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('home-new-conversation')));
+    expect(selected?.conversationId, isNull);
+    expect(selected?.mode, ConversationMode.chatOnly);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home menu retains shortcuts and reveals conversation search', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    LegacyTextLocalizer.setResolvedLocale(const Locale('zh'));
+    await tester.pumpWidget(
+      _buildProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const HomeDrawer(
+            homePage: true,
+            embedded: true,
+            closeOnNavigate: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('设置'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    await tester.pumpAndSettle();
+    expect(find.byType(PopupMenuItem<int>), findsNWidgets(8));
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.text('轨迹'), findsOneWidget);
+    await tester.tap(find.text('搜索对话'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home menu refreshes plugin registry without remounting', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var installed = false;
+    var running = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pluginChannel, (call) async {
+          if (call.method == 'listActions') {
+            return installed
+                ? <Map<String, Object?>>[
+                    {
+                      'id': 'open_kimi_web',
+                      'pluginId': 'com.omnimind.agent-web',
+                      'displayName': 'Kimi Code Web',
+                      'presentation': <String, Object?>{
+                        'placements': <String>['home_drawer_quick_launch'],
+                        'agentId': 'kimi-code-acp',
+                        'statusAction': 'get_kimi_web_status',
+                        'stopAction': 'stop_kimi_web',
+                      },
+                    },
+                  ]
+                : <Map<String, Object?>>[];
+          }
+          if (call.method == 'invokeAction') {
+            return <String, Object?>{
+              'running': running,
+              'code': running ? 'RUNNING' : 'STOPPED',
+            };
+          }
+          return null;
+        });
+    await tester.pumpWidget(
+      _buildProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const HomeDrawer(
+            homePage: true,
+            embedded: true,
+            closeOnNavigate: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final homeState = tester.state(find.byType(HomeDrawer));
+
+    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Web 界面'), findsNothing);
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    installed = true;
+    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Web 界面'), findsOneWidget);
+    running = true;
+    await tester.tap(find.text('Web 界面'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('home-drawer-web-kimi-code-acp')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('home-drawer-web-stop-kimi-code-acp')),
+      findsOneWidget,
+    );
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    installed = false;
+    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Web 界面'), findsNothing);
+    expect(tester.state(find.byType(HomeDrawer)), same(homeState));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home search remains usable with a compact keyboard viewport', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    nativeConversations = [
+      {
+        'id': 103,
+        'title': '聊天记录',
+        'mode': 'chat_only',
+        'status': 0,
+        'messageCount': 0,
+        'createdAt': now,
+        'updatedAt': now,
+      },
+    ];
+    await tester.pumpWidget(
+      _buildProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(1.3),
+              padding: const EdgeInsets.only(top: 24, bottom: 24),
+            ),
+            child: child!,
+          ),
+          home: const HomeDrawer(
+            homePage: true,
+            embedded: true,
+            closeOnNavigate: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('home-filter-chat')));
+    await tester.tap(find.byKey(const ValueKey('home-filter-chat')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('搜索对话'));
+    await tester.pumpAndSettle();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'missing');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-menu-button')), findsNothing);
+    expect(find.byKey(const ValueKey('home-filter-chat')), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('home-close-search')));
+    tester.view.viewInsets = FakeViewPadding.zero;
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byKey(const ValueKey('home-menu-button')), findsOneWidget);
+    expect(find.text('聊天记录'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home menu ignores repeated taps while refreshing plugins', (
+    tester,
+  ) async {
+    final registryResponse = Completer<List<Object?>>();
+    var registryReads = 0;
+    var delayRegistry = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pluginChannel, (call) async {
+          if (call.method == 'listActions') {
+            registryReads++;
+            return delayRegistry ? registryResponse.future : <Object?>[];
+          }
+          return null;
+        });
+    await tester.pumpWidget(
+      _buildProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const HomeDrawer(
+            homePage: true,
+            embedded: true,
+            closeOnNavigate: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final initialRegistryReads = registryReads;
+    delayRegistry = true;
+    final menuButton = find.byKey(const ValueKey('home-menu-button'));
+    await tester.tap(menuButton);
+    await tester.pump();
+    await tester.tap(menuButton);
+    await tester.pump();
+    expect(registryReads, initialRegistryReads + 1);
+    expect(find.byType(PopupMenuItem<int>), findsNothing);
+
+    registryResponse.complete(<Object?>[]);
+    await tester.pumpAndSettle();
+    expect(find.byType(PopupMenuItem<int>), findsNWidgets(8));
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+    expect(find.byType(PopupMenuItem<int>), findsNothing);
+
+    delayRegistry = false;
+    await tester.tap(menuButton);
+    await tester.pumpAndSettle();
+    expect(find.byType(PopupMenuItem<int>), findsNWidgets(8));
+    expect(registryReads, initialRegistryReads + 2);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('large conversation list builds only viewport rows', (
@@ -659,10 +981,7 @@ void main() {
 
     await tester.longPress(find.text('子运行会话'));
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('home-drawer-context-pin')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('home-drawer-context-pin')), findsNothing);
     expect(
       find.byKey(const ValueKey('home-drawer-context-rename')),
       findsOneWidget,

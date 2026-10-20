@@ -395,7 +395,7 @@ class _WorkspaceMemorySettingPageState
               onPressed: saving ? null : onSave,
               style: ElevatedButton.styleFrom(
                 backgroundColor: palette.accentPrimary,
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 elevation: 0,
                 minimumSize: const Size(84, 38),
                 padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -404,12 +404,12 @@ class _WorkspaceMemorySettingPageState
                 ),
               ),
               child: saving
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onPrimary,
                       ),
                     )
                   : Text(context.trLegacy('保存')),

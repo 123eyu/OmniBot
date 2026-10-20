@@ -1413,8 +1413,8 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
                                     await _editMem0Memory(item);
                                   },
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.buttonPrimary,
-                              side: const BorderSide(color: Color(0x332C7FEB)),
+                              foregroundColor: palette.accentPrimary,
+                              side: BorderSide(color: palette.borderStrong),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -1737,7 +1737,7 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
             style: TextStyle(
               fontSize: AppTextStyles.fontSizeH3,
               fontWeight: AppTextStyles.fontWeightMedium,
-              color: AppColors.primaryBlue,
+              color: context.omniPalette.textPrimary,
               height: AppTextStyles.lineHeightH1,
               letterSpacing: AppTextStyles.letterSpacingWide,
             ),

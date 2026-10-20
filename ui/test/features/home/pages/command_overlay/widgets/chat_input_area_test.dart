@@ -10,6 +10,8 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/chat_input_area.dart';
 import 'package:ui/widgets/glass_popup.dart';
+import 'package:ui/features/home/pages/chat/widgets/chat_widgets.dart';
+import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
 
 void main() {
@@ -30,6 +32,165 @@ void main() {
 
   tearDown(() {
     messenger.setMockMethodCallHandler(speechChannel, null);
+  });
+
+  testWidgets(
+    'minimal composer keeps send and draft but moves auxiliary controls out',
+    (tester) async {
+      var sends = 0;
+      await tester.pumpWidget(
+        _buildTestApp(
+          contextUsageRatio: 0.5,
+          useLargeComposerStyle: true,
+          minimalComposer: true,
+          initialText: 'Keep this draft',
+          runtimeConfigButton: const Icon(
+            Icons.tune,
+            key: ValueKey('runtime-control'),
+          ),
+          agentPermissionMode: AgentPermissionMode.defaultMode,
+          onAgentPermissionModeChanged: (_) {},
+          onTriggerSlashCommand: () {},
+          onSendMessage: () => sends++,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('chat-minimal-composer')),
+        findsOneWidget,
+      );
+      expect(find.text('Keep this draft'), findsOneWidget);
+      expect(find.byKey(const ValueKey('runtime-control')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('runtime-control'), skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('chat-input-agent-permission-button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('chat-input-trigger-slash-button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('chat-input-add-or-cancel-edit-button')),
+        findsNothing,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('chat-input-send-or-stop-button')),
+      );
+      expect(sends, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'minimal composer permissions open from the header anchor through the existing owner',
+    (tester) async {
+      final inputKey = GlobalKey<ChatInputAreaState>();
+      final controller = TextEditingController(text: 'Unsent draft');
+      final focus = FocusNode();
+      addTearDown(controller.dispose);
+      addTearDown(focus.dispose);
+      AgentPermissionMode? selected;
+      await tester.pumpWidget(
+        DefaultAssetBundle(
+          bundle: _TestAssetBundle(),
+          child: MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  Builder(
+                    builder: (anchor) => TextButton(
+                      onPressed: () => inputKey.currentState!
+                          .openAgentPermissionMenu(anchor),
+                      child: const Text('Permissions'),
+                    ),
+                  ),
+                  ChatInputArea(
+                    key: inputKey,
+                    controller: controller,
+                    focusNode: focus,
+                    isProcessing: false,
+                    onSendMessage: () {},
+                    onCancelTask: () {},
+                    minimalComposer: true,
+                    agentPermissionMode: AgentPermissionMode.defaultMode,
+                    onAgentPermissionModeChanged: (mode) => selected = mode,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Permissions'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          const ValueKey('chat-input-agent-permission-option-readOnly'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(selected, AgentPermissionMode.readOnly);
+      expect(controller.text, 'Unsent draft');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('header options preserve focused message editing', (
+    tester,
+  ) async {
+    final controller = TextEditingController(text: 'Editing draft');
+    final focus = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focus.dispose);
+    var cancelled = 0;
+    await tester.pumpWidget(
+      DefaultAssetBundle(
+        bundle: _TestAssetBundle(),
+        child: MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                ChatAppBar(
+                  onMenuTap: () {},
+                  activeMode: ChatSurfaceMode.normal,
+                  onModeChanged: (_) {},
+                  onDisplayLayerChanged: (_) {},
+                  onTerminalEnvironmentTap: (_) {},
+                  onTerminalTap: () {},
+                  onBrowserTap: () {},
+                ),
+                ChatInputArea(
+                  controller: controller,
+                  focusNode: focus,
+                  isProcessing: false,
+                  onSendMessage: () {},
+                  onCancelTask: () {},
+                  minimalComposer: true,
+                  isEditingUserMessage: true,
+                  onCancelUserMessageEditing: () => cancelled++,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    focus.requestFocus();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chat-app-bar-more-button')));
+    await tester.pumpAndSettle();
+    expect(cancelled, 0);
+    expect(focus.hasFocus, isTrue);
+    expect(controller.text, 'Editing draft');
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(cancelled, 0);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('flow border ticks do not repaint the surrounding chat surface', (
@@ -334,7 +495,11 @@ void main() {
     );
     expect(
       selectedPermissionDecoration.color,
-      const Color(0xFF2C7FEB).withValues(alpha: 0.12),
+      tester
+          .element(selectedPermissionRow)
+          .omniPalette
+          .accentPrimary
+          .withValues(alpha: 0.08),
     );
     expect(selectedPermissionDecoration.border, isNull);
     expect(
@@ -1393,6 +1558,7 @@ Widget _buildTestApp({
   VoidCallback? onLongPressContextUsageRing,
   VoidCallback? onTriggerSlashCommand,
   bool useLargeComposerStyle = false,
+  bool minimalComposer = false,
   bool useRouter = false,
   AgentPermissionMode? agentPermissionMode,
   List<AgentPermissionMode> agentPermissionModes = AgentPermissionMode.values,
@@ -1414,6 +1580,7 @@ Widget _buildTestApp({
       onSendMessage: onSendMessage ?? () {},
       onCancelTask: () {},
       useLargeComposerStyle: useLargeComposerStyle,
+      minimalComposer: minimalComposer,
       hasExternalSendPayload: hasExternalSendPayload,
       contextUsageRatio: contextUsageRatio,
       onLongPressContextUsageRing: onLongPressContextUsageRing,

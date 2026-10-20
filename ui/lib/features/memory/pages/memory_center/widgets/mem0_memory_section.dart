@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:ui/features/memory/models/mem0_memory_item.dart';
 import 'package:ui/features/memory/pages/memory_center/widgets/tag_chip.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
-import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/app_text_styles.dart';
 import 'package:ui/theme/theme_context.dart';
 
@@ -158,9 +157,9 @@ class _Mem0MemorySectionState extends State<Mem0MemorySection> {
         if (widget.snapshot.configured || widget.snapshot.hasData)
           IconButton(
             onPressed: widget.isMutating ? null : widget.onAddTap,
-            icon: const Icon(
+            icon: Icon(
               Icons.add_circle_outline_rounded,
-              color: AppColors.buttonPrimary,
+              color: palette.accentPrimary,
               size: 20,
             ),
             splashRadius: 18,
@@ -175,9 +174,9 @@ class _Mem0MemorySectionState extends State<Mem0MemorySection> {
                 : () async {
                     await widget.onRefresh!.call();
                   },
-            icon: const Icon(
+            icon: Icon(
               Icons.refresh_rounded,
-              color: AppColors.buttonPrimary,
+              color: palette.accentPrimary,
               size: 20,
             ),
             splashRadius: 18,
@@ -250,10 +249,10 @@ class _Mem0MemorySectionState extends State<Mem0MemorySection> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0x102C7FEB),
+              color: palette.surfaceSecondary,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: AppColors.buttonPrimary, size: 20),
+            child: Icon(icon, color: palette.accentPrimary, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -309,15 +308,11 @@ class _Mem0MemorySectionState extends State<Mem0MemorySection> {
               height: 36,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                gradient: const LinearGradient(
-                  colors: [Color(0x1F2DA5F0), Color(0x262C7FEB)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: palette.surfaceSecondary,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.auto_awesome_outlined,
-                color: AppColors.buttonPrimary,
+                color: palette.accentPrimary,
                 size: 18,
               ),
             ),

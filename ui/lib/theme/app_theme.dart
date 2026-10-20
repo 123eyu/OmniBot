@@ -36,14 +36,37 @@ class AppTheme {
         ).copyWith(
           primary: palette.accentPrimary,
           onPrimary: onAccentColor,
-          secondary: isDark
-              ? _secondaryAccentForDark(palette)
-              : AppColors.gradientAux,
-          onSecondary: isDark ? onAccentColor : palette.textPrimary,
+          primaryContainer: palette.surfaceElevated,
+          onPrimaryContainer: palette.textPrimary,
+          secondary: palette.textSecondary,
+          onSecondary: palette.surfacePrimary,
+          secondaryContainer: palette.surfaceSecondary,
+          onSecondaryContainer: palette.textPrimary,
+          tertiary: palette.textSecondary,
+          onTertiary: palette.surfacePrimary,
+          tertiaryContainer: palette.surfaceElevated,
+          onTertiaryContainer: palette.textPrimary,
           error: AppColors.alertRed,
           onError: Colors.white,
           surface: palette.surfacePrimary,
           onSurface: palette.textPrimary,
+          onSurfaceVariant: palette.textSecondary,
+          surfaceBright: palette.surfacePrimary,
+          surfaceDim: palette.surfaceElevated,
+          surfaceContainerLowest: palette.surfacePrimary,
+          surfaceContainerLow: palette.pageBackground,
+          surfaceContainer: palette.surfaceSecondary,
+          surfaceContainerHigh: palette.surfaceElevated,
+          surfaceContainerHighest: palette.surfaceElevated,
+          inverseSurface: isDark
+              ? OmniThemePalette.light.surfacePrimary
+              : OmniThemePalette.dark.surfacePrimary,
+          onInverseSurface: isDark
+              ? OmniThemePalette.light.textPrimary
+              : OmniThemePalette.dark.textPrimary,
+          inversePrimary: isDark
+              ? OmniThemePalette.light.accentPrimary
+              : OmniThemePalette.dark.accentPrimary,
           outline: palette.borderStrong,
           outlineVariant: palette.borderSubtle,
           surfaceTint: Colors.transparent,
@@ -72,7 +95,6 @@ class AppTheme {
           fontSize: 17,
           fontWeight: FontWeight.w600,
           color: palette.textPrimary,
-          fontFamily: 'SF Pro',
         ),
         iconTheme: IconThemeData(color: palette.textPrimary, size: 24),
       ),
@@ -88,7 +110,7 @@ class AppTheme {
       inputDecorationTheme: globalInputDecorationTheme,
       chipTheme: ChipThemeData(
         backgroundColor: palette.surfaceElevated,
-        selectedColor: palette.segmentThumb,
+        selectedColor: palette.accentPrimary,
         disabledColor: palette.surfaceSecondary,
         labelStyle: TextStyle(
           color: palette.textSecondary,
@@ -96,13 +118,13 @@ class AppTheme {
           fontWeight: FontWeight.w600,
         ),
         secondaryLabelStyle: TextStyle(
-          color: palette.textPrimary,
+          color: onAccentColor,
           fontSize: 13,
           fontWeight: FontWeight.w600,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        shape: StadiumBorder(side: BorderSide(color: palette.borderSubtle)),
-        side: BorderSide(color: palette.borderSubtle),
+        shape: const StadiumBorder(),
+        side: BorderSide.none,
       ),
       sliderTheme: SliderThemeData(
         activeTrackColor: palette.accentPrimary,
@@ -114,7 +136,7 @@ class AppTheme {
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return Colors.white;
+            return onAccentColor;
           }
           return palette.surfacePrimary;
         }),
@@ -141,6 +163,14 @@ class AppTheme {
         backgroundColor: palette.surfacePrimary,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: palette.surfacePrimary,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: palette.shadowColor,
+        elevation: 8,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        textStyle: TextStyle(color: palette.textPrimary, fontSize: 15),
       ),
     );
 
@@ -214,15 +244,7 @@ class AppTheme {
 
   static Color _foregroundForAccent(Color accentColor) {
     return accentColor.computeLuminance() > 0.35
-        ? const Color(0xFF141716)
+        ? const Color(0xFF161616)
         : Colors.white;
-  }
-
-  static Color _secondaryAccentForDark(OmniThemePalette palette) {
-    final hsl = HSLColor.fromColor(palette.accentPrimary);
-    return hsl
-        .withSaturation((hsl.saturation * 0.72).clamp(0.0, 1.0))
-        .withLightness((hsl.lightness + 0.08).clamp(0.0, 1.0))
-        .toColor();
   }
 }

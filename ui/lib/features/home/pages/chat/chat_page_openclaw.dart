@@ -173,12 +173,14 @@ mixin _ChatPageOpenClawMixin on _ChatPageStateBase {
       position,
     );
     final insideInputAuxiliarySurface =
+        _isPointerInside(_firstUseTourModelAnchorKey, position) ||
         _isPointerInside(_openClawPanelKey, position) ||
         _isPointerInside(_slashCommandStripKey, position) ||
         insideToolActivityStrip;
-    final insideHomeDrawerSearch =
-        _isPointerInside(_embeddedDrawerSearchFieldKey, position) ||
-        _isPointerInside(_drawerSearchFieldKey, position);
+    final insideHomeDrawerSearch = _isPointerInside(
+      _embeddedDrawerSearchFieldKey,
+      position,
+    );
     if (!insideInputArea &&
         !insideInputAuxiliarySurface &&
         !insideHomeDrawerSearch &&

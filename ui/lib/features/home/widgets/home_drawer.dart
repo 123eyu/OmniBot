@@ -12,6 +12,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/features/home/pages/chat/chat_page_models.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
+import 'package:ui/features/home/widgets/conversation_context_menu.dart';
 import 'package:ui/features/home/widgets/home_drawer_search_field.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
@@ -33,11 +34,13 @@ import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/cache_util.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
+import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:ui/widgets/settings_ui.dart';
 
 part 'home_drawer_actions.dart';
 part 'home_drawer_conversation_list.dart';
 part 'home_drawer_header_footer.dart';
+part 'home_drawer_home.dart';
 part 'home_drawer_image_previews.dart';
 part 'home_drawer_models.dart';
 part 'home_drawer_search.dart';
@@ -109,6 +112,7 @@ class HomeDrawer extends ConsumerStatefulWidget {
     this.onSearchFocusChanged,
     this.searchFieldKey,
     this.deferInitialLoad = false,
+    this.homePage = false,
   });
 
   final int? memoryCount;
@@ -124,6 +128,10 @@ class HomeDrawer extends ConsumerStatefulWidget {
   /// it renders the in-memory snapshot and leaves the refresh to the host's
   /// [HomeDrawerState.reloadAfterSettle], instead of loading mid-animation.
   final bool deferInitialLoad;
+
+  /// Presents the existing conversation owner as the app's full-screen home.
+  /// Search, history mutations and running-session status remain shared.
+  final bool homePage;
 
   @override
   ConsumerState<HomeDrawer> createState() => HomeDrawerState();
@@ -167,6 +175,9 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
       <_ConversationSearchResult>[];
   bool isLoadingConversations = true;
   bool _isSearching = false;
+  bool _homeSearchVisible = false;
+  bool _homeMenuOpening = false;
+  _HomeConversationFilter _homeFilter = _HomeConversationFilter.all;
   int _conversationLoadGeneration = 0;
   int _searchGeneration = 0;
   Timer? _searchDebounceTimer;
@@ -418,6 +429,9 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
       debugBuildCount++;
       return true;
     }());
+    if (widget.homePage) {
+      return _buildHomePage();
+    }
     final backgroundColor = _drawerBackgroundColor;
     final content = ColoredBox(
       color: backgroundColor,

@@ -198,6 +198,7 @@ void main() {
       ).readAsStringSync();
 
       for (final part in const <String>[
+        'chat_runtime_agent_event_support.dart',
         'chat_runtime_message_support.dart',
         'chat_runtime_streaming_support.dart',
         'chat_runtime_thinking_support.dart',
@@ -209,12 +210,62 @@ void main() {
         'chat_app_bar.dart',
         'chat_input_wrapper.dart',
         'chat_message_list.dart',
-        'chat_mode_slider.dart',
       ]) {
         expect(widgetSource, contains("part '$part';"));
       }
     },
   );
+
+  test('the shared coordinator solely consumes and projects native ACP events', () {
+    const coordinatorPath =
+        '$chatRoot/services/chat_conversation_runtime_coordinator.dart';
+    final subscription = RegExp(
+      r'\bAgentRuntimeService\s*\.\s*events\s*\.\s*listen\s*\(',
+    );
+    final owners = <String>[];
+    for (final file in Directory('lib').listSync(recursive: true).whereType<File>()) {
+      if (!file.path.endsWith('.dart')) continue;
+      final source = file.readAsStringSync();
+      for (final _ in subscription.allMatches(source)) {
+        owners.add(file.path);
+      }
+    }
+    expect(owners, <String>[coordinatorPath]);
+    final coordinator = File(coordinatorPath).readAsStringSync();
+    expect(coordinator, contains('if (_initialized) return;'));
+    final projection = File(
+      '$chatRoot/services/chat_runtime_agent_event_support.dart',
+    ).readAsStringSync();
+    final reductionIndex = projection.indexOf('_applyAgentEvent(');
+    final publicationIndex = projection.indexOf(
+      '_latestAgentEventProjection = ChatAgentEventProjection(',
+    );
+    expect(reductionIndex, greaterThanOrEqualTo(0));
+    expect(publicationIndex, greaterThan(reductionIndex));
+    expect(
+      projection.indexOf('_notifyRuntimeListeners();'),
+      greaterThan(publicationIndex),
+    );
+
+    final page = File('$chatRoot/chat_page.dart').readAsStringSync() +
+        File('$chatRoot/chat_page_lifecycle.dart').readAsStringSync() +
+        File('$chatRoot/chat_page_agent.dart').readAsStringSync();
+    final sheet = File(
+      'lib/features/home/pages/command_overlay/chat_bot_sheet.dart',
+    ).readAsStringSync();
+    for (final source in <String>[page, sheet]) {
+      expect(source, contains('_runtimeCoordinator.latestAgentEventProjection'));
+      expect(
+        source,
+        contains('_runtimeCoordinator.addListener(_handleRuntimeCoordinatorChanged)'),
+      );
+      expect(
+        source,
+        contains('_runtimeCoordinator.removeListener(_handleRuntimeCoordinatorChanged)'),
+      );
+      expect(source, isNot(contains('_runtimeCoordinator.applyAgentEvent(')));
+    }
+  });
 
   test('Agent Flutter runtime exposes only the ACP lifecycle entry points', () {
     final reducerSource = File(
@@ -306,13 +357,18 @@ void main() {
       'Future<bool> _tryAgentFlow(String aiMessageId, String userMessageId)',
     );
     final flowEnd = source.indexOf(
-      '\n  void _handleIncomingAcpRuntimeEvent(',
+      '\n  bool _canContinueAcpTurn(',
       flowStart,
     );
     expect(flowStart, greaterThanOrEqualTo(0));
     expect(flowEnd, greaterThan(flowStart));
     final flowBody = source.substring(flowStart, flowEnd);
     expect(flowBody, contains('_runtimeCoordinator.beginAcpTurn('));
+    expect(
+      flowBody.indexOf('_runtimeCoordinator.beginAcpTurn('),
+      lessThan(flowBody.indexOf('await AgentRuntimeService.status()')),
+    );
+    expect(flowBody, isNot(contains('_runtimeCoordinator.registerTask(')));
   });
 
   test('new ACP entry points have one coordinator admission boundary', () {
@@ -342,16 +398,18 @@ void main() {
       'Future<bool> _tryAgentFlow(String aiMessageId, String userMessageId)',
     );
     final flowEnd = source.indexOf(
-      '\n  void _handleIncomingAcpRuntimeEvent(',
+      '\n  bool _canContinueAcpTurn(',
       flowStart,
     );
     expect(flowStart, greaterThanOrEqualTo(0));
     expect(flowEnd, greaterThan(flowStart));
     final flowBody = source.substring(flowStart, flowEnd);
     final newSessionIndex = flowBody.indexOf('AgentRuntimeService.newSession(');
+    final bindSessionIndex = flowBody.indexOf('_runtimeCoordinator.bindAcpSession(');
     final promptIndex = flowBody.indexOf('AgentRuntimeService.promptSession(');
     expect(newSessionIndex, greaterThanOrEqualTo(0));
-    expect(promptIndex, greaterThan(newSessionIndex));
+    expect(bindSessionIndex, greaterThan(newSessionIndex));
+    expect(promptIndex, greaterThan(bindSessionIndex));
     expect(flowBody.substring(promptIndex), isNot(contains('sessionId: null')));
   });
 

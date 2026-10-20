@@ -50,7 +50,7 @@ class _WelcomePageState extends State<WelcomePage> {
   Future<void> _handleStartExperience() async {
     await _requestInstalledAppsPermission();
     await StorageService.setBool(StorageKeys.welcomeCompleted, true);
-    GoRouterManager.clearAndNavigateTo('/home/chat');
+    GoRouterManager.clearAndNavigateTo(GoRouterManager.homeRoute);
   }
 
   static const int _totalPages = 4;

@@ -68,9 +68,13 @@ extension _HomeDrawerActions on HomeDrawerState {
     // 永远不应继承它(否则 subagent_dispatch / schedule_* / alarm_* / calendar_*
     // 都会被 AgentConversationModePolicy 过滤掉)。chatOnly 保持继承,因为那是用户
     // 主动选择的纯聊天模式。
-    final newMode = widget.newConversationMode == ConversationMode.subagent
-        ? ConversationMode.agent
+    final requestedMode =
+        widget.homePage && _homeFilter == _HomeConversationFilter.chat
+        ? ConversationMode.chatOnly
         : widget.newConversationMode;
+    final newMode = requestedMode == ConversationMode.subagent
+        ? ConversationMode.agent
+        : requestedMode;
     _openThreadTarget(
       ConversationThreadTarget.newConversation(
         mode: newMode,
@@ -438,15 +442,6 @@ extension _HomeDrawerActions on HomeDrawerState {
       box.size.bottomRight(Offset.zero),
       ancestor: overlay,
     );
-    final overlaySize = overlay.size;
-    final mediaPadding = MediaQuery.paddingOf(rowContext);
-    const estimatedMenuHeight = 236.0;
-    final spaceBelow =
-        overlaySize.height - mediaPadding.bottom - rowBottomRight.dy - 16.0;
-    final openUpward =
-        spaceBelow < estimatedMenuHeight &&
-        (rowTopLeft.dy - mediaPadding.top) > estimatedMenuHeight;
-
     setState(() {
       _activeContextMenuThreadKey = conversation.threadKey;
     });
@@ -454,140 +449,69 @@ extension _HomeDrawerActions on HomeDrawerState {
     final selectedAction = await showGeneralDialog<_ConversationContextAction>(
       context: rowContext,
       barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(
-        rowContext,
-      ).modalBarrierDismissLabel,
+      barrierLabel: MaterialLocalizations.of(rowContext)
+          .modalBarrierDismissLabel,
       barrierColor: Colors.transparent,
       transitionDuration: const Duration(milliseconds: 170),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        final palette = dialogContext.omniPalette;
-        final isDark = dialogContext.isDarkTheme;
         final isEnglish =
             Localizations.localeOf(dialogContext).languageCode == 'en';
         String tr(String zh, String en) => isEnglish ? en : zh;
-        final surface = isDark
-            ? palette.surfaceElevated
-            : palette.surfacePrimary;
-        final dividerColor = palette.borderSubtle.withValues(
-          alpha: isDark ? 0.55 : 0.75,
-        );
-
-        return Stack(
-          children: [
-            Positioned(
-              left: (rowTopLeft.dx + 4).clamp(16.0, overlaySize.width - 216.0),
-              top: openUpward ? null : rowBottomRight.dy + 4,
-              bottom: openUpward
-                  ? overlaySize.height - rowTopLeft.dy + 4
-                  : null,
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  width: 196,
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    color: surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: palette.borderSubtle.withValues(
-                        alpha: isDark ? 0.8 : 0.9,
-                      ),
-                      width: 0.75,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: palette.shadowColor.withValues(
-                          alpha: isDark ? 0.36 : 0.09,
-                        ),
-                        blurRadius: 22,
-                        spreadRadius: -2,
-                        offset: const Offset(0, 8),
-                      ),
-                      BoxShadow(
-                        color: palette.shadowColor.withValues(
-                          alpha: isDark ? 0.18 : 0.04,
-                        ),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (includePinAction)
-                        _buildConversationMenuOption(
-                          dialogContext,
-                          action: _ConversationContextAction.pin,
-                          icon: conversation.isPinned
-                              ? LucideIcons.pinOff
-                              : LucideIcons.pin,
-                          label: conversation.isPinned
-                              ? tr('取消置顶', 'Unpin')
-                              : tr('置顶对话', 'Pin'),
-                        ),
-                      _buildConversationMenuOption(
-                        dialogContext,
-                        action: _ConversationContextAction.rename,
-                        icon: LucideIcons.pencil,
-                        label: tr('重命名', 'Rename'),
-                      ),
-                      _buildConversationMenuOption(
-                        dialogContext,
-                        action: _ConversationContextAction.copy,
-                        icon: LucideIcons.copy,
-                        label: tr('复制对话', 'Copy'),
-                      ),
-                      _buildConversationMenuOption(
-                        dialogContext,
-                        action: _ConversationContextAction.archive,
-                        icon: conversation.isArchived
-                            ? LucideIcons.archiveRestore
-                            : LucideIcons.archive,
-                        label: conversation.isArchived
-                            ? tr('取消归档', 'Unarchive')
-                            : tr('归档对话', 'Archive'),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        child: Divider(
-                          height: 1,
-                          thickness: 0.65,
-                          color: dividerColor,
-                        ),
-                      ),
-                      _buildConversationMenuOption(
-                        dialogContext,
-                        action: _ConversationContextAction.delete,
-                        icon: LucideIcons.trash2,
-                        label: tr('删除对话', 'Delete'),
-                        isDestructive: true,
-                      ),
-                    ],
-                  ),
-                ),
+        return ConversationContextMenu(
+          anchor: Rect.fromPoints(rowTopLeft, rowBottomRight),
+          title: _resolveConversationTitle(conversation),
+          actions: [
+            if (includePinAction)
+              _buildConversationMenuOption(
+                dialogContext,
+                action: _ConversationContextAction.pin,
+                icon: conversation.isPinned
+                    ? LucideIcons.pinOff
+                    : LucideIcons.pin,
+                label: conversation.isPinned
+                    ? tr('取消置顶', 'Unpin')
+                    : tr('置顶对话', 'Pin'),
               ),
+            _buildConversationMenuOption(
+              dialogContext,
+              action: _ConversationContextAction.rename,
+              icon: LucideIcons.pencil,
+              label: tr('重命名', 'Rename'),
+            ),
+            _buildConversationMenuOption(
+              dialogContext,
+              action: _ConversationContextAction.copy,
+              icon: LucideIcons.copy,
+              label: tr('复制对话', 'Copy'),
+            ),
+            _buildConversationMenuOption(
+              dialogContext,
+              action: _ConversationContextAction.archive,
+              icon: conversation.isArchived
+                  ? LucideIcons.archiveRestore
+                  : LucideIcons.archive,
+              label: conversation.isArchived
+                  ? tr('取消归档', 'Unarchive')
+                  : tr('归档对话', 'Archive'),
+            ),
+            _buildConversationMenuOption(
+              dialogContext,
+              action: _ConversationContextAction.delete,
+              icon: LucideIcons.trash2,
+              label: tr('删除对话', 'Delete'),
+              isDestructive: true,
             ),
           ],
         );
       },
       transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
         return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            alignment: openUpward ? Alignment.bottomLeft : Alignment.topLeft,
-            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
-            child: child,
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
           ),
+          child: child,
         );
       },
     );
@@ -630,42 +554,47 @@ extension _HomeDrawerActions on HomeDrawerState {
     bool isDestructive = false,
   }) {
     final palette = dialogContext.omniPalette;
-    final color = isDestructive ? const Color(0xFFE05252) : palette.textPrimary;
+    final color = isDestructive
+        ? Theme.of(dialogContext).colorScheme.error
+        : palette.textPrimary;
     final iconColor = isDestructive
-        ? const Color(0xFFE05252)
-        : palette.textPrimary.withValues(alpha: 0.78);
+        ? Theme.of(dialogContext).colorScheme.error
+        : palette.textPrimary;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         key: ValueKey('home-drawer-context-${action.name}'),
-        borderRadius: BorderRadius.circular(9.5),
+        borderRadius: BorderRadius.circular(18),
         onTap: () {
           performOmniSelectionHaptic();
           Navigator.of(dialogContext).pop(action);
         },
         splashColor: color.withValues(alpha: 0.08),
         highlightColor: color.withValues(alpha: 0.04),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9.5),
-          child: Row(
-            children: [
-              Icon(icon, size: 16, color: iconColor),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w500,
-                    color: color,
-                    height: 1.25,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Row(
+              children: [
+                Icon(icon, size: 20, color: iconColor),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                      color: color,
+                      height: 1.25,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -5,13 +5,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+
 import 'package:file_picker/file_picker.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/utils/picked_attachment_metadata.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+
 import '../../../../models/conversation_model.dart';
 import '../../../../models/conversation_thread_target.dart';
 import '../../../../models/chat_link_preview.dart';
@@ -24,13 +27,15 @@ import '../authorize/authorize_page_args.dart';
 import '../command_overlay/widgets/chat_input_area.dart';
 import '../command_overlay/services/manual_recording_flow_controller.dart';
 import '../command_overlay/services/manual_recording_result_card.dart';
+
 import 'package:ui/features/task/run_log/omniflow_tool_client.dart';
-import '../command_overlay/services/tool_card_detail_gesture_gate.dart';
+
 import '../common/openclaw_connection_checker.dart';
 import '../omnibot_workspace/widgets/omnibot_workspace_browser.dart';
 import 'services/chat_conversation_lifecycle_guard.dart';
 import 'services/chat_conversation_runtime_coordinator.dart';
 import 'state/chat_page_mode_state.dart';
+
 import 'package:ui/constants/openclaw/openclaw_keys.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/services/app_update_service.dart';
@@ -71,7 +76,6 @@ import 'package:ui/features/home/pages/chat/utils/composer_keyboard_metrics_trac
 import 'package:ui/features/home/pages/chat/utils/keyboard_inset_motion_tracker.dart';
 import 'package:ui/features/home/pages/agent/codex_remote_directory_picker.dart';
 import 'package:ui/features/home/pages/agent/codex_remote_workspace_browser.dart';
-import 'package:ui/widgets/chat_drawer_gesture_guard.dart';
 
 // 导入 Mixins
 import 'mixins/chat_dispatch_support.dart';
@@ -86,6 +90,7 @@ import 'widgets/chat_message_anchor_bar.dart';
 import 'widgets/pet_overlay_permission_sheet.dart';
 import 'widgets/chat_tool_activity_strip.dart';
 import 'widgets/chat_spotlight_tour.dart';
+
 import 'package:ui/widgets/app_update_dialog.dart';
 import 'package:ui/widgets/app_background_widgets.dart';
 import 'package:ui/widgets/conversation_model_selector.dart';
@@ -148,17 +153,13 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   final FocusNode _inputFocusNode = FocusNode();
 
   // ===================== Keys =====================
+  final GlobalKey<AcpConfigButtonState> _acpConfigButtonKey =
+      GlobalKey<AcpConfigButtonState>();
   final GlobalKey<ChatInputAreaState> _chatInputAreaKey =
       GlobalKey<ChatInputAreaState>();
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  // These drawers are mutually exclusive subtrees. They must not share a
-  // GlobalKey, otherwise Flutter reparents one keyed subtree between two
-  // trees during layout changes and can invalidate inherited dependents.
   final GlobalKey<HomeDrawerState> _embeddedDrawerKey =
       GlobalKey<HomeDrawerState>();
-  final GlobalKey<HomeDrawerState> _drawerKey = GlobalKey<HomeDrawerState>();
   final GlobalKey _embeddedDrawerSearchFieldKey = GlobalKey();
-  final GlobalKey _drawerSearchFieldKey = GlobalKey();
   final GlobalKey _browserOverlayKey = GlobalKey();
   final GlobalKey _slashCommandStripKey = GlobalKey();
   final GlobalKey _toolActivityStripKey = GlobalKey();
@@ -269,7 +270,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   _conversationMessagesChangedSubscription;
   StreamSubscription<Map<String, dynamic>>?
   _browserSessionSnapshotChangedSubscription;
-  StreamSubscription<Map<String, dynamic>>? _agentEventSubscription;
+  ChatAgentEventProjection? _lastAgentEventProjection;
   StreamSubscription<Map<String, dynamic>>? _omniLinkEventSubscription;
   final Set<String> _pendingManualAgentRetryTaskIds = <String>{};
   bool _pendingAgentInputResponseInFlight = false;
@@ -316,9 +317,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   Size _browserOverlaySize = const Size(360, 420);
   int _browserOverlayViewSeed = 0;
   String? _lastObservedBrowserSnapshotSignature;
-  int? _pageGesturePointerId;
-  double _pageHorizontalDragDelta = 0;
-  double _pageVerticalDragDelta = 0;
   int _surfaceSwitchRequestId = 0;
   bool _isSurfacePageScrolling = false;
   final HdPadPaneLayoutResolver _hdPadPaneLayoutResolver =
@@ -407,9 +405,8 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     final runtimeMessages = resolveVisibleChatMessages(
       runtimeMessages: _runtimeForMode(ChatPageMode.agent)?.messages,
       fallbackMessages: _modeState(ChatPageMode.agent).messages,
-      preserveFallbackDuringHandoff: _modeState(
-        ChatPageMode.agent,
-      ).isAiResponding,
+      preserveFallbackDuringHandoff: _modeState(ChatPageMode.agent)
+          .isAiResponding,
     );
     for (final message in runtimeMessages.reversed) {
       final messageAgentId = message.agentId?.trim() ?? '';
@@ -831,15 +828,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       _modeState(_activeMode).slashCommandExpanded;
   bool get _isToolActivityExpanded =>
       _modeState(_activeMode).toolActivityExpanded;
-  Set<String> _expandedAgentRunTaskIdsForMode(ChatPageMode mode) =>
-      _modeState(mode).expandedAgentRunTaskIds;
-  String? _latestExpandedAgentRunTaskIdForMode(ChatPageMode mode) {
-    final orderedTaskIds = _modeState(mode).expandedAgentRunTaskOrder;
-    if (orderedTaskIds.isEmpty) {
-      return null;
-    }
-    return orderedTaskIds.last;
-  }
 
   double get _inputAreaHeight => _modeState(_activeMode).inputAreaHeight;
   // ACP Agent lifecycle state has one owner: the conversation runtime. The
@@ -1191,38 +1179,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       _modeState(_activeMode).editingUserMessageId;
   set _editingUserMessageId(String? value) =>
       _modeState(_activeMode).editingUserMessageId = value;
-  void _updateExpandedAgentRunTaskIds(ChatPageMode mode, Set<String> taskIds) {
-    final normalizedTaskIds = taskIds
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toSet();
-    final currentTaskIds = _expandedAgentRunTaskIdsForMode(mode);
-    final currentOrder = _modeState(mode).expandedAgentRunTaskOrder;
-    final hasChanged =
-        currentTaskIds.length != normalizedTaskIds.length ||
-        !currentTaskIds.containsAll(normalizedTaskIds);
-    if (!hasChanged || !mounted) {
-      return;
-    }
-    final nextOrderedTaskIds = currentOrder
-        .where(normalizedTaskIds.contains)
-        .toList(growable: true);
-    for (final taskId in normalizedTaskIds) {
-      if (!currentTaskIds.contains(taskId)) {
-        nextOrderedTaskIds.remove(taskId);
-        nextOrderedTaskIds.add(taskId);
-      }
-    }
-    setState(() {
-      _modeState(mode).expandedAgentRunTaskIds
-        ..clear()
-        ..addAll(normalizedTaskIds);
-      _modeState(mode).expandedAgentRunTaskOrder
-        ..clear()
-        ..addAll(nextOrderedTaskIds);
-    });
-  }
-
   _ChatModelOverrideSelection? get _activeConversationModelOverrideSelection {
     final pending = _pendingConversationModelOverride;
     if (pending != null) {
@@ -1489,11 +1445,9 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       unawaited(_persistVisibleThreadTargetIfNeeded());
       unawaited(_syncVisibleChatConversation());
     }
-    // Reload the embedded drawer's conversation list so newly persisted
-    // conversations appear immediately, matching phone-mode behaviour where
-    // the drawer reloads every time it is opened.
+    // Keep the tablet's embedded conversation list current. The phone home
+    // route observes conversation updates independently.
     _embeddedDrawerKey.currentState?.reloadConversations();
-    _drawerKey.currentState?.reloadConversations();
   }
 
   @override
@@ -1679,16 +1633,21 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   }
 
   void _handleRuntimeCoordinatorChanged() {
-    if (!mounted || _activeRuntime == null) return;
+    if (!mounted) return;
+    final projection = _runtimeCoordinator.latestAgentEventProjection;
+    if (projection != null && projection != _lastAgentEventProjection) {
+      _lastAgentEventProjection = projection;
+      _handleAgentRuntimeProjection(projection);
+    }
+    if (_activeRuntime == null) return;
     _scheduleBrowserSessionRefreshIfNeeded();
     final mode = _activeMode;
     final runtime = _activeRuntime!;
     final nextChromeSignature = _runtimeChromeSignature(runtime);
     final previousChromeSignature = _modeState(mode).runtimeChromeSignature;
     final nextMutationRevision = runtime.messages.lastMutationRevision;
-    final previousMutationRevision = _modeState(
-      mode,
-    ).runtimeMessageMutationRevision;
+    final previousMutationRevision = _modeState(mode)
+        .runtimeMessageMutationRevision;
     final hasChromeChange = nextChromeSignature != previousChromeSignature;
     final hasMessageMutation = nextMutationRevision != previousMutationRevision;
 
@@ -1851,7 +1810,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     ConversationThreadTarget target,
   );
 
-  void _handleAgentRuntimeEvent(Map<String, dynamic> event);
+  void _handleAgentRuntimeProjection(ChatAgentEventProjection projection);
 
   Future<void> _sendAgentMessage(
     String aiMessageId,
@@ -1945,14 +1904,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   String _browserSnapshotSignature(ChatBrowserSessionSnapshot? snapshot);
 
   void _scheduleBrowserSessionRefreshIfNeeded();
-
-  void _handlePagePointerDown(PointerDownEvent event);
-
-  void _handlePagePointerMove(PointerMoveEvent event);
-
-  void _handlePagePointerUp(PointerUpEvent event);
-
-  void _handlePagePointerCancel(PointerCancelEvent event);
 
   Future<void> _refreshLiveBrowserSessionSnapshot({bool syncRuntime = false});
 
@@ -2092,7 +2043,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
 
   void _updateThinkingCardToCancelled(String taskId);
 
-  void _collapseAgentRunTrace(String taskId);
 
   void _onPopupVisibilityChanged(bool visible);
 

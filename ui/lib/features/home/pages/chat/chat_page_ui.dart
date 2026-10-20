@@ -60,7 +60,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     }
 
     return AcpConfigButton(
-      key: ValueKey('acp-config-$generation'),
+      key: _acpConfigButtonKey,
+      presentationIdentity: generation,
       isRunning: _isAiResponding,
       onVisibilityChanged: _onPopupVisibilityChanged,
       configureModel: _usesSharedProviderModel(agentId)
@@ -80,6 +81,71 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         );
       },
     );
+  }
+
+  void _returnToConversationHome() {
+    _dismissChatInputFocus();
+    if (GoRouterManager.canPop()) {
+      GoRouterManager.pop();
+    } else {
+      GoRouterManager.go('/home/home');
+    }
+  }
+
+  List<ChatAppBarAction> _chatHeaderActions() {
+    final english = LegacyTextLocalizer.isEnglish;
+    return [
+      if (_isInputAreaVisible) ...[
+        ChatAppBarAction(
+          label: english ? 'Model & settings' : '模型与参数',
+          icon: LucideIcons.slidersHorizontal,
+          onSelected: (anchor) async {
+            if (_activeMode == ChatPageMode.agent &&
+                _activeAcpAgentId == 'na-cloud') {
+              GoRouterManager.push('/home/agent_config/na-cloud');
+            } else {
+              await _acpConfigButtonKey.currentState?.open(
+                anchor,
+                preferBelow: true,
+              );
+            }
+          },
+        ),
+        ChatAppBarAction(
+          label: english ? 'Add attachment' : '添加附件',
+          icon: LucideIcons.paperclip,
+          onSelected: (_) => _pickAttachments(),
+        ),
+        ChatAppBarAction(
+          label: english ? 'Commands' : '命令',
+          icon: LucideIcons.command,
+          onSelected: (_) => _triggerSlashCommandPanel(),
+        ),
+        if (_activeMode == ChatPageMode.agent &&
+            _activeAcpAgentId != 'na-cloud')
+          ChatAppBarAction(
+            label: english ? 'Agent permissions' : 'Agent 权限',
+            icon: LucideIcons.shield,
+            onSelected: (anchor) async {
+              await _chatInputAreaKey.currentState?.openAgentPermissionMenu(
+                anchor,
+              );
+            },
+          ),
+        if (_activeMode != ChatPageMode.openclaw)
+          ChatAppBarAction(
+            label: english ? 'Context usage & limit' : '上下文用量与阈值',
+            icon: LucideIcons.chartPie,
+            onSelected: (_) => this._handleContextUsageRingLongPress(),
+          ),
+      ],
+      if (_isHdPadLandscapeForMediaQuery(MediaQuery.of(context)))
+        ChatAppBarAction(
+          label: english ? 'Conversation sidebar' : '会话侧栏',
+          icon: LucideIcons.panelLeft,
+          onSelected: (_) => _toggleHdPadLeftPaneCollapsed(),
+        ),
+    ];
   }
 
   ChatPaneOverlayAnchorGeometry? _lastStableToolActivityAnchorGeometry;
@@ -107,26 +173,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       // A previously lost chat focus may have left the lift latched against a
       // stable IME inset, so no new focus/metrics notification is guaranteed.
       setState(() {});
-    }
-  }
-
-  void _handleHomeDrawerChanged(bool isOpen) {
-    if (!mounted) {
-      return;
-    }
-    if (isOpen) {
-      _dismissChatInputFocus();
-      _composerLiftIntentTracker.reset();
-      // The drawer opens with its in-memory list; refreshing it rebuilds every
-      // visible row and starts image-preview history reads, so wait until the
-      // open animation has settled (see HomeDrawerState.reloadAfterSettle).
-      _embeddedDrawerKey.currentState?.reloadConversations();
-      _drawerKey.currentState?.reloadAfterSettle();
-    } else {
-      _drawerKey.currentState?.cancelSettledReload();
-      _isHomeDrawerSearchFocused = false;
-      _composerLiftIntentTracker.reset();
-      checkAndHandleDeletedConversation();
     }
   }
 
@@ -828,7 +874,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     }
     return shouldShowAgentToolActivitySnapshot(
       snapshot,
-      expandedTaskIds: _expandedAgentRunTaskIdsForMode(mode),
     );
   }
 
@@ -1029,7 +1074,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     final toolActivitySnapshot = resolveAgentToolActivitySnapshot(
       List<ChatMessageModel>.from(visibleMessages),
       activeTaskIds: activeAgentTurnIds,
-      preferredCompletedTaskId: _latestExpandedAgentRunTaskIdForMode(mode),
     );
     final showToolActivityStrip = _shouldShowToolActivityStripForMode(
       mode: mode,
@@ -1062,10 +1106,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       useAcpPresentation: useAcpPresentation,
       activeAcpAgentId: activeAcpAgentId,
       onRetryAgentMessage: this._retryFailedAgentTurn,
-      expandedAgentRunTaskIds: _expandedAgentRunTaskIdsForMode(mode),
-      onExpandedAgentRunTaskIdsChanged: (taskIds) {
-        _updateExpandedAgentRunTaskIds(mode, taskIds);
-      },
       showEmptyGreeting: homeGreetingSettings.greetingEnabled,
       liftEmptyGreeting: liftEmptyGreeting,
       emptyGreetingQuickPrompts: homeGreetingSettings.quickPrompts,
@@ -1305,16 +1345,12 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     required bool hideWorkspaceOverlays,
     required bool showMenuButton,
     required bool showSurfaceSwitcher,
-    required VoidCallback onMenuTap,
     VoidCallback? onWorkspacePaneTap,
     bool showWorkspacePaneButton = false,
   }) {
     final toolActivitySnapshot = resolveAgentToolActivitySnapshot(
       List<ChatMessageModel>.from(_messages),
       activeTaskIds: _activeRuntime?.activeAgentTurnIds ?? const <String>{},
-      preferredCompletedTaskId: _latestExpandedAgentRunTaskIdForMode(
-        _activeMode,
-      ),
     );
     final toolActivityMessages = toolActivitySnapshot.messages;
     final toolActivityCards = extractAgentToolCards(toolActivityMessages);
@@ -1392,7 +1428,10 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         Column(
           children: [
             ChatAppBar(
-              onMenuTap: onMenuTap,
+              onMenuTap: _returnToConversationHome,
+              title: _currentConversation?.title,
+              actions: _chatHeaderActions(),
+              tutorialActionsAnchorKey: _firstUseTourModelAnchorKey,
               onPetTap: () {
                 unawaited(_handlePetOverlayTap());
               },
@@ -1517,10 +1556,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                           ? null
                           : this._handleContextUsageRingLongPress,
                       modelPickerSettings: null,
-                      runtimeConfigButton: KeyedSubtree(
-                        key: _firstUseTourModelAnchorKey,
-                        child: _buildAcpConfigButton(),
-                      ),
+                      runtimeConfigButton: _buildAcpConfigButton(),
                       agentRunSettings: null,
                       onAgentRunSettingsOpened: null,
                       onAgentRunSettingsChanged: null,
@@ -1878,42 +1914,34 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                 child: _buildPaneSurface(
                   translucent: backgroundActive,
                   visualProfile: visualProfile,
-                  child: Listener(
-                    behavior: HitTestBehavior.translucent,
-                    onPointerDown: _handlePagePointerDown,
-                    onPointerMove: _handlePagePointerMove,
-                    onPointerUp: _handlePagePointerUp,
-                    onPointerCancel: _handlePagePointerCancel,
-                    child: LayoutBuilder(
-                      builder: (context, paneConstraints) {
-                        return _buildChatPaneShell(
-                          layoutContext: context,
-                          constraints: paneConstraints,
-                          backgroundConfig: backgroundConfig,
-                          visualProfile: visualProfile,
-                          backgroundActive: backgroundActive,
-                          inputBottomPadding: inputBottomPadding,
-                          keyboardSpacer: keyboardSpacer,
-                          commandPanelBottomOffset: commandPanelBottomOffset,
-                          conversationBody: _buildModeMessagePage(
-                            _primaryChatMessagePageMode,
-                            backgroundConfig,
-                            visualProfile,
-                            bottomOverlayInset:
-                                _resolveNormalSurfaceComposerInset(
-                                  inputBottomPadding: inputBottomPadding,
-                                  keyboardSpacer: keyboardSpacer,
-                                ),
-                          ),
-                          hideWorkspaceOverlays: false,
-                          showMenuButton: true,
-                          showSurfaceSwitcher: false,
-                          onMenuTap: _toggleHdPadLeftPaneCollapsed,
-                          showWorkspacePaneButton: _hdPadRightPaneCollapsed,
-                          onWorkspacePaneTap: _toggleHdPadRightPaneCollapsed,
-                        );
-                      },
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, paneConstraints) {
+                      return _buildChatPaneShell(
+                        layoutContext: context,
+                        constraints: paneConstraints,
+                        backgroundConfig: backgroundConfig,
+                        visualProfile: visualProfile,
+                        backgroundActive: backgroundActive,
+                        inputBottomPadding: inputBottomPadding,
+                        keyboardSpacer: keyboardSpacer,
+                        commandPanelBottomOffset: commandPanelBottomOffset,
+                        conversationBody: _buildModeMessagePage(
+                          _primaryChatMessagePageMode,
+                          backgroundConfig,
+                          visualProfile,
+                          bottomOverlayInset:
+                              _resolveNormalSurfaceComposerInset(
+                                inputBottomPadding: inputBottomPadding,
+                                keyboardSpacer: keyboardSpacer,
+                              ),
+                        ),
+                        hideWorkspaceOverlays: false,
+                        showMenuButton: true,
+                        showSurfaceSwitcher: false,
+                        showWorkspacePaneButton: _hdPadRightPaneCollapsed,
+                        onWorkspacePaneTap: _toggleHdPadRightPaneCollapsed,
+                      );
+                    },
                   ),
                 ),
               ),
@@ -2077,26 +2105,12 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                 }
               },
               child: Scaffold(
-                key: _scaffoldKey,
                 backgroundColor: Colors.transparent,
                 resizeToAvoidBottomInset: false,
-                // 锚点面板展开时关闭抽屉的边缘侧滑，避免轻滑误触发 home_drawer。
-                drawerEnableOpenDragGesture: !_messageAnchorExpanded,
-                drawer: isHdPadLandscape
-                    ? null
-                    : HomeDrawer(
-                        key: _drawerKey,
-                        newConversationMode: _conversationModeForPageMode(
-                          _activeMode,
-                        ),
-                        onSearchFocusChanged:
-                            _handleHomeDrawerSearchFocusChanged,
-                        searchFieldKey: _drawerSearchFieldKey,
-                        deferInitialLoad: true,
-                      ),
-                onDrawerChanged: isHdPadLandscape
-                    ? null
-                    : _handleHomeDrawerChanged,
+                // Conversation history lives on the home route. Keep the
+                // system edge free for predictive back; the workspace remains
+                // the second page of the horizontal PageView below.
+                drawerEnableOpenDragGesture: false,
                 body: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -2118,19 +2132,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                           behavior: HitTestBehavior.translucent,
                           onPointerDown: (event) {
                             unawaited(_handleOutsideTap(event.position));
-                            if (!isHdPadLandscape) {
-                              _handlePagePointerDown(event);
-                            }
                           },
-                          onPointerMove: isHdPadLandscape
-                              ? null
-                              : _handlePagePointerMove,
-                          onPointerUp: isHdPadLandscape
-                              ? null
-                              : _handlePagePointerUp,
-                          onPointerCancel: isHdPadLandscape
-                              ? null
-                              : _handlePagePointerCancel,
                           child: isHdPadLandscape
                               ? _buildHdPadLandscapeShell(
                                   backgroundConfig: backgroundConfig,
@@ -2183,10 +2185,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                                           _isWorkspaceSurface,
                                       showMenuButton: true,
                                       showSurfaceSwitcher: true,
-                                      onMenuTap: () {
-                                        _dismissChatInputFocus();
-                                        _scaffoldKey.currentState?.openDrawer();
-                                      },
                                     );
                                   },
                                 ),

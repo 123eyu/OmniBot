@@ -50,8 +50,10 @@ const String _kAgentPermissionFullAccessIconAsset =
 
 enum AgentPermissionMode { readOnly, defaultMode, autoReview, fullAccess }
 
-typedef AgentRunSettingsChanged =
-    FutureOr<void> Function({String? modelId, String? reasoningEffort});
+typedef AgentRunSettingsChanged = FutureOr<void> Function({
+  String? modelId,
+  String? reasoningEffort,
+});
 
 class AgentRunSettings {
   const AgentRunSettings({
@@ -145,6 +147,7 @@ class ChatInputArea extends StatefulWidget {
   /// 是否使用毛玻璃效果（command_overlay 使用毛玻璃，chatbotsheet 使用白色+阴影）
   final bool useFrostedGlass;
   final bool useLargeComposerStyle;
+  final bool minimalComposer;
   final bool useAttachmentPickerForPlus;
   final Future<void> Function()? onPickAttachment;
   final List<ChatInputAttachment> attachments;
@@ -185,6 +188,7 @@ class ChatInputArea extends StatefulWidget {
     this.onTerminalTap,
     this.useFrostedGlass = false,
     this.useLargeComposerStyle = false,
+    this.minimalComposer = false,
     this.useAttachmentPickerForPlus = false,
     this.onPickAttachment,
     this.attachments = const [],
@@ -285,7 +289,8 @@ abstract class _ChatInputAreaStateBase extends State<ChatInputArea>
     _composerFlowController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 8000),
-    )..repeat();
+    );
+    if (!widget.minimalComposer) _composerFlowController.repeat();
     _modelPickerSpinController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 520),
@@ -411,6 +416,9 @@ abstract class _ChatInputAreaStateBase extends State<ChatInputArea>
       child: foreground,
     );
   }
+
+  Future<void> openAgentPermissionMenu(BuildContext anchorContext) =>
+      _openAgentPermissionMenu(anchorContext);
 
   Future<void> openTerminalFromInput() async {
     try {

@@ -1433,7 +1433,6 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
     if (taskId != null) {
       _updateThinkingCardToCancelled(taskId);
       _upsertCancelledAgentRunMessage(taskId);
-      _collapseAgentRunTrace(taskId);
       _runtimeCoordinator.unregisterTask(
         taskId,
         conversationId: _currentConversationId,
@@ -1509,7 +1508,6 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
       );
       _updateThinkingCardToCancelled(taskId);
       _upsertCancelledAgentRunMessage(taskId);
-      _collapseAgentRunTrace(taskId);
       if (_activeConversationMode != ChatPageMode.agent) {
         clearAgentStreamSessionState();
         resetDispatchState();
@@ -1551,21 +1549,6 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
       );
     });
     _persistDeepThinkingCardIfNeeded(_messages[index]);
-  }
-
-  @override
-  void _collapseAgentRunTrace(String taskId) {
-    final normalizedTaskId = taskId.trim();
-    if (normalizedTaskId.isEmpty) {
-      return;
-    }
-    final expandedTaskIds = _expandedAgentRunTaskIdsForMode(_activeMode);
-    if (!expandedTaskIds.contains(normalizedTaskId)) {
-      return;
-    }
-    final nextTaskIds = Set<String>.from(expandedTaskIds)
-      ..remove(normalizedTaskId);
-    _updateExpandedAgentRunTaskIds(_activeMode, nextTaskIds);
   }
 
   void _upsertCancelledAgentRunMessage(String taskId) {

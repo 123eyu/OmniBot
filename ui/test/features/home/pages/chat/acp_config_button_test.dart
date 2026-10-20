@@ -7,6 +7,81 @@ import 'package:ui/widgets/conversation_model_selector.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
 
 void main() {
+  testWidgets(
+    'header opens the existing hidden config owner and a conversation switch dismisses it',
+    (tester) async {
+      final configKey = GlobalKey<AcpConfigButtonState>();
+      var identity = 1;
+      var writes = 0;
+      late StateSetter update;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return Scaffold(
+                body: Column(
+                  children: [
+                    Builder(
+                      builder: (anchor) => TextButton(
+                        onPressed: () => configKey.currentState!.open(
+                          anchor,
+                          preferBelow: true,
+                        ),
+                        child: const Text('Model menu'),
+                      ),
+                    ),
+                    Offstage(
+                      child: AcpConfigButton(
+                        key: configKey,
+                        presentationIdentity: identity,
+                        isRunning: false,
+                        load: () async => {
+                          'sessionId': 'session-$identity',
+                          'configOptions': [
+                            {
+                              'id': 'temperature',
+                              'name': 'Temperature',
+                              'type': 'select',
+                              'currentValue': 'one',
+                              'options': [
+                                {'value': 'one', 'name': 'One'},
+                              ],
+                            },
+                          ],
+                        },
+                        write: (_, _, _) async {
+                          writes++;
+                          return {};
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final owner = configKey.currentState;
+      expect(owner, isNotNull);
+      expect(
+        find.byKey(const ValueKey('chat-acp-config-button')),
+        findsNothing,
+      );
+      await tester.tap(find.text('Model menu'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AcpConfigPanel), findsOneWidget);
+      update(() => identity = 2);
+      await tester.pumpAndSettle();
+      expect(find.byType(AcpConfigPanel), findsNothing);
+      expect(configKey.currentState, same(owner));
+      expect(writes, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final readOnly in [false, true]) {
     testWidgets(
       'shared model selection uses configured connections (readOnly=$readOnly)',

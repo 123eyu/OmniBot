@@ -101,9 +101,8 @@ extension _ChatInputAgentControls on _ChatInputAreaStateBase {
       final opened = widget.onAgentRunSettingsOpened;
       if (opened != null) {
         unawaited(
-          Future<void>.sync(
-            opened,
-          ).catchError((Object error, StackTrace stackTrace) {}),
+          Future<void>.sync(opened)
+              .catchError((Object error, StackTrace stackTrace) {}),
         );
       }
       if (!mounted) {
@@ -300,73 +299,9 @@ extension _ChatInputAgentControls on _ChatInputAreaStateBase {
     final selected =
         widget.agentPermissionMode ?? AgentPermissionMode.fullAccess;
     final palette = context.omniPalette;
-    final selectedColor = context.isDarkTheme
-        ? palette.accentPrimary
-        : const Color(0xFF2F65D9);
-    final inactiveColor = context.isDarkTheme
-        ? palette.textSecondary
-        : const Color(0xFF5E6C84);
+    final selectedColor = palette.accentPrimary;
 
     final buttonKey = _agentPermissionButtonKey;
-
-    Future<void> openMenu() async {
-      if (_agentPermissionMenuHandle != null ||
-          !_composerStateMachine.beginPopupOpening(
-            ChatComposerPopup.agentPermission,
-          )) {
-        return;
-      }
-      final anchorContext = buttonKey.currentContext;
-      if (anchorContext == null) {
-        _composerStateMachine.popupClosed(ChatComposerPopup.agentPermission);
-        return;
-      }
-      final anchor = glassPopupAnchorFromContext(anchorContext);
-      if (anchor == null) {
-        _composerStateMachine.popupClosed(ChatComposerPopup.agentPermission);
-        return;
-      }
-      final handle = showOverlayGlassPopup<AgentPermissionMode>(
-        context: anchorContext,
-        anchor: anchor,
-        preferBelow: false,
-        reverseTransitionDuration: Duration.zero,
-        builder: (handle) => _AgentPermissionGlassMenuContent(
-          width: 196,
-          selected: selected,
-          selectedColor: selectedColor,
-          inactiveColor: inactiveColor,
-          textColor: context.isDarkTheme
-              ? palette.textPrimary
-              : const Color(0xFF232D3D),
-          options: [
-            for (final mode in widget.agentPermissionModes)
-              _AgentPermissionOptionData(
-                mode: mode,
-                label: _agentPermissionLabel(mode),
-                iconAsset: _agentPermissionIconAsset(mode),
-              ),
-          ],
-          onSelect: (mode) => unawaited(handle.dismiss(mode)),
-        ),
-      );
-      _agentPermissionMenuHandle = handle;
-      _composerStateMachine.popupOpened(ChatComposerPopup.agentPermission);
-      try {
-        final mode = await handle.future;
-        if (mode == null) return;
-        await widget.onAgentPermissionModeChanged?.call(mode);
-      } finally {
-        if (_agentPermissionMenuHandle == handle) {
-          _agentPermissionMenuHandle = null;
-          if (mounted) {
-            _composerStateMachine.popupClosed(
-              ChatComposerPopup.agentPermission,
-            );
-          }
-        }
-      }
-    }
 
     return TextFieldTapRegion(
       child: Tooltip(
@@ -375,7 +310,10 @@ extension _ChatInputAgentControls on _ChatInputAreaStateBase {
         child: InkWell(
           key: const ValueKey('chat-input-agent-permission-button'),
           borderRadius: BorderRadius.circular(999),
-          onTap: openMenu,
+          onTap: () {
+            final anchorContext = buttonKey.currentContext;
+            if (anchorContext != null) _openAgentPermissionMenu(anchorContext);
+          },
           child: AnimatedContainer(
             key: buttonKey,
             duration: _buttonAnimationDuration,
@@ -399,6 +337,63 @@ extension _ChatInputAgentControls on _ChatInputAreaStateBase {
         ),
       ),
     );
+  }
+
+  Future<void> _openAgentPermissionMenu(BuildContext anchorContext) async {
+    final selected =
+        widget.agentPermissionMode ?? AgentPermissionMode.fullAccess;
+    final palette = context.omniPalette;
+    final selectedColor = palette.accentPrimary;
+    final inactiveColor = palette.textSecondary;
+    if (_agentPermissionMenuHandle != null ||
+        !_composerStateMachine.beginPopupOpening(
+          ChatComposerPopup.agentPermission,
+        )) {
+      return;
+    }
+    final anchor = glassPopupAnchorFromContext(anchorContext);
+    if (anchor == null) {
+      _composerStateMachine.popupClosed(ChatComposerPopup.agentPermission);
+      return;
+    }
+    final handle = showOverlayGlassPopup<AgentPermissionMode>(
+      context: anchorContext,
+      anchor: anchor,
+      preferBelow: widget.minimalComposer,
+      reverseTransitionDuration: Duration.zero,
+      builder: (handle) => _AgentPermissionGlassMenuContent(
+        width: 196,
+        selected: selected,
+        selectedColor: selectedColor,
+        inactiveColor: inactiveColor,
+        textColor: context.isDarkTheme
+            ? palette.textPrimary
+            : const Color(0xFF232D3D),
+        options: [
+          for (final mode in widget.agentPermissionModes)
+            _AgentPermissionOptionData(
+              mode: mode,
+              label: _agentPermissionLabel(mode),
+              iconAsset: _agentPermissionIconAsset(mode),
+            ),
+        ],
+        onSelect: (mode) => unawaited(handle.dismiss(mode)),
+      ),
+    );
+    _agentPermissionMenuHandle = handle;
+    _composerStateMachine.popupOpened(ChatComposerPopup.agentPermission);
+    try {
+      final mode = await handle.future;
+      if (mode == null) return;
+      await widget.onAgentPermissionModeChanged?.call(mode);
+    } finally {
+      if (_agentPermissionMenuHandle == handle) {
+        _agentPermissionMenuHandle = null;
+        if (mounted) {
+          _composerStateMachine.popupClosed(ChatComposerPopup.agentPermission);
+        }
+      }
+    }
   }
 
   String _agentPermissionTooltip() {

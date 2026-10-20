@@ -80,8 +80,6 @@ void main() {
         createdAt: 1,
         updatedAt: 1,
       )
-      ..expandedAgentRunTaskIds.add('expanded-task')
-      ..expandedAgentRunTaskOrder.add('expanded-task')
       ..toolActivityExpanded = true;
 
     state.resetConversation();
@@ -108,8 +106,6 @@ void main() {
     expect(state.currentConversationId, isNull);
     expect(state.currentConversation, isNull);
 
-    expect(state.expandedAgentRunTaskIds, {'expanded-task'});
-    expect(state.expandedAgentRunTaskOrder, ['expanded-task']);
     expect(state.toolActivityExpanded, isTrue);
   });
 }

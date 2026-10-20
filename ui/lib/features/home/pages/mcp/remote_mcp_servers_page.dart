@@ -249,7 +249,7 @@ class _RemoteMcpServersPageState extends State<RemoteMcpServersPage> {
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: palette.accentPrimary,
-        foregroundColor: Colors.white,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         elevation: 2,
         onPressed: () => _showServerEditor(),
         child: const Icon(LucideIcons.plus),

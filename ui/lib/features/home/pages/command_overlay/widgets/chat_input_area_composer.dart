@@ -37,75 +37,76 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    final composer = switch ((
-      widget.useLargeComposerStyle,
-      widget.useFrostedGlass,
-    )) {
-      (true, _) => SafeArea(child: _buildLargeComposerShell()),
-      (false, true) => SafeArea(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
-            child: Container(
-              height: 44,
-              padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
-              decoration: BoxDecoration(
-                color: context.isDarkTheme
-                    ? palette.surfacePrimary.withValues(alpha: 0.86)
-                    : const Color(0xE6F1F8FF),
+    final composer = widget.minimalComposer
+        ? SafeArea(top: false, child: _buildMinimalComposer())
+        : switch ((widget.useLargeComposerStyle, widget.useFrostedGlass)) {
+            (true, _) => SafeArea(child: _buildLargeComposerShell()),
+            (false, true) => SafeArea(
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                border: context.isDarkTheme
-                    ? Border.all(
-                        color: palette.borderSubtle.withValues(alpha: 0.72),
-                      )
-                    : null,
-              ),
-              child: _buildInputContent(),
-            ),
-          ),
-        ),
-      ),
-      (false, false) => SafeArea(
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: context.isDarkTheme
-                ? [
-                    BoxShadow(
-                      color: palette.shadowColor.withValues(alpha: 0.22),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+                  child: Container(
+                    height: 44,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
+                    decoration: BoxDecoration(
+                      color: context.isDarkTheme
+                          ? palette.surfacePrimary.withValues(alpha: 0.86)
+                          : const Color(0xE6F1F8FF),
+                      borderRadius: BorderRadius.circular(8),
+                      border: context.isDarkTheme
+                          ? Border.all(
+                              color: palette.borderSubtle.withValues(
+                                alpha: 0.72,
+                              ),
+                            )
+                          : null,
                     ),
-                  ]
-                : [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              height: 44,
-              padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
-              decoration: BoxDecoration(
-                color: context.isDarkTheme
-                    ? palette.surfacePrimary
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: context.isDarkTheme
-                    ? Border.all(color: palette.borderSubtle)
-                    : null,
+                    child: _buildInputContent(),
+                  ),
+                ),
               ),
-              child: _buildInputContent(),
             ),
-          ),
-        ),
-      ),
-    };
+            (false, false) => SafeArea(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: context.isDarkTheme
+                      ? [
+                          BoxShadow(
+                            color: palette.shadowColor.withValues(alpha: 0.22),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ]
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    height: 44,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
+                    decoration: BoxDecoration(
+                      color: context.isDarkTheme
+                          ? palette.surfacePrimary
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: context.isDarkTheme
+                          ? Border.all(color: palette.borderSubtle)
+                          : null,
+                    ),
+                    child: _buildInputContent(),
+                  ),
+                ),
+              ),
+            ),
+          };
     return TextFieldTapRegion(
       onTapOutside: widget.isEditingUserMessage
           ? (_) {
@@ -119,6 +120,72 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
           return false;
         },
         child: SizeChangedLayoutNotifier(child: composer),
+      ),
+    );
+  }
+
+  /// The chat screen owns auxiliary actions in its header. Drafts, editing,
+  /// attachments and the send/stop state still use the same composer owner.
+  Widget _buildMinimalComposer() {
+    final palette = context.omniPalette;
+    return DecoratedBox(
+      key: const ValueKey('chat-minimal-composer'),
+      decoration: BoxDecoration(
+        color: palette.surfacePrimary,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: palette.shadowColor.withValues(
+              alpha: context.isDarkTheme ? 0.18 : 0.07,
+            ),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.runtimeConfigButton != null)
+              Offstage(child: widget.runtimeConfigButton!),
+            if (widget.attachments.isNotEmpty) ...[
+              _buildAttachmentPreview(),
+              const SizedBox(height: 8),
+            ],
+            if ((widget.selectedModelOverrideId ?? '').trim().isNotEmpty) ...[
+              _buildSelectedModelOverrideChip(),
+              const SizedBox(height: 8),
+            ],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (widget.isEditingUserMessage) ...[
+                  SizedBox(
+                    width: 32,
+                    height: 40,
+                    child: _buildLargeAddButton(),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Expanded(child: _buildTextField(multiline: true)),
+                const SizedBox(width: 10),
+                AnimatedBuilder(
+                  animation: Listenable.merge([
+                    widget.controller,
+                    _composerStateMachine,
+                  ]),
+                  builder: (context, _) => SizedBox(
+                    width: 42,
+                    height: 42,
+                    child: _buildLargeSendOrStopButton(),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -375,7 +442,25 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
       hasTextOverride: widget.controller.text.trim().isNotEmpty,
     );
     final canTap = action != ChatComposerPrimaryAction.disabled;
-    final icon = action == ChatComposerPrimaryAction.cancel
+    final icon = widget.minimalComposer
+        ? DecoratedBox(
+            decoration: BoxDecoration(
+              color: context.omniPalette.textPrimary,
+              shape: BoxShape.circle,
+            ),
+            child: SizedBox(
+              width: 42,
+              height: 42,
+              child: Icon(
+                action == ChatComposerPrimaryAction.cancel
+                    ? LucideIcons.square
+                    : LucideIcons.arrowUp,
+                size: action == ChatComposerPrimaryAction.cancel ? 18 : 24,
+                color: context.omniPalette.surfacePrimary,
+              ),
+            ),
+          )
+        : action == ChatComposerPrimaryAction.cancel
         ? _pauseSvg
         : _sendSvg;
 

@@ -47,14 +47,10 @@ extension _ChatInputActionSupport on _ChatInputAreaStateBase {
     final textInputAction = useKeyboardNewline
         ? TextInputAction.newline
         : TextInputAction.send;
-    final textColor = context.isDarkTheme
-        ? palette.textPrimary
-        : const Color(0xFF353E53);
-    final hintColor = context.isDarkTheme
-        ? palette.textTertiary
-        : const Color(0x80353E53);
+    final textColor = palette.textPrimary;
+    final hintColor = palette.textTertiary;
     final textStyle = TextStyle(
-      fontSize: multiline ? 15.0 : 14.0,
+      fontSize: widget.minimalComposer ? 16.0 : (multiline ? 15.0 : 14.0),
       height: multiline ? 1.45 : 1.43,
       color: textColor,
       letterSpacing: 0.333,
@@ -108,10 +104,12 @@ extension _ChatInputActionSupport on _ChatInputAreaStateBase {
               TextInputContextMenu(editableTextState: editableTextState),
           decoration: InputDecoration(
             hintText: Localizations.localeOf(context).languageCode == 'en'
-                ? 'Type your message'
-                : '请输入内容',
+                ? 'Describe your task…'
+                : '描述你的任务…',
             hintStyle: TextStyle(
-              fontSize: multiline ? 15.0 : 14.0,
+              fontSize: widget.minimalComposer
+                  ? 16.0
+                  : (multiline ? 15.0 : 14.0),
               color: hintColor,
               height: multiline ? 1.45 : 1.43,
               letterSpacing: 0.333,

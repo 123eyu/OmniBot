@@ -175,13 +175,14 @@ extension _ChatPageRemoteCodexSupport on _ChatPageStateBase {
       _modeState(ChatPageMode.agent).hasMoreMessages = false;
       _modeState(ChatPageMode.agent).messageOffset = messages.length;
     });
-    _runtimeCoordinator.ensureEphemeralRuntime(
+    final hydratedRuntime = _runtimeCoordinator.ensureEphemeralRuntime(
       conversationId: runtimeId,
       mode: kChatRuntimeModeAgent,
       initialMessages: messages,
       conversation: conversation,
       initialChatIslandDisplayLayer: ChatIslandDisplayLayer.mode,
     );
+    hydratedRuntime.knownAcpSessionIds.add(resolvedThreadId);
     _runtimeCoordinator.replaceConversationSnapshot(
       conversationId: runtimeId,
       mode: kChatRuntimeModeAgent,
@@ -258,7 +259,7 @@ extension _ChatPageRemoteCodexSupport on _ChatPageStateBase {
     final normalizedThreadId = threadId.trim();
     final runtimeId = _remoteCodexRuntimeId(normalizedThreadId);
     final now = DateTime.now().millisecondsSinceEpoch;
-    _runtimeCoordinator.ensureEphemeralRuntime(
+    final runtime = _runtimeCoordinator.ensureEphemeralRuntime(
       conversationId: runtimeId,
       mode: kChatRuntimeModeAgent,
       conversation:
@@ -280,6 +281,7 @@ extension _ChatPageRemoteCodexSupport on _ChatPageStateBase {
           ),
       initialChatIslandDisplayLayer: ChatIslandDisplayLayer.mode,
     );
+    runtime.knownAcpSessionIds.add(normalizedThreadId);
     return runtimeId;
   }
 

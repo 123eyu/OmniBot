@@ -41,12 +41,11 @@ List<Map<String, dynamic>> acpConfigOptions(Map<String, dynamic> response) =>
         .map((option) => Map<String, dynamic>.from(option))
         .toList();
 
-typedef AcpConfigWriter =
-    Future<Map<String, dynamic>> Function(
-      String sessionId,
-      String configId,
-      Object value,
-    );
+typedef AcpConfigWriter = Future<Map<String, dynamic>> Function(
+  String sessionId,
+  String configId,
+  Object value,
+);
 
 class AcpConfigButton extends StatefulWidget {
   const AcpConfigButton({
@@ -57,6 +56,7 @@ class AcpConfigButton extends StatefulWidget {
     required this.isRunning,
     this.onVisibilityChanged,
     this.configureModel,
+    this.presentationIdentity,
   });
   final Future<Map<String, dynamic>> Function() load;
   final Future<Map<String, dynamic>> Function()? refresh;
@@ -64,18 +64,27 @@ class AcpConfigButton extends StatefulWidget {
   final bool isRunning;
   final ValueChanged<bool>? onVisibilityChanged;
   final Future<void> Function(BuildContext anchorContext)? configureModel;
+  final Object? presentationIdentity;
 
   @override
-  State<AcpConfigButton> createState() => _AcpConfigButtonState();
+  State<AcpConfigButton> createState() => AcpConfigButtonState();
 }
 
-class _AcpConfigButtonState extends State<AcpConfigButton> {
+class AcpConfigButtonState extends State<AcpConfigButton> {
   OverlayGlassPopupHandle<void>? _popup;
 
   @override
   void didUpdateWidget(covariant AcpConfigButton oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isRunning != oldWidget.isRunning) unawaited(_popup?.dismiss());
+    if (widget.isRunning != oldWidget.isRunning ||
+        widget.presentationIdentity != oldWidget.presentationIdentity) {
+      final popup = _popup;
+      // didUpdateWidget runs during build; dismissing the overlay immediately
+      // can notify an animation outside the current build subtree.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(popup?.dismiss());
+      });
+    }
   }
 
   @override
@@ -84,14 +93,17 @@ class _AcpConfigButtonState extends State<AcpConfigButton> {
     super.dispose();
   }
 
-  Future<void> _open(BuildContext anchorContext) async {
+  Future<void> open(
+    BuildContext anchorContext, {
+    bool preferBelow = false,
+  }) async {
     if (_popup != null) return;
     final anchor = glassPopupAnchorFromContext(anchorContext);
     if (anchor == null) return;
     final handle = showOverlayGlassPopup<void>(
       context: context,
       anchor: anchor,
-      preferBelow: false,
+      preferBelow: preferBelow,
       transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,
       builder: (_) => AcpConfigPanel(
@@ -129,7 +141,7 @@ class _AcpConfigButtonState extends State<AcpConfigButton> {
         child: InkWell(
           key: const ValueKey('chat-acp-config-button'),
           borderRadius: BorderRadius.circular(8),
-          onTap: () => _open(anchor),
+          onTap: () => open(anchor),
           child: SizedBox(
             width: 28,
             height: 28,

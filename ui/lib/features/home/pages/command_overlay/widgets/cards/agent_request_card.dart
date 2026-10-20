@@ -1051,7 +1051,7 @@ class _RequestFooter extends StatelessWidget {
               disabledBackgroundColor: context.isDarkTheme
                   ? palette.surfaceElevated
                   : const Color(0xFFE2E5E9),
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               disabledForegroundColor: palette.textTertiary,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),

@@ -66,7 +66,7 @@ class _AgentPermissionGlassMenuContentState
             palette.accentPrimary,
             0.18,
           )!
-        : const Color(0xFF2C7FEB).withValues(alpha: 0.12);
+        : palette.accentPrimary.withValues(alpha: 0.08);
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
       child: InkWell(
@@ -104,9 +104,7 @@ class _AgentPermissionGlassMenuContentState
                 Icon(
                   Icons.check_rounded,
                   size: 15,
-                  color: isDark
-                      ? palette.accentPrimary
-                      : const Color(0xFF2C7FEB),
+                  color: isDark ? palette.accentPrimary : palette.accentPrimary,
                 ),
             ],
           ),

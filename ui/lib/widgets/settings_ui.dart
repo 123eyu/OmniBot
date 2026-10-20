@@ -21,26 +21,21 @@ void performOmniSelectionHaptic() {
 
 /// Unified surface decoration used across settings groups and cards.
 ///
-/// Uses `palette.surfacePrimary` (#FFFFFF in light, #1C1E1F in dark) over
-/// `palette.pageBackground` (#F4F7FB in light, #151617 in dark) with a
-/// hairline subtle border and no drop shadow for a clean, restrained look.
+/// Uses a plain rounded surface over the page background. Borders are opt-in;
+/// fine inset dividers provide separation inside a group.
 BoxDecoration omniSettingsSurfaceDecoration(
   BuildContext context, {
   Color? color,
   Color? borderColor,
-  double borderRadius = 16,
+  double borderRadius = 22,
 }) {
   final palette = context.omniPalette;
-  final isDark = context.isDarkTheme;
   return BoxDecoration(
     color: color ?? palette.surfacePrimary,
     borderRadius: BorderRadius.circular(borderRadius),
-    border: Border.all(
-      color:
-          borderColor ??
-          palette.borderSubtle.withValues(alpha: isDark ? 0.65 : 0.85),
-      width: 0.75,
-    ),
+    border: borderColor == null
+        ? null
+        : Border.all(color: borderColor, width: 0.75),
   );
 }
 
@@ -48,18 +43,13 @@ BoxDecoration omniSettingsSurfaceDecoration(
 ShapeBorder omniSettingsSurfaceShape(
   BuildContext context, {
   Color? borderColor,
-  double borderRadius = 16,
+  double borderRadius = 22,
 }) {
-  final palette = context.omniPalette;
-  final isDark = context.isDarkTheme;
   return RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(borderRadius),
-    side: BorderSide(
-      color:
-          borderColor ??
-          palette.borderSubtle.withValues(alpha: isDark ? 0.65 : 0.85),
-      width: 0.75,
-    ),
+    side: borderColor == null
+        ? BorderSide.none
+        : BorderSide(color: borderColor, width: 0.75),
   );
 }
 
@@ -73,7 +63,7 @@ class OmniSettingsCard extends StatelessWidget {
     this.margin,
     this.color,
     this.borderColor,
-    this.borderRadius = 16,
+    this.borderRadius = 22,
     this.clipBehavior = Clip.antiAlias,
   });
 
@@ -118,9 +108,9 @@ class OmniSettingsGroup extends StatelessWidget {
     this.subtitle,
     this.headerTrailing,
     this.footer,
-    this.dividerIndent = 46,
-    this.dividerEndIndent = 16,
-    this.borderRadius = 16,
+    this.dividerIndent = 54,
+    this.dividerEndIndent = 0,
+    this.borderRadius = 22,
     this.translateTitle = true,
   });
 
@@ -177,7 +167,7 @@ class OmniSettingsGroup extends StatelessWidget {
       children: [
         if (title != null || subtitle != null)
           Padding(
-            padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -186,9 +176,8 @@ class OmniSettingsGroup extends StatelessWidget {
                       ? Text(
                           translateTitle ? context.trLegacy(title!) : title!,
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.3,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
                             color: palette.textTertiary,
                             height: 1.35,
                           ),
@@ -201,9 +190,8 @@ class OmniSettingsGroup extends StatelessWidget {
                                     ? context.trLegacy(title!)
                                     : title!,
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.3,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w400,
                                   color: palette.textTertiary,
                                   height: 1.35,
                                 ),
@@ -264,7 +252,7 @@ class OmniSettingsTile extends StatelessWidget {
     this.bottomNote,
     this.translateText = true,
     this.isDestructive = false,
-    this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 13.5),
+    this.padding = const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
   });
 
   final Key? tileKey;
@@ -310,14 +298,11 @@ class OmniSettingsTile extends StatelessWidget {
         : palette.textPrimary;
     final effectiveIconColor =
         iconColor ??
-        (isDestructive
-            ? const Color(0xFFE05252)
-            : palette.textPrimary.withValues(alpha: 0.78));
+        (isDestructive ? const Color(0xFFE05252) : palette.textPrimary);
     final hasLeading = leading != null || icon != null;
     final effectiveShowChevron =
         showChevron ?? (onTap != null && trailing == null);
-    final effectiveOnTap =
-        onTap != null
+    final effectiveOnTap = onTap != null
         ? () {
             if (trailing is OmniSettingsSwitch) {
               performOmniSelectionHaptic();
@@ -346,15 +331,15 @@ class OmniSettingsTile extends StatelessWidget {
                 children: [
                   if (hasLeading) ...[
                     SizedBox(
-                      width: 20,
-                      height: 20,
+                      width: 22,
+                      height: 24,
                       child: Center(
                         child:
                             leading ??
-                            Icon(icon, size: 19, color: effectiveIconColor),
+                            Icon(icon, size: 22, color: effectiveIconColor),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 14),
                   ],
                   Expanded(
                     child: Column(
@@ -364,8 +349,8 @@ class OmniSettingsTile extends StatelessWidget {
                         Text(
                           translateText ? context.trLegacy(title) : title,
                           style: TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w400,
                             color: effectiveTitleColor,
                             height: 1.38,
                           ),
@@ -417,7 +402,7 @@ class OmniSettingsTile extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w400,
                                 color:
                                     trailingTextColor ?? palette.textSecondary,
@@ -429,7 +414,7 @@ class OmniSettingsTile extends StatelessWidget {
                         if (effectiveShowChevron)
                           Icon(
                             LucideIcons.chevronRight,
-                            size: 16,
+                            size: 18,
                             color: palette.textTertiary,
                           ),
                       ],
@@ -439,7 +424,7 @@ class OmniSettingsTile extends StatelessWidget {
               ),
               if (bottomNote != null && bottomNote!.trim().isNotEmpty) ...[
                 Padding(
-                  padding: EdgeInsets.only(top: 6, left: hasLeading ? 32 : 0),
+                  padding: EdgeInsets.only(top: 6, left: hasLeading ? 36 : 0),
                   child: Text(
                     translateText ? context.trLegacy(bottomNote!) : bottomNote!,
                     style: TextStyle(
@@ -583,9 +568,10 @@ class _OmniSettingsSwitchState extends State<OmniSettingsSwitch>
     final palette = context.omniPalette;
     final isDark = context.isDarkTheme;
     final activeTrackColor = palette.accentPrimary;
-    final inactiveTrackColor = isDark
-        ? palette.borderStrong
-        : const Color(0xFFE1E7F0);
+    final inactiveTrackColor = palette.borderStrong;
+    final thumbColor = widget.value
+        ? Theme.of(context).colorScheme.onPrimary
+        : Colors.white;
     final trackColor = widget.value ? activeTrackColor : inactiveTrackColor;
     final thumbLeft =
         _kInset + (widget.value ? _kMaxTravel : 0.0) + _dragOffset;
@@ -633,7 +619,7 @@ class _OmniSettingsSwitchState extends State<OmniSettingsSwitch>
                       padding: _kInset,
                       activeColor: activeTrackColor,
                       inactiveColor: inactiveTrackColor,
-                      toggleColor: Colors.white,
+                      toggleColor: thumbColor,
                       borderRadius: 999,
                       duration: widget.duration,
                       value: widget.value,
@@ -667,7 +653,7 @@ class _OmniSettingsSwitchState extends State<OmniSettingsSwitch>
                     scale: thumbScale,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: thumbColor,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
@@ -826,9 +812,8 @@ class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
     final selected = await showGeneralDialog<T>(
       context: anchorContext,
       barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(
-        anchorContext,
-      ).modalBarrierDismissLabel,
+      barrierLabel: MaterialLocalizations.of(anchorContext)
+          .modalBarrierDismissLabel,
       barrierColor: Colors.transparent,
       transitionDuration: const Duration(milliseconds: 170),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
@@ -845,8 +830,7 @@ class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
                 selectedValue: widget.value,
                 minWidth: widget.menuMinWidth,
                 maxWidth: widget.menuMaxWidth,
-                onSelected: (picked) =>
-                    Navigator.of(dialogContext).pop(picked),
+                onSelected: (picked) => Navigator.of(dialogContext).pop(picked),
               ),
             ),
           ],

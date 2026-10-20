@@ -44,6 +44,7 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     });
 
     _runtimeCoordinator.ensureInitialized();
+    _lastAgentEventProjection = _runtimeCoordinator.latestAgentEventProjection;
     _runtimeCoordinator.addListener(_handleRuntimeCoordinatorChanged);
     HomeGreetingSettingsService.notifier.addListener(
       _handleHomeGreetingSettingsChanged,
@@ -94,9 +95,6 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     _browserSessionSnapshotChangedSubscription = AssistsMessageService
         .browserSessionSnapshotChangedStream
         .listen(_handleBrowserSessionSnapshotChanged);
-    _agentEventSubscription = AgentRuntimeService.events.listen(
-      _handleAgentRuntimeEvent,
-    );
     _omniLinkEventSubscription = OmniLinkPluginService.events.listen(
       _handleOmniLinkEvent,
     );
@@ -117,7 +115,6 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       final isHdPadLandscape = _isHdPadLandscapeForMediaQuery(mediaQuery);
       if (_wasHdPadLandscape == true && !isHdPadLandscape) {
         _embeddedDrawerKey.currentState?.unfocusSearch();
-        _drawerKey.currentState?.unfocusSearch();
       }
       _wasHdPadLandscape = isHdPadLandscape;
       if (isHdPadLandscape && _activeSurfaceMode == ChatSurfaceMode.workspace) {
@@ -749,7 +746,6 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     _openClawTokenController.dispose();
     _openClawUserIdController.dispose();
     this._stopRemoteCodexSessionSync();
-    _agentEventSubscription?.cancel();
     _omniLinkEventSubscription?.cancel();
     super.dispose();
   }

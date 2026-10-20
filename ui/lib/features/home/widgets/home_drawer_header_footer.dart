@@ -173,11 +173,7 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
                           ),
                         ),
                       ),
-                      for (
-                        var i = 0;
-                        i < _webQuickActions.length;
-                        i++
-                      ) ...[
+                      for (var i = 0; i < _webQuickActions.length; i++) ...[
                         if (i > 0) const SizedBox(height: 2),
                         _buildWebPopoverOptionTile(
                           dialogContext,
@@ -351,42 +347,43 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
     );
   }
 
+  List<_DrawerShortcutAction> get _shortcutActions => <_DrawerShortcutAction>[
+    _DrawerShortcutAction(
+      label: context.l10n.settingsTitle,
+      assetPath: 'assets/home/setting_icon.svg',
+      onTap: () => _navigateTo('/home/settings'),
+    ),
+    _DrawerShortcutAction(
+      label: context.l10n.memoryCenterTitle,
+      svgString: _kDrawerMemoryIconSvg,
+      onTap: () => _navigateTo('/memory/memory_center_page'),
+    ),
+    _DrawerShortcutAction(
+      label: context.l10n.pluginMarketTitle,
+      svgString: _kDrawerPluginMarketIconSvg,
+      onTap: () => _navigateTo('/home/plugin_market'),
+    ),
+    _DrawerShortcutAction(
+      label: context.l10n.skillStoreTitle,
+      svgString: _kDrawerSkillStoreIconSvg,
+      onTap: () => _navigateTo('/home/skill_store'),
+    ),
+    _DrawerShortcutAction(
+      label: context.trLegacy('轨迹'),
+      svgString: _kDrawerUsageStatisticsIconSvg,
+      onTap: () => _navigateTo('/task/execution_history'),
+    ),
+    _DrawerShortcutAction(
+      label: context.l10n.homeDrawerScheduled,
+      assetPath: 'assets/common/schedule_icon.svg',
+      onTap: () => _navigateTo('/task/scheduled_tasks'),
+    ),
+  ];
+
   Widget _buildFooterShortcutBar() {
     final palette = context.omniPalette;
     final isDark = context.isDarkTheme;
-    final items = <_DrawerShortcutAction>[
-      _DrawerShortcutAction(
-        label: context.l10n.settingsTitle,
-        assetPath: 'assets/home/setting_icon.svg',
-        onTap: () => _navigateTo('/home/settings'),
-      ),
-      _DrawerShortcutAction(
-        label: context.l10n.memoryCenterTitle,
-        svgString: _kDrawerMemoryIconSvg,
-        onTap: () => _navigateTo('/memory/memory_center_page'),
-      ),
-      _DrawerShortcutAction(
-        label: context.l10n.pluginMarketTitle,
-        svgString: _kDrawerPluginMarketIconSvg,
-        onTap: () => _navigateTo('/home/plugin_market'),
-      ),
-      _DrawerShortcutAction(
-        label: context.l10n.skillStoreTitle,
-        svgString: _kDrawerSkillStoreIconSvg,
-        onTap: () => _navigateTo('/home/skill_store'),
-      ),
-      _DrawerShortcutAction(
-        label: context.trLegacy('轨迹'),
-        svgString: _kDrawerUsageStatisticsIconSvg,
-        onTap: () => _navigateTo('/task/execution_history'),
-      ),
-      _DrawerShortcutAction(
-        label: context.l10n.homeDrawerScheduled,
-        assetPath: 'assets/common/schedule_icon.svg',
-        onTap: () => _navigateTo('/task/scheduled_tasks'),
-      ),
-    ];
-
+    final items = _shortcutActions;
     const barHeight = 44.0;
     final surfaceColor = isDark ? palette.surfacePrimary : Colors.white;
     final borderColor = palette.borderSubtle.withValues(
@@ -471,10 +468,7 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
                           decoration: BoxDecoration(
                             color: dotColor,
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: surfaceColor,
-                              width: 1.3,
-                            ),
+                            border: Border.all(color: surfaceColor, width: 1.3),
                           ),
                         ),
                       ),
@@ -492,24 +486,6 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
     _DrawerShortcutAction item, {
     required double height,
   }) {
-    final palette = context.omniPalette;
-    final iconColor = context.isDarkTheme
-        ? palette.textPrimary
-        : AppColors.text;
-    final icon = item.assetPath != null
-        ? SvgPicture.asset(
-            item.assetPath!,
-            width: 17,
-            height: 17,
-            colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
-          )
-        : SvgPicture.string(
-            item.svgString!,
-            width: 17,
-            height: 17,
-            colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
-          );
-
     return Tooltip(
       message: item.label,
       child: InkWell(
@@ -520,9 +496,27 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
         borderRadius: BorderRadius.circular(10),
         child: SizedBox(
           height: height,
-          child: Center(child: icon),
+          child: Center(child: _shortcutIcon(item)),
         ),
       ),
     );
+  }
+
+  Widget _shortcutIcon(_DrawerShortcutAction item, {double size = 17}) {
+    final color = context.omniPalette.textPrimary;
+    if (item.icon != null) return Icon(item.icon, size: size, color: color);
+    return item.assetPath != null
+        ? SvgPicture.asset(
+            item.assetPath!,
+            width: size,
+            height: size,
+            colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+          )
+        : SvgPicture.string(
+            item.svgString!,
+            width: size,
+            height: size,
+            colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+          );
   }
 }

@@ -16,8 +16,6 @@ class ChatPageModeState {
       ChatMessageListNavigator();
   final List<ChatInputAttachment> pendingAttachments = <ChatInputAttachment>[];
   final List<ChatMessageModel> messages = <ChatMessageModel>[];
-  final Set<String> expandedAgentRunTaskIds = <String>{};
-  final List<String> expandedAgentRunTaskOrder = <String>[];
   final Map<String, String> currentAiMessages = <String, String>{};
 
   String draftMessage = '';
