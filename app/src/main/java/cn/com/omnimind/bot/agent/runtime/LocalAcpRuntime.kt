@@ -480,8 +480,8 @@ internal class LocalAcpRuntime(
     private val scope: CoroutineScope,
     private val bindingRepository: AgentSessionBindingRepository,
     private val profileStore: AcpAgentProfileStore,
-    private val prepareLaunchEnvironment: suspend (AcpAgentProfile) -> Map<String, String>,
-    private val resolveSessionMcpEnabled: suspend (AcpAgentProfile) -> Boolean = { true },
+    private val prepareLaunchEnvironment: suspend (AcpAgentProfile, AcpLaunchPreparation) -> PreparedAcpLaunch,
+    private val resolveSessionMcpEnabled: suspend (AcpAgentProfile, AgentProviderAccess?) -> Boolean = { _, _ -> true },
     private val prepareSharedProviderBinding: suspend () -> Unit = {},
     private val buildHandoffContext: suspend (Long, String?) -> String?,
     private val scheduleToolBridge: AgentScheduleToolBridge,
@@ -587,6 +587,9 @@ internal class LocalAcpRuntime(
     private var activeLaunchEnvironment: Map<String, String> = emptyMap()
 
     @Volatile
+    private var activePreparedLaunch: PreparedAcpLaunch? = null
+
+    @Volatile
     private var catalogSessionId: String? = null
 
     val isConnected: Boolean
@@ -620,6 +623,18 @@ internal class LocalAcpRuntime(
 
     fun agentVersion(): String? = agentInfo?.implementation?.version
 
+    internal fun activeProviderAccess(): AgentProviderAccess? =
+        activePreparedLaunch?.takeUnless { it.isClosed }?.providerAccess
+
+    /**
+     * Keep external configuration writes on one launch snapshot while disconnect/reconnect waits.
+     * Offline configuration is allowed; the caller decides whether an active access is required.
+     * PROCESS preparation already holds this lock and must not call this method recursively.
+     */
+    internal suspend fun <T> withLaunchConfiguration(
+        block: suspend (AgentProviderAccess?) -> T,
+    ): T = connectMutex.withLock { block(activeProviderAccess()) }
+
     suspend fun connect(
         profile: AcpAgentProfile = profileStore.selected()
     ) {
@@ -628,54 +643,74 @@ internal class LocalAcpRuntime(
         val connectStartedAt = System.nanoTime()
         try {
             connectMutex.withLock {
-        Log.i(TAG, "Connecting ACP agent id=${profile.id} command=${profile.command}")
-        require(profile.enabled) { "ACP agent ${profile.name} is disabled." }
-        if (isConnected && activeProfile?.id == profile.id) {
-            return@withLock
-        }
-        disconnectLocked()
-        workspaceManager.ensureRuntimeDirectories()
-        val baseEnvironment = try {
-            if (profile.id == AcpAgentProfileStore.XIAOWAN_AGENT_ID) {
-                sessionMcpEnabled = true
-                emptyMap()
-            } else {
-                prepareLaunchEnvironment(profile).also {
-                    val officialRuntime = AcpAgentProfileStore.officialRuntime(profile)
-                    val health = profileStore.health(profile.id)
-                    if (shouldProbeManagedAcpLaunchCommand(
-                            managedAdapter = officialRuntime?.managedAdapterPackage != null,
-                            healthStatus = health.status,
-                            installed = health.installed,
-                            preparationRevision = health.preparationRevision,
-                            requiredRevision = officialRuntime?.preparationRevision,
-                        )
-                    ) {
-                        requireLaunchCommand(profile)
-                    } else {
-                        Log.i(
-                            TAG,
-                            "Reusing persisted ACP launch readiness for ${profile.id}",
-                        )
+                Log.i(TAG, "Connecting ACP agent id=${profile.id} command=${profile.command}")
+                require(profile.enabled) { "ACP agent ${profile.name} is disabled." }
+                if (isConnected && activeProfile?.id == profile.id) return@withLock
+                disconnectLocked()
+                workspaceManager.ensureRuntimeDirectories()
+                val prepared = prepareAcpLaunch(profile)
+                try {
+                    initializePreparedConnection(profile, prepared, connectStartedAt)
+                    activePreparedLaunch = prepared
+                } finally {
+                    if (activePreparedLaunch !== prepared) {
+                        activeLaunchEnvironment = emptyMap()
+                        closePreparedLaunch(prepared)
                     }
-                    sessionMcpEnabled = resolveSessionMcpEnabled(profile)
                 }
             }
+        } finally {
+            callerJob?.let(pendingConnectJobs::remove)
+        }
+    }
+
+    private suspend fun prepareAcpLaunch(profile: AcpAgentProfile): PreparedAcpLaunch {
+        var prepared: PreparedAcpLaunch? = null
+        try {
+            if (profile.id == AcpAgentProfileStore.XIAOWAN_AGENT_ID) {
+                sessionMcpEnabled = true
+                return PreparedAcpLaunch(emptyMap())
+            }
+            prepared = prepareLaunchEnvironment(profile, AcpLaunchPreparation.PROCESS)
+            val officialRuntime = AcpAgentProfileStore.officialRuntime(profile)
+            val health = profileStore.health(profile.id)
+            if (shouldProbeManagedAcpLaunchCommand(
+                    managedAdapter = officialRuntime?.managedAdapterPackage != null,
+                    healthStatus = health.status,
+                    installed = health.installed,
+                    preparationRevision = health.preparationRevision,
+                    requiredRevision = officialRuntime?.preparationRevision,
+                )
+            ) {
+                requireLaunchCommand(profile)
+            } else {
+                Log.i(TAG, "Reusing persisted ACP launch readiness for ${profile.id}")
+            }
+            sessionMcpEnabled = resolveSessionMcpEnabled(profile, prepared.providerAccess ?: activeProviderAccess())
+            return prepared
         } catch (error: Throwable) {
+            closePreparedLaunch(prepared)
             if (error is CancellationException) throw error
             Log.e(TAG, "ACP launch preparation failed for ${profile.id}: ${error.message}", error)
             val wrapped = wrapInitializationError(profile, error)
             profileStore.saveHealth(profile.id, failedAgentHealth(wrapped))
             throw wrapped
         }
+    }
+
+    private suspend fun initializePreparedConnection(
+        profile: AcpAgentProfile,
+        prepared: PreparedAcpLaunch,
+        connectStartedAt: Long,
+    ) {
         Log.i(
             TAG,
             "ACP timing agent=${profile.id} stage=launch_prepared " +
                 "elapsedMs=${elapsedMillis(connectStartedAt)}"
         )
         val nextConnection: AcpRuntimeConnection = if (
-        profile.id == AcpAgentProfileStore.XIAOWAN_AGENT_ID
-    ) {
+            profile.id == AcpAgentProfileStore.XIAOWAN_AGENT_ID
+        ) {
             XiaowanAcpConnection(
                 context = appContext,
                 scope = scope,
@@ -700,7 +735,7 @@ internal class LocalAcpRuntime(
         } else {
             val launchEnvironment = mergeAcpLaunchEnvironment(
                 profile = profile,
-                providerEnvironment = baseEnvironment,
+                providerEnvironment = prepared.environment,
             )
             activeLaunchEnvironment = launchEnvironment
             AcpProcessConnection(
@@ -727,22 +762,19 @@ internal class LocalAcpRuntime(
                 }
             )
         }
-        val transport = nextConnection.createTransport(scope)
-        val nextProtocol = Protocol(scope, transport)
-        // ACP has two elicitation scopes. Session-scoped requests are routed
-        // through ClientSessionOperations; request-scoped requests do not
-        // belong to a session and therefore use the Client-level handler.
-        // Supplying both keeps an Agent from failing merely because it asks
-        // for confirmation before a session has been associated with it.
-        val nextClient = Client(
-            nextProtocol,
-            object : GlobalElicitationHandler {
-                override suspend fun createElicitation(
-                    request: CreateElicitationRequest
-                ): CreateElicitationResponse = awaitElicitation(request, null)
-            }
-        )
+        var protocolToClose: Protocol? = null
         try {
+            val transport = nextConnection.createTransport(scope)
+            val nextProtocol = Protocol(scope, transport).also { protocolToClose = it }
+            // Session and request-scoped elicitation keep their official SDK owners.
+            val nextClient = Client(
+                nextProtocol,
+                object : GlobalElicitationHandler {
+                    override suspend fun createElicitation(
+                        request: CreateElicitationRequest
+                    ): CreateElicitationResponse = awaitElicitation(request, null)
+                }
+            )
             Log.i(TAG, "Starting ACP process for ${profile.id}")
             nextConnection.start()
             Log.i(
@@ -813,6 +845,8 @@ internal class LocalAcpRuntime(
             processExitWatcher = scope.launch {
                 val exitCode = nextConnection.exitSignal.await()
                 if (connection !== nextConnection) return@launch
+                // Close this exact launch, never a newer connection's capability.
+                closePreparedLaunch(prepared)
                 val diagnostic = nextConnection.diagnosticSummary()
                 val message = buildString {
                     append("ACP process exited after initialize")
@@ -842,13 +876,14 @@ internal class LocalAcpRuntime(
                 }
             }
         } catch (error: Throwable) {
+            closePreparedLaunch(prepared)
             val diagnostics = nextConnection.diagnosticSummary()
             // Until initialize succeeds these resources belong to this
             // attempt, not disconnectLocked(). Cancellation must release
             // them as well, in a context where pipe cleanup can suspend.
             withContext(kotlinx.coroutines.NonCancellable) {
                 try {
-                    nextProtocol.close()
+                    protocolToClose?.close()
                 } finally {
                     nextConnection.close()
                 }
@@ -887,9 +922,15 @@ internal class LocalAcpRuntime(
             )
             throw wrapped
         }
-            }
-        } finally {
-            callerJob?.let(pendingConnectJobs::remove)
+    }
+
+    private fun closePreparedLaunch(prepared: PreparedAcpLaunch?) {
+        try {
+            prepared?.close()
+        } catch (error: Exception) {
+            // Resource implementations revoke synchronously; never expose their credentials
+            // or let cleanup replace the original ACP initialization/cancellation result.
+            Log.w(TAG, "Provider launch cleanup failed type=${error.javaClass.simpleName}")
         }
     }
 
@@ -977,6 +1018,9 @@ internal class LocalAcpRuntime(
 
     private suspend fun disconnectLocked() {
         Log.i(TAG, "Disconnecting ACP runtime profile=${activeProfile?.id ?: "none"}")
+        val prepared = activePreparedLaunch
+        activePreparedLaunch = null
+        closePreparedLaunch(prepared)
         processExitWatcher?.cancel()
         processExitWatcher = null
         // Session MCP capability belongs to one Harness launch. A custom
@@ -1644,8 +1688,8 @@ internal class LocalAcpRuntime(
             )
         }
 
-        val wasSelected = profileStore.selected()
-        val wasConnected = isConnected
+        // Manager routes this request to the target Agent's own runtime. A test
+        // must not tear it down or restore the globally selected Agent here.
         return runCatching {
             connect(profile = profile)
             linkedMapOf(
@@ -1667,14 +1711,6 @@ internal class LocalAcpRuntime(
                 "status" to health.status,
                 "error" to (error.message ?: error.javaClass.simpleName)
             )
-        }.also {
-            if (profile.id != wasSelected.id) {
-                disconnect()
-                profileStore.select(wasSelected.id)
-                if (wasConnected) {
-                    connect(profile = wasSelected)
-                }
-            }
         }
     }
 
@@ -1709,8 +1745,12 @@ internal class LocalAcpRuntime(
             // command in place; the normal agent/select path performs the ACP
             // handshake when the user actually switches to that Harness.
             return runCatching {
-                prepareLaunchEnvironment(profile)
-                requireLaunchCommand(profile)
+                val prepared = prepareLaunchEnvironment(profile, AcpLaunchPreparation.PROBE)
+                try {
+                    requireLaunchCommand(profile)
+                } finally {
+                    closePreparedLaunch(prepared)
+                }
                 val health = managedAgentPreparationHealth(
                     preparationRevision = AcpAgentProfileStore
                         .officialRuntime(profile)
@@ -1761,14 +1801,6 @@ internal class LocalAcpRuntime(
                 "status" to health.status,
                 "error" to (error.message ?: error.javaClass.simpleName)
             )
-        }.also {
-            if (profile.id != wasSelected.id) {
-                disconnect()
-                profileStore.select(wasSelected.id)
-                if (wasConnected) {
-                    connect(profile = wasSelected)
-                }
-            }
         }
     }
 

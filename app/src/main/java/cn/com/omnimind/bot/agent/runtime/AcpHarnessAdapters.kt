@@ -24,6 +24,9 @@ internal interface AcpHarnessAdapter {
     /** Declarative key for the optional Harness config converter. */
     val configAdapterId: String?
         get() = null
+    /** Official config accepts a local HTTP Responses endpoint and bearer grant. */
+    val supportsHostManagedResponses: Boolean
+        get() = false
     val launchConfigPath: String?
         get() = null
     val launchConfigExecutorKey: String?
@@ -80,6 +83,7 @@ internal object AcpHarnessAdapters {
     // Harness adapter, not to a vendor branch in the shared runtime.
     val codex: AcpHarnessAdapter = object : AcpHarnessAdapter {
         override val configAdapterId = "codex"
+        override val supportsHostManagedResponses = true
 
         // codex-acp 1.10.0's unstable plan extension calls the identity
         // planId; acp-kotlin 0.30.1 requires id. Normalize only this wire
@@ -135,10 +139,12 @@ internal object AcpHarnessAdapters {
 
     val kimiCode: AcpHarnessAdapter = object : AcpHarnessAdapter {
         override val configAdapterId = "kimi-code"
+        override val supportsHostManagedResponses = true
     }
 
     val openCode: AcpHarnessAdapter = object : AcpHarnessAdapter {
         override val configAdapterId = "open-code"
+        override val supportsHostManagedResponses = true
         override fun resolveModelValue(model: String, available: List<String>): String? =
             super.resolveModelValue(model, available)
                 ?: "omnibot/$model".takeIf { it in available }
@@ -157,6 +163,7 @@ internal object AcpHarnessAdapters {
         // official session/new request, where DSH owns discovery and tool
         // namespacing.
         override val configAdapterId = "deepseek-harness"
+        override val supportsHostManagedResponses = true
         override val launchConfigPath = DEEPSEEK_HARNESS_CONFIG_PATH
         override val launchConfigExecutorKey = "harness-launch-config-read"
 
@@ -375,16 +382,8 @@ internal fun deepSeekHarnessConfigFromArgs(
     sharedProvider: AgentProviderCredentials? = null,
     sharedModel: String? = null
 ): DeepSeekHarnessConfig {
-    val baseUrl = sharedProvider?.baseUrl.orEmpty()
-    val model = sharedModel.orEmpty()
-    val apiKey = sharedProvider?.apiKey.orEmpty()
     val reasoningEffort = args.agentConfigStringValue("reasoningEffort")
         ?: current.reasoningEffort
-    require(baseUrl.isNotBlank()) { "DeepSeek Base URL is required." }
-    require(model.isNotBlank()) {
-        "DeepSeek model ID is required. Select a model from the active Provider first."
-    }
-    require(apiKey.isNotBlank()) { "DeepSeek API key is required." }
     require(reasoningEffort.isEmpty() || reasoningEffort in DEEPSEEK_HARNESS_REASONING_EFFORTS) {
         "DeepSeek Harness reasoning effort is invalid."
     }
@@ -393,12 +392,22 @@ internal fun deepSeekHarnessConfigFromArgs(
     require(permissionMode.isEmpty() || permissionMode in DEEPSEEK_HARNESS_PERMISSION_MODES) {
         "DeepSeek Harness permission mode is invalid."
     }
-    return DeepSeekHarnessConfig(
-        baseUrl = baseUrl,
-        model = model,
-        apiKey = apiKey,
+    val updatedPreferences = current.copy(
         reasoningEffort = reasoningEffort,
-        permissionMode = permissionMode
+        permissionMode = permissionMode,
+    )
+    // Provider credentials are a launch concern. In particular, never save a
+    // process-scoped relay grant while editing reasoning or permission mode.
+    if (sharedProvider == null || sharedProvider.isHostManaged) return updatedPreferences
+    require(sharedProvider.baseUrl.isNotBlank()) { "DeepSeek Base URL is required." }
+    require(!sharedModel.isNullOrBlank()) {
+        "DeepSeek model ID is required. Select a model from the active Provider first."
+    }
+    require(sharedProvider.apiKey.isNotBlank()) { "DeepSeek API key is required." }
+    return updatedPreferences.copy(
+        baseUrl = sharedProvider.baseUrl,
+        model = sharedModel,
+        apiKey = sharedProvider.apiKey,
     )
 }
 

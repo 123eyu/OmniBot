@@ -40,7 +40,7 @@ class LocalAcpRuntimeInitializationTest {
         val forwarded = CompletableDeferred<Unit>()
         val runtime = LocalAcpRuntime(
             context, scope, mock(AgentSessionBindingRepository::class.java), store,
-            prepareLaunchEnvironment = { emptyMap() },
+            prepareLaunchEnvironment = { _, _ -> PreparedAcpLaunch(emptyMap()) },
             buildHandoffContext = { _, _ -> null },
             scheduleToolBridge = mock(AgentScheduleToolBridge::class.java),
             onMessage = { delivered += it; forwarded.complete(Unit) },
@@ -121,7 +121,7 @@ class LocalAcpRuntimeInitializationTest {
         }.use {
             val runtime = LocalAcpRuntime(
                 context, scope, mock(AgentSessionBindingRepository::class.java), store,
-                prepareLaunchEnvironment = { emptyMap() },
+                prepareLaunchEnvironment = { _, _ -> PreparedAcpLaunch(emptyMap()) },
                 buildHandoffContext = { _, _ -> null },
                 scheduleToolBridge = mock(AgentScheduleToolBridge::class.java),
                 onMessage = { error("An initialize cancellation must not synthesize turn events") },

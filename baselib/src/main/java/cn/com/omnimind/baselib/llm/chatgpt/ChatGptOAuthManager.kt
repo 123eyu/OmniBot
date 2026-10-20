@@ -85,6 +85,13 @@ object ChatGptOAuthManager {
 
     suspend fun accessToken(profileId: String): String = requireCoordinator().accessToken(profileId)
 
+    /** A native process may reuse refreshes, but never a later login to this Provider. */
+    fun credentialBinding(profileId: String): ChatGptOAuthCredentialBinding =
+        requireCoordinator().credentialBinding(profileId)
+
+    suspend fun accessToken(binding: ChatGptOAuthCredentialBinding): String =
+        requireCoordinator().accessToken(binding.profileId, binding)
+
     suspend fun logout(profileId: String): Map<String, Any?> {
         closeListenersForProfile(profileId)
         return requireCoordinator().logout(profileId)

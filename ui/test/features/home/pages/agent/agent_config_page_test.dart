@@ -323,6 +323,72 @@ void main() {
     expect(savedBinding?['modelId'], 'deepseek-v4-pro');
   });
 
+  testWidgets(
+    'shared Agent model selection accepts ready OAuth without an API key',
+    (tester) async {
+      Map<String, dynamic>? savedBinding;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(agentRuntimeChannel, (call) async {
+        if (call.method == 'agent/list') {
+          return _catalog(_agent('codex-acp', 'Codex'));
+        }
+        if (call.method == 'agent/config/read') return {'kind': 'codex'};
+        return null;
+      });
+      messenger.setMockMethodCallHandler(assistCoreChannel, (call) async {
+        switch (call.method) {
+          case 'listModelProviderProfiles':
+            return {
+              'editingProfileId': 'chatgpt-1',
+              'profiles': [
+                {
+                  'id': 'chatgpt-1',
+                  'name': 'My ChatGPT',
+                  'baseUrl': 'https://api.openai.com/v1',
+                  'sourceType': 'chatgpt_oauth',
+                  'wireApi': 'responses',
+                  'configured': true,
+                  'ready': true,
+                  'apiKey': '',
+                  'hasApiKey': false,
+                  'revision': 12,
+                },
+              ],
+            };
+          case 'getSceneModelBindings':
+            return <dynamic>[];
+          case 'fetchProviderModels':
+            expect((call.arguments as Map)['profileId'], 'chatgpt-1');
+            return [
+              {'id': 'gpt-test', 'displayName': 'gpt-test'},
+            ];
+          case 'saveSceneModelBinding':
+            savedBinding = Map<String, dynamic>.from(call.arguments as Map);
+            return [
+              {
+                'sceneId': 'scene.dispatch.model',
+                'providerProfileId': 'chatgpt-1',
+                'modelId': 'gpt-test',
+              },
+            ];
+        }
+        return null;
+      });
+      await _pumpPage(tester, 'codex-acp');
+      await tester.tap(
+        find.byKey(const Key('agent-shared-provider-model-selector')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('gpt-test'));
+      await tester.pumpAndSettle();
+      expect(savedBinding?['sceneId'], 'scene.dispatch.model');
+      expect(savedBinding?['providerProfileId'], 'chatgpt-1');
+      expect(savedBinding?['modelId'], 'gpt-test');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Codex config page uses the shared Provider selector', (
     tester,
   ) async {

@@ -50,18 +50,19 @@ internal object CodexConfigAdapter : AgentConfigAdapter {
             CODEX_CONFIG_TOML_PATH,
             "codex-agent-config-read",
         )
-        val authJson = access.read(
+        val provider = input.provider
+        val authJson = if (input.usesHostManagedProvider) "" else access.read(
             CODEX_AUTH_JSON_PATH,
             "codex-agent-auth-read",
         )
-        val provider = input.provider
         return linkedMapOf(
             "agentId" to input.agentId,
             "kind" to "codex",
             "configPath" to CODEX_CONFIG_TOML_DISPLAY_PATH,
             "authPath" to CODEX_AUTH_JSON_DISPLAY_PATH,
-            "baseUrl" to (provider?.baseUrl
-                ?: extractTomlString(configToml, "base_url").orEmpty()),
+            "baseUrl" to (if (input.usesHostManagedProvider) {
+                input.providerProfile?.baseUrl.orEmpty()
+            } else provider?.baseUrl ?: extractTomlString(configToml, "base_url").orEmpty()),
             "model" to input.model.orEmpty(),
             "apiKey" to extractOpenAiApiKey(authJson).orEmpty(),
         )
@@ -72,6 +73,23 @@ internal object CodexConfigAdapter : AgentConfigAdapter {
         args: Map<String, Any?>,
         providerModels: List<ProviderModelOption>,
     ): List<AgentConfigWrite> {
+        if (input.usesHostManagedProvider) {
+            val model = resolveAcpLaunchModelForDispatch(providerModels.map { it.id }, input.model)
+                ?: throw IllegalArgumentException("Select a Provider model first.")
+            val catalog = (providerModels + ProviderModelOption(id = model)).distinctBy { it.id }
+            if (input.provider != null) {
+                // The manager supplies this process's existing grant when online.
+                val configured = input.copy(model = model)
+                return launchConfigWrites(configured, map(configured), catalog, "")
+            }
+            // Saving offline settings must not manufacture a usable route or
+            // fetch credentials. The next launch writes its actual relay URL.
+            return listOf(AgentConfigWrite(
+                path = CODEX_MODEL_CATALOG_JSON_PATH,
+                content = buildCodexModelCatalogJson(catalog),
+                executorKey = "codex-agent-config-write",
+            ))
+        }
         val baseUrl = args.agentConfigStringValue("baseUrl")
             ?: throw IllegalArgumentException("Base URL is required.")
         val model = args.agentConfigStringValue("model")
@@ -103,6 +121,7 @@ internal object CodexConfigAdapter : AgentConfigAdapter {
                     wireApi = mapping.codexWireApi ?: OpenAiWireApi.RESPONSES,
                     modelCatalogPath = CODEX_MODEL_CATALOG_JSON_PATH,
                     envHttpHeaders = mapping.codexEnvHttpHeaders,
+                    authentication = provider.authentication,
                 ),
                 executorKey = "codex-agent-config-write",
             ),
@@ -159,8 +178,8 @@ internal object CodexConfigAdapter : AgentConfigAdapter {
     ): List<AgentConfigWrite> {
         val provider = input.provider ?: return emptyList()
         val model = mapping.codexModel ?: return emptyList()
-        return listOf(
-            AgentConfigWrite(
+        return buildList {
+            add(AgentConfigWrite(
                 path = CODEX_CONFIG_TOML_PATH,
                 content = buildCodexConfigToml(
                     baseUrl = mapping.codexBaseUrl ?: provider.baseUrl,
@@ -168,23 +187,26 @@ internal object CodexConfigAdapter : AgentConfigAdapter {
                     wireApi = mapping.codexWireApi ?: OpenAiWireApi.RESPONSES,
                     modelCatalogPath = CODEX_MODEL_CATALOG_JSON_PATH,
                     envHttpHeaders = mapping.codexEnvHttpHeaders,
+                    authentication = provider.authentication,
                 ),
                 executorKey = "codex-agent-config-write",
-            ),
-            AgentConfigWrite(
+            ))
+            // env_key bypasses any earlier auth.json without deleting a user's
+            // existing login. A process grant must never be persisted there.
+            if (!provider.isHostManaged) add(AgentConfigWrite(
                 path = CODEX_AUTH_JSON_PATH,
                 content = buildCodexAuthJson(provider.apiKey),
                 executorKey = "codex-agent-config-write",
-            ),
-            AgentConfigWrite(
+            ))
+            add(AgentConfigWrite(
                 path = CODEX_MODEL_CATALOG_JSON_PATH,
                 content = buildCodexModelCatalogJson(
                     providerModels = providerModels,
                     provider = provider,
                 ),
                 executorKey = "codex-agent-config-write",
-            ),
-        )
+            ))
+        }
     }
 }
 
@@ -296,7 +318,10 @@ internal object KimiCodeConfigAdapter : AgentConfigAdapter {
     }
 
     override fun map(input: AgentProviderMappingInput): AgentProviderMapping =
-        AgentProviderMapping(environment = kimiCodeBaseEnvironment())
+        AgentProviderMapping(environment = kimiCodeBaseEnvironment() +
+            if (input.provider?.isHostManaged == true) {
+                mapOf("OPENAI_API_KEY" to input.provider.apiKey)
+            } else emptyMap())
 
 }
 
@@ -349,7 +374,9 @@ internal object OpenCodeConfigAdapter : AgentConfigAdapter {
                     providerModels = providerModels,
                     protocolType = provider.protocolType,
                     wireApi = provider.wireApi,
-                ),
+                ).let { config ->
+                    if (provider.isHostManaged) configureHostManagedOpenCode(config) else config
+                },
                 executorKey = "opencode-agent-config-write",
             )
         )
@@ -385,4 +412,75 @@ private fun requireJsonObjectLike(content: String, name: String) {
     require(trimmed.startsWith("{") && trimmed.endsWith("}")) {
         "$name must contain a JSON object."
     }
+}
+
+internal fun buildCodexConfigToml(
+    baseUrl: String,
+    model: String,
+    wireApi: String = OpenAiWireApi.RESPONSES,
+    modelCatalogPath: String? = null,
+    envHttpHeaders: Map<String, String> = emptyMap(),
+    authentication: AgentProviderAuthentication = AgentProviderAuthentication.API_KEY,
+): String {
+    val hostManaged = authentication == AgentProviderAuthentication.HOST_MANAGED
+    require(!hostManaged || OpenAiWireApi.isResponses(wireApi)) {
+        "Host-managed Codex Provider requires Responses."
+    }
+    val codexWireApi = if (OpenAiWireApi.isResponses(wireApi)) {
+        OpenAiWireApi.RESPONSES
+    } else {
+        "chat"
+    }
+    val lines = mutableListOf(
+        "model_provider = \"omnimind\"",
+        "model = ${tomlString(model.trim())}",
+        "disable_response_storage = true",
+        modelCatalogPath?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { "model_catalog_json = ${tomlString(it)}" }
+            .orEmpty(),
+        "",
+        "[model_providers.omnimind]",
+        "name = \"omnimind\"",
+        "base_url = ${tomlString(baseUrl.trim())}",
+        "wire_api = \"$codexWireApi\"",
+        "requires_openai_auth = ${!hostManaged}",
+    )
+    if (hostManaged) {
+        lines += "env_key = \"OPENAI_API_KEY\""
+        lines += "supports_websockets = false"
+    }
+    lines += envHttpHeaders.takeIf { it.isNotEmpty() }?.let { headers ->
+            "env_http_headers = { " + headers.entries.joinToString(", ") {
+                "${tomlString(it.key)} = ${tomlString(it.value)}"
+            } + " }"
+        }.orEmpty()
+    return lines.joinToString(separator = "\n", postfix = "\n")
+}
+
+/** Keep the managed route stateless while retaining unrelated user settings. */
+private fun configureHostManagedOpenCode(config: String): String {
+    val root = JsonParser.parseString(config).asJsonObject
+    val provider = root.getAsJsonObject("provider").getAsJsonObject(OPEN_CODE_PROVIDER_ID)
+    fun statelessOptionsValues(options: com.google.gson.JsonObject) {
+        options.addProperty("store", false)
+        options.remove("previousResponseId")
+        options.remove("previous_response_id")
+    }
+    fun statelessOptions(parent: com.google.gson.JsonObject) {
+        val options = parent.getAsJsonObject("options") ?: com.google.gson.JsonObject().also {
+            parent.add("options", it)
+        }
+        statelessOptionsValues(options)
+    }
+    statelessOptions(provider)
+    provider.getAsJsonObject("models").entrySet().forEach { (_, entry) ->
+        if (entry.isJsonObject) {
+            val model = entry.asJsonObject
+            statelessOptions(model)
+            model.getAsJsonObject("variants")?.entrySet()?.forEach { (_, variant) ->
+                if (variant.isJsonObject) statelessOptionsValues(variant.asJsonObject)
+            }
+        }
+    }
+    return com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(root) + "\n"
 }

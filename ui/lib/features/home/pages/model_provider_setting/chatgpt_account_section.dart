@@ -342,8 +342,8 @@ class _ChatGptAccountSectionState extends State<ChatGptAccountSection> {
         const SizedBox(height: 8),
         Text(
           _text(
-            '已连接账号可用于小万对话及文本、图片理解。',
-            'Connected accounts support Xiaowan chat, text and image understanding.',
+            '已连接账号可用于小万，也可供已适配 Responses 的 Agent 复用。',
+            'Connected accounts support Xiaowan and Agents with a compatible Responses integration.',
           ),
           style: TextStyle(color: textColor),
         ),

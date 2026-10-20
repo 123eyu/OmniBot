@@ -235,6 +235,142 @@ class ChatGptOAuthCoordinatorTest {
         assertEquals(0, remote.exchangeCalls)
     }
 
+    @Test fun credentialBindingSurvivesRefreshAndUnboundAccessStillWorks() = runBlocking {
+        val store = FakeStore(registration())
+        val remote = FakeRemote()
+        val owner = coordinator(store, remote)
+        val binding = owner.credentialBinding("profile")
+
+        assertEquals("new-access", owner.accessToken("profile", binding))
+        assertEquals("new-refresh", store.read("profile")?.refreshToken)
+        assertEquals("new-access", owner.accessToken("profile", binding))
+        assertEquals("new-access", owner.accessToken("profile"))
+        assertEquals("new-access", owner.accessToken("profile", owner.credentialBinding("profile")))
+        assertEquals(1, remote.refreshCalls)
+    }
+
+    @Test fun credentialBindingRequiresAuthorizedAccountAndCannotCrossProfiles() = runBlocking {
+        val store = FakeStore(registration()).apply {
+            write("other", registration().copy(accessToken = "other-access", expiresAtSeconds = NOW / 1000 + 3600))
+            write("disabled", registration().copy(scopes = setOf("openid")))
+            write("signed-out", registration().withoutTokens())
+        }
+        val remote = FakeRemote()
+        val owner = coordinator(store, remote)
+        for (profileId in listOf("missing", "signed-out")) {
+            val failure = assertThrows(ChatGptOAuthException::class.java) { owner.credentialBinding(profileId) }
+            assertEquals("sign_in_required", failure.code)
+        }
+        val disabled = assertThrows(ChatGptOAuthException::class.java) { owner.credentialBinding("disabled") }
+        assertEquals("plan_disabled", disabled.code)
+
+        val binding = owner.credentialBinding("profile")
+        val wrongProfile = runCatching { owner.accessToken("other", binding) }.exceptionOrNull() as ChatGptOAuthException
+        assertEquals("login_cancelled", wrongProfile.code)
+        assertEquals("other-access", owner.accessToken("other"))
+        assertEquals(0, remote.refreshCalls)
+    }
+
+    @Test fun completedReauthorizationInvalidatesOldBindingButPendingAuthorizationDoesNot() = runBlocking {
+        val store = FakeStore(registration().copy(expiresAtSeconds = NOW / 1000 + 3600))
+        val remote = FakeRemote()
+        val owner = coordinator(store, remote)
+        val oldBinding = owner.credentialBinding("profile")
+        val attempt = owner.beginLogin("profile", REDIRECT)
+        assertEquals("old-access", owner.accessToken("profile", oldBinding))
+
+        owner.completeLogin(attempt.id, callback(attempt))
+        assertEquals("completed", owner.loginStatus(attempt.id)["status"])
+        val failure = runCatching { owner.accessToken("profile", oldBinding) }.exceptionOrNull() as ChatGptOAuthException
+        assertEquals("login_cancelled", failure.code)
+        assertEquals("new-access", owner.accessToken("profile", owner.credentialBinding("profile")))
+        assertEquals("new-access", owner.accessToken("profile"))
+        assertEquals(0, remote.refreshCalls)
+    }
+
+    @Test fun abandonedReauthorizationLeavesExistingCredentialBindingUsable() = runBlocking {
+        val owner = coordinator(FakeStore(registration()), FakeRemote())
+        val binding = owner.credentialBinding("profile")
+        val attempt = owner.beginLogin("profile", REDIRECT)
+        owner.cancelLogin(attempt.id)
+        assertEquals("cancelled", owner.loginStatus(attempt.id)["status"])
+        assertEquals("new-access", owner.accessToken("profile", binding))
+    }
+
+    @Test fun logoutThenLoginCannotReauthorizeAnOldProcessBinding() = runBlocking {
+        val owner = coordinator(FakeStore(registration()), FakeRemote())
+        val oldBinding = owner.credentialBinding("profile")
+        owner.logout("profile")
+        val loggedOut = runCatching { owner.accessToken("profile", oldBinding) }.exceptionOrNull() as ChatGptOAuthException
+        assertEquals("login_cancelled", loggedOut.code)
+        val unavailable = assertThrows(ChatGptOAuthException::class.java) { owner.credentialBinding("profile") }
+        assertEquals("sign_in_required", unavailable.code)
+
+        val attempt = owner.beginLogin("profile", REDIRECT)
+        owner.completeLogin(attempt.id, callback(attempt))
+        val stale = runCatching { owner.accessToken("profile", oldBinding) }.exceptionOrNull() as ChatGptOAuthException
+        assertEquals("login_cancelled", stale.code)
+        assertEquals("new-access", owner.accessToken("profile", owner.credentialBinding("profile")))
+        assertEquals("new-access", owner.accessToken("profile"))
+    }
+
+    @Test fun removingAndRecreatingTheSameProfileCannotRestoreAnOldBinding() = runBlocking {
+        val store = FakeStore(registration())
+        val owner = coordinator(store, FakeRemote())
+        val oldBinding = owner.credentialBinding("profile")
+        owner.removeProfile("profile")
+        assertNull(store.read("profile"))
+        val removed = runCatching { owner.accessToken("profile", oldBinding) }.exceptionOrNull() as ChatGptOAuthException
+        assertEquals("login_cancelled", removed.code)
+
+        val attempt = owner.beginLogin("profile", REDIRECT)
+        owner.completeLogin(attempt.id, callback(attempt))
+        val stale = runCatching { owner.accessToken("profile", oldBinding) }.exceptionOrNull() as ChatGptOAuthException
+        assertEquals("login_cancelled", stale.code)
+        assertEquals("new-access", owner.accessToken("profile", owner.credentialBinding("profile")))
+    }
+
+    @Test fun boundRefreshCannotPublishCredentialsAfterLogoutRemovalOrReauthorization() = runBlocking {
+        for (mutation in listOf("logout", "remove", "reauthorize")) {
+            val entered = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val store = FakeStore(registration())
+            val remote = FakeRemote().apply {
+                refreshHandler = {
+                    entered.complete(Unit)
+                    release.await()
+                    tokens().copy(accessToken = "stale-refreshed-access", refreshToken = "stale-refreshed-token")
+                }
+            }
+            val owner = coordinator(store, remote)
+            val binding = owner.credentialBinding("profile")
+            val request = async { runCatching { owner.accessToken("profile", binding) } }
+            entered.await()
+            try {
+                when (mutation) {
+                    "logout" -> owner.logout("profile")
+                    "remove" -> owner.removeProfile("profile")
+                    else -> {
+                        val attempt = owner.beginLogin("profile", REDIRECT)
+                        owner.completeLogin(attempt.id, callback(attempt))
+                    }
+                }
+            } finally {
+                release.complete(Unit)
+            }
+            val failure = request.await().exceptionOrNull() as ChatGptOAuthException
+            assertEquals("Old request survived $mutation", "login_cancelled", failure.code)
+            if (mutation == "reauthorize") {
+                assertEquals("new-access", store.read("profile")?.accessToken)
+                assertEquals("new-refresh", store.read("profile")?.refreshToken)
+                assertEquals("new-access", owner.accessToken("profile", owner.credentialBinding("profile")))
+            } else {
+                assertNull(store.read("profile")?.accessToken)
+                assertNull(store.read("profile")?.refreshToken)
+            }
+        }
+    }
+
     private fun coordinator(store: FakeStore, remote: FakeRemote) = ChatGptOAuthCoordinator(store, remote) { NOW }
     private fun callback(attempt: ChatGptOAuthCoordinator.Attempt, clientId: String = "issued") =
         mapOf("state" to attempt.state, "code" to "single-use-code", "client_id" to clientId)
