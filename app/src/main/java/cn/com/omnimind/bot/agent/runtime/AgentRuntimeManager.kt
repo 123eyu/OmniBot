@@ -32,6 +32,7 @@ import cn.com.omnimind.bot.terminal.EmbeddedTerminalSetupManager
 import cn.com.omnimind.bot.task.runtime.TaskRuntime
 import cn.com.omnimind.bot.util.TaskRuntimeSettings
 import com.rk.terminal.runtime.TerminalDistribution
+import com.rk.terminal.runtime.EmbeddedRuntimeInstaller
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import kotlinx.coroutines.CoroutineScope
@@ -224,6 +225,24 @@ class AgentRuntimeManager private constructor(
     private val historyRepository = AgentConversationHistoryRepository(appContext)
     private val remoteConfigStore = CodexRemoteBridgeConfigStore(appContext)
     private val acpAgentProfileStore = AcpAgentProfileStore(appContext)
+    private val managedAgentUpdates = ManagedAgentUpdates(
+        probe = { profiles, distributionId ->
+            check(TerminalDistribution.selected().id == distributionId &&
+                EmbeddedRuntimeInstaller.isCurrentDistributionReady(appContext)) {
+                "Prepare the terminal environment before checking installed Agent versions"
+            }
+            val result = TerminalManager.getInstance(appContext).executeHiddenCommand(
+                command = managedAgentVersionProbeCommand(profiles),
+                executorKey = "acp-agent-version-probe-$distributionId",
+                timeoutMs = 15_000L,
+                distribution = TerminalDistribution.fromId(distributionId),
+            )
+            check(result.isOk && result.exitCode == 0) { "Agent version probe failed" }
+            parseManagedAgentVersionProbe(result.output)
+        },
+        read = acpAgentProfileStore::packageVersion,
+        save = acpAgentProfileStore::savePackageVersion,
+    )
     private val naRuntime by lazy { NaCloudRuntime(appContext, scope, bindingRepository, acpAgentProfileStore, ::emitEvent) }
     private val scheduledTaskScheduler by lazy {
         WorkspaceScheduledTaskScheduler(appContext)
@@ -764,6 +783,19 @@ class AgentRuntimeManager private constructor(
                 "agents" to acpAgentProfileStore.list().map { it.toPayload(selected = it.id == NA_AGENT_ID, health = acpAgentProfileStore.health(it.id)) })
         }
         if (method.startsWith("agent/")) {
+            val distribution = TerminalDistribution.selected()
+            val distributionId = distribution.id
+            if (method == "agent/checkUpdates") {
+                managedAgentUpdates.check(acpAgentProfileStore.list(), distributionId)
+                check(TerminalDistribution.selected().id == distributionId) {
+                    "Terminal environment changed. Check updates again."
+                }
+                val catalogMethod = if (EmbeddedRuntimeInstaller.isCurrentDistributionReady(appContext))
+                    "agent/refresh" else "agent/list"
+                return withAgentPackageVersions(
+                    selectedLocalRuntime().handleMethod(catalogMethod, emptyMap()), distributionId,
+                )
+            }
             val requestedAgentId = canonicalArgs.stringValue("agentId")
                 ?: canonicalArgs.mapValue("agent").stringValue("id")
                 ?: acpAgentProfileStore.selected().id
@@ -784,14 +816,29 @@ class AgentRuntimeManager private constructor(
             // Harness, but must never start npm, a native build, or a package
             // bootstrap behind the chat UI.
             if (method == "agent/prepare") {
-                ensureManagedAcpAdapter(targetProfile, force = canonicalArgs["force"] == true)
+                require(canonicalArgs.stringValue("distributionId")?.let { it == distributionId } != false) {
+                    "Terminal environment changed. Refresh Agent settings before installing."
+                }
+                try {
+                    ensureManagedAcpAdapter(targetProfile, force = canonicalArgs["force"] == true, distribution = distribution)
+                } finally {
+                    // An installer can partially fail. Re-read disk instead of
+                    // optimistically assigning the version from the registry.
+                    managedAgentUpdates.check(listOf(targetProfile), distributionId, remote = false)
+                }
+                check(TerminalDistribution.selected().id == distributionId) {
+                    "Terminal environment changed. Refresh Agent settings to see the installation result."
+                }
             }
             val response = targetLocalRuntime.handleMethod(method, canonicalArgs)
             if (method == "agent/select") {
                 activeRuntime = AgentRuntimeKind.LOCAL
                 activeLocalDistributionId = TerminalDistribution.selected().id
             }
-            return response
+            if (method == "agent/refresh") {
+                managedAgentUpdates.check(acpAgentProfileStore.list(), distributionId, remote = false)
+            }
+            return withAgentPackageVersions(response, distributionId)
         }
         if (
             method == "model/list" &&
@@ -894,6 +941,21 @@ class AgentRuntimeManager private constructor(
             "respondToServerRequest" -> respondToServerRequest(args)
             else -> request(method, canonicalArgs)
         }
+    }
+
+    private fun withAgentPackageVersions(payload: Any?, distributionId: String): Any? {
+        if (payload !is Map<*, *>) return payload
+        val result = payload.entries.associate { it.key.toString() to it.value }.toMutableMap()
+        if (result.containsKey("agents")) result["distributionId"] = distributionId
+        fun enrich(value: Any?): Any? {
+            if (value !is Map<*, *>) return value
+            val id = value["id"] as? String ?: return value
+            return value + mapOf("packageVersion" to acpAgentProfileStore.packageVersion(distributionId, id)?.toPayload())
+        }
+        (result["agents"] as? List<*>)?.let { result["agents"] = it.map(::enrich) }
+        result["agent"]?.let { result["agent"] = enrich(it) }
+        result["catalog"]?.let { result["catalog"] = withAgentPackageVersions(it, distributionId) }
+        return result
     }
 
     /**
@@ -1763,7 +1825,8 @@ class AgentRuntimeManager private constructor(
     private suspend fun writeTerminalTextFile(
         path: String,
         content: String,
-        executorKey: String
+        executorKey: String,
+        distribution: TerminalDistribution.Spec = TerminalDistribution.selected(),
     ) {
         val parent = File(path).parent
             ?: throw IllegalArgumentException("Invalid Agent config path.")
@@ -1774,16 +1837,18 @@ class AgentRuntimeManager private constructor(
             printf %s ${shellQuote(content)} > ${shellQuote(path)}
             chmod 600 ${shellQuote(path)}
         """.trimIndent()
-        executeAgentConfigCommand(command, executorKey)
+        executeAgentConfigCommand(command, executorKey, distribution)
     }
 
     private suspend fun executeAgentConfigCommand(
         command: String,
-        executorKey: String
+        executorKey: String,
+        distribution: TerminalDistribution.Spec = TerminalDistribution.selected(),
     ): String {
         val result = TerminalManager.getInstance(appContext).executeHiddenCommand(
             command = command,
             executorKey = executorKey,
+            distribution = distribution,
             timeoutMs = null
         )
         if (!result.isOk || result.exitCode != 0) {
@@ -2034,6 +2099,15 @@ class AgentRuntimeManager private constructor(
         providerAccess: AgentProviderAccess? = null,
         providerModelsOverride: List<ProviderModelOption>? = null,
     ): Map<String, String> {
+        val officialRuntime = AcpAgentProfileStore.officialRuntime(profile)
+        if (officialRuntime?.validateBeforeConfigWrite == true) {
+            // A major-version config migration must not write V2-only fields
+            // into an installation that still runs the old executable.
+            val healthCommand = requireNotNull(officialRuntime.managedAdapterHealthCommand)
+            check(isTerminalShellCommandSuccessful(healthCommand, MANAGED_ACP_PROBE_TIMEOUT_MS)) {
+                "${profile.name} runtime needs an upgrade. Open Agent mode settings and update or reinstall it."
+            }
+        }
         val usesSharedProvider = AcpAgentProfileStore
             .officialRuntime(profile)
             ?.usesSharedProvider == true
@@ -2255,7 +2329,11 @@ class AgentRuntimeManager private constructor(
         )
     }
 
-    private suspend fun ensureManagedAcpAdapter(profile: AcpAgentProfile, force: Boolean = false) {
+    private suspend fun ensureManagedAcpAdapter(
+        profile: AcpAgentProfile,
+        force: Boolean = false,
+        distribution: TerminalDistribution.Spec = TerminalDistribution.selected(),
+    ) {
         val runtime = AcpAgentProfileStore.officialRuntime(profile)
             ?: return
         if (runtime.managedAdapterPackage == null) {
@@ -2279,11 +2357,11 @@ class AgentRuntimeManager private constructor(
         // installation owns the gate, report that state instead of continuing
         // into initialization as though this installation had completed.
         managedAcpPreparationGate.run(profile.id) {
-            ensureManagedAcpAdapterLocked(profile, force)
+            ensureManagedAcpAdapterLocked(profile, force, distribution)
         }
     }
 
-    private suspend fun ensureManagedAcpAdapterLocked(profile: AcpAgentProfile, force: Boolean) {
+    private suspend fun ensureManagedAcpAdapterLocked(profile: AcpAgentProfile, force: Boolean, distribution: TerminalDistribution.Spec) {
         val runtime = AcpAgentProfileStore.officialRuntime(profile) ?: return
         val packageName = runtime.managedAdapterPackage ?: return
         val previousHealth = acpAgentProfileStore.health(profile.id)
@@ -2329,12 +2407,14 @@ class AgentRuntimeManager private constructor(
             writeTerminalTextFile(
                 path = it,
                 content = "#!/bin/sh\n$installScript\n",
-                executorKey = "harness-installer-script-write-${profile.id}"
+                executorKey = "harness-installer-script-write-${profile.id}",
+                distribution = distribution,
             )
         }
         val commandAvailable = isTerminalCommandAvailable(
             command = profile.command,
             timeoutMs = MANAGED_ACP_PROBE_TIMEOUT_MS,
+            distribution = distribution,
         )
         // Some official Harnesses (DeepSeek ACP profile in particular) keep
         // the adapter inside a vendor-owned profile directory rather than
@@ -2348,10 +2428,11 @@ class AgentRuntimeManager private constructor(
                 (commandAvailable && areManagedNpmPackagesInstalled(
                     packageSpecs = managedPackages,
                     timeoutMs = MANAGED_ACP_PROBE_TIMEOUT_MS,
+                    distribution = distribution,
                 ))
         }
         val adapterHealthy = runtime.managedAdapterHealthCommand
-            ?.let { isTerminalShellCommandSuccessful(it, MANAGED_ACP_PROBE_TIMEOUT_MS) }
+            ?.let { isTerminalShellCommandSuccessful(it, MANAGED_ACP_PROBE_TIMEOUT_MS, distribution) }
             ?: true
         // Installation/update is an explicit preparation boundary. A normal
         // Agent switch must reuse a healthy installed adapter; otherwise every
@@ -2369,7 +2450,8 @@ class AgentRuntimeManager private constructor(
         }
         // This is an explicit user retry. A previous failure must not prevent
         // the installer from trying again after network/environment repairs.
-        if (!isTerminalCommandAvailable("npm", MANAGED_ACP_PROBE_TIMEOUT_MS)) {
+        if (!isTerminalCommandAvailable("npm", MANAGED_ACP_PROBE_TIMEOUT_MS, distribution)) {
+            check(TerminalDistribution.selected().id == distribution.id) { "Terminal environment changed. Refresh Agent settings." }
             val terminalPackageId = managedAgentTerminalPackageId(profile)
             if (terminalPackageId == null) {
                 throw IllegalStateException(
@@ -2388,7 +2470,7 @@ class AgentRuntimeManager private constructor(
                 )
             }
         }
-        if (!isTerminalCommandAvailable("npm", MANAGED_ACP_PROBE_TIMEOUT_MS)) {
+        if (!isTerminalCommandAvailable("npm", MANAGED_ACP_PROBE_TIMEOUT_MS, distribution)) {
             throw IllegalStateException(
                 "npm is required to prepare the ${profile.name} ACP adapter."
             )
@@ -2401,6 +2483,7 @@ class AgentRuntimeManager private constructor(
         val result = TerminalManager.getInstance(appContext).executeHiddenCommand(
             command = command,
             executorKey = "acp-adapter-install-${profile.id}",
+            distribution = distribution,
             timeoutMs = MANAGED_ACP_INSTALL_TIMEOUT_MS
         )
         if (!result.isOk || result.exitCode != 0) {
@@ -2419,18 +2502,21 @@ class AgentRuntimeManager private constructor(
             )
         }
         // Only a successful explicit installer proves the installed revision.
-        acpAgentProfileStore.saveHealth(
-            profile.id,
-            acpAgentProfileStore.health(profile.id).copy(
-                installed = true,
-                preparationRevision = runtime.preparationRevision,
-            ),
-        )
+        if (TerminalDistribution.selected().id == distribution.id) {
+            acpAgentProfileStore.saveHealth(
+                profile.id,
+                acpAgentProfileStore.health(profile.id).copy(
+                    installed = true,
+                    preparationRevision = runtime.preparationRevision,
+                ),
+            )
+        }
     }
 
     private suspend fun areManagedNpmPackagesInstalled(
         packageSpecs: List<String>,
         timeoutMs: Long = 20_000L,
+        distribution: TerminalDistribution.Spec = TerminalDistribution.selected(),
     ): Boolean {
         if (packageSpecs.isEmpty()) return true
         val checks = packageSpecs.joinToString(" && ") { spec ->
@@ -2440,6 +2526,7 @@ class AgentRuntimeManager private constructor(
         val result = TerminalManager.getInstance(appContext).executeHiddenCommand(
             command = checks,
             executorKey = "acp-managed-packages-probe-${packageSpecs.hashCode()}",
+            distribution = distribution,
             timeoutMs = timeoutMs
         )
         return result.isOk && result.exitCode == 0
@@ -2448,11 +2535,13 @@ class AgentRuntimeManager private constructor(
     private suspend fun isTerminalCommandAvailable(
         command: String,
         timeoutMs: Long = 20_000L,
+        distribution: TerminalDistribution.Spec = TerminalDistribution.selected(),
     ): Boolean {
         val result = TerminalManager.getInstance(appContext).executeHiddenCommand(
             command = "$MANAGED_NPM_PATH_PREFIX " +
                 "command -v ${shellQuote(command)} >/dev/null 2>&1",
             executorKey = "acp-command-probe-${command.hashCode()}",
+            distribution = distribution,
             timeoutMs = timeoutMs
         )
         return result.isOk && result.exitCode == 0
@@ -2461,10 +2550,12 @@ class AgentRuntimeManager private constructor(
     private suspend fun isTerminalShellCommandSuccessful(
         command: String,
         timeoutMs: Long = 20_000L,
+        distribution: TerminalDistribution.Spec = TerminalDistribution.selected(),
     ): Boolean {
         val result = TerminalManager.getInstance(appContext).executeHiddenCommand(
             command = "$MANAGED_NPM_PATH_PREFIX $command",
             executorKey = "acp-shell-health-${command.hashCode()}",
+            distribution = distribution,
             timeoutMs = timeoutMs
         )
         return result.isOk && result.exitCode == 0
@@ -4052,7 +4143,7 @@ private fun buildRemoteBridgeConfigPayload(
 }
 
 /**
- * Official OpenCode v1 configuration for a custom OpenAI-compatible provider.
+ * Official OpenCode V2 configuration for the shared Provider.
  * The API key remains an environment substitution; the host only publishes
  * the shared provider/model mapping into OpenCode's own config surface.
  */
@@ -4066,37 +4157,27 @@ internal fun buildOpenCodeConfigJson(
     wireApi: String = OpenAiWireApi.CHAT_COMPLETIONS,
 ): String {
     val providerModel = model.removePrefix("$OPEN_CODE_PROVIDER_ID/")
-    val root = runCatching {
-        JsonParser.parseString(existingConfigJson).takeIf { it.isJsonObject }?.asJsonObject
-    }.getOrNull() ?: com.google.gson.JsonObject()
+    val root = if (existingConfigJson.isBlank()) com.google.gson.JsonObject()
+        else JsonParser.parseString(existingConfigJson).asJsonObject
     root.addProperty("\$schema", "https://opencode.ai/config.json")
     root.addProperty("model", model)
     // This adapter maps the user's shared Provider, not OpenCode's built-in
     // catalog. Use OpenCode's own provider-selection configuration.
-    if (!root.has("enabled_providers")) {
+    if (!root.has("enabled_providers") && !root.has("policies")) {
         root.add("enabled_providers", com.google.gson.JsonArray().apply { add(OPEN_CODE_PROVIDER_ID) })
     }
 
-    val providers = root.getAsJsonObject("provider") ?: com.google.gson.JsonObject().also {
-        root.add("provider", it)
-    }
-    val provider = providers.getAsJsonObject(OPEN_CODE_PROVIDER_ID)
-        ?: com.google.gson.JsonObject().also {
-            providers.add(OPEN_CODE_PROVIDER_ID, it)
-        }
-    provider.addProperty("npm", when {
-        protocolType.equals("anthropic", ignoreCase = true) -> "@ai-sdk/anthropic"
-        OpenAiWireApi.isResponses(wireApi) -> "@ai-sdk/openai"
-        else -> "@ai-sdk/openai-compatible"
+    val provider = managedOpenCodeV2Provider(root)
+    provider.addProperty("package", when {
+        protocolType.equals("anthropic", ignoreCase = true) -> "@opencode/ai/providers/anthropic-compatible"
+        OpenAiWireApi.isResponses(wireApi) -> "@opencode/ai/providers/openai-compatible/responses"
+        else -> "@opencode/ai/providers/openai-compatible"
     })
     provider.addProperty("name", "OmniBot Provider")
-    val options = provider.getAsJsonObject("options") ?: com.google.gson.JsonObject().also {
-        provider.add("options", it)
-    }
-    options.addProperty("baseURL", baseUrl)
-    options.addProperty("apiKey", "{env:OPENAI_API_KEY}")
-    val headers = options.getAsJsonObject("headers")
-        ?: com.google.gson.JsonObject().also { options.add("headers", it) }
+    val settings = provider.objectOrCreate("settings")
+    settings.addProperty("baseURL", baseUrl)
+    settings.addProperty("apiKey", "{env:OPENAI_API_KEY}")
+    val headers = provider.objectOrCreate("headers")
     // The Provider is the editable source of truth. Remove only values that
     // this adapter generated on an earlier launch; preserve unrelated user
     // headers in the official OpenCode file.
@@ -4113,7 +4194,7 @@ internal fun buildOpenCodeConfigJson(
             headers.addProperty(name, "{env:OMNIBOT_PROVIDER_HEADER_$index}")
         }
     if (headers.entrySet().isEmpty()) {
-        options.remove("headers")
+        provider.remove("headers")
     }
     val models = provider.getAsJsonObject("models") ?: com.google.gson.JsonObject().also {
         provider.add("models", it)
@@ -4132,13 +4213,24 @@ internal fun buildOpenCodeConfigJson(
             modelConfig.addProperty("name", entry.displayName.ifBlank { entry.id })
             // Forward declared capabilities. Let OpenCode own its supported variants;
             // never infer reasoning levels or token limits from a model name.
-            entry.reasoning?.let { modelConfig.addProperty("reasoning", it) }
-            entry.toolCall?.let { modelConfig.addProperty("tool_call", it) }
-            entry.temperature?.let { modelConfig.addProperty("temperature", it) }
-            entry.attachment?.let { modelConfig.addProperty("attachment", it) }
-            if (entry.contextLimit != null || entry.outputLimit != null) {
+            val capabilities = modelConfig.objectOrCreate("capabilities")
+            entry.reasoning?.let { supported ->
+                if (!supported) capabilities.remove("reasoning")
+                capabilities.objectOrCreate("reasoning").addProperty("supported", supported)
+            }
+            entry.toolCall?.let { capabilities.addProperty("tools", it) }
+            entry.temperature?.let { capabilities.addProperty("temperature", it) }
+            if (entry.inputModalities.isNotEmpty()) capabilities.add("input", com.google.gson.JsonArray().apply {
+                entry.inputModalities.forEach(::add)
+            })
+            if (entry.outputModalities.isNotEmpty()) capabilities.add("output", com.google.gson.JsonArray().apply {
+                entry.outputModalities.forEach(::add)
+            })
+            if (capabilities.size() == 0) modelConfig.remove("capabilities")
+            if (entry.contextLimit != null || entry.inputLimit != null || entry.outputLimit != null) {
                 val limits = modelConfig.getAsJsonObject("limit") ?: com.google.gson.JsonObject()
                 entry.contextLimit?.let { limits.addProperty("context", it) }
+                entry.inputLimit?.let { limits.addProperty("input", it) }
                 entry.outputLimit?.let { limits.addProperty("output", it) }
                 modelConfig.add("limit", limits)
             }

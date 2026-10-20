@@ -81,13 +81,15 @@
       "builtIn": true,
       "runtime": {
         "discoveryCommand": "opencode",
-        "managedAdapterPackage": "opencode-ai@latest",
-        "managedAdapterPackages": ["opencode-ai@latest"],
+        "managedAdapterPackage": "@opencode/cli@latest",
+        "managedAdapterPackages": ["@opencode/cli@latest"],
         "configAdapterId": "open-code",
         "usesSharedProvider": true,
         "terminalPackageId": "opencode",
         "managedInstallCommandAsset": "acp/install/opencode.sh",
-        "preparationRevision": "opencode-rootfs-libc-v2"
+        "managedAdapterHealthCommand": "node -e \"const expected = require('/root/.npm-global/lib/node_modules/@opencode/cli/package.json').version; const actual = require('node:child_process').execFileSync('opencode', ['--version'], {timeout:8000,encoding:'utf8'}).trim().replace(/^opencode v/, ''); if (Number(expected.split('.')[0]) < 2 || actual !== expected) process.exit(1)\"",
+        "validateBeforeConfigWrite": true,
+        "preparationRevision": "opencode-cli-v2-rootfs-libc-v1"
       }
     },
     {

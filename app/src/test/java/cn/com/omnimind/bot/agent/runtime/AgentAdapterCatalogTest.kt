@@ -68,11 +68,11 @@ class AgentAdapterCatalogTest {
                 when (adapter.configAdapterId) {
                     "open-code" -> {
                         val sdk = JsonParser.parseString(files.single().content).asJsonObject
-                            .getAsJsonObject("provider").getAsJsonObject("omnibot")["npm"].asString
+                            .getAsJsonObject("providers").getAsJsonObject("omnibot")["package"].asString
                         assertEquals(when {
-                            protocol == "anthropic" -> "@ai-sdk/anthropic"
-                            wire == "responses" -> "@ai-sdk/openai"
-                            else -> "@ai-sdk/openai-compatible"
+                            protocol == "anthropic" -> "@opencode/ai/providers/anthropic-compatible"
+                            wire == "responses" -> "@opencode/ai/providers/openai-compatible/responses"
+                            else -> "@opencode/ai/providers/openai-compatible"
                         }, sdk)
                     }
                     "kimi-code" -> {

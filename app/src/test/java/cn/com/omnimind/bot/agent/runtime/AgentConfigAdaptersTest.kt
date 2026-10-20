@@ -91,11 +91,11 @@ class AgentConfigAdaptersTest {
             providerModels = listOf(ProviderModelOption(id = "model-a", reasoning = true,
                 toolCall = true, temperature = false, contextLimit = 32000, outputLimit = 4000)),
         )).asJsonObject
-        val model = root.getAsJsonObject("provider").getAsJsonObject("omnibot")
+        val model = root.getAsJsonObject("providers").getAsJsonObject("omnibot")
             .getAsJsonObject("models").getAsJsonObject("model-a")
-        assertTrue(model["reasoning"].asBoolean)
-        assertTrue(model["tool_call"].asBoolean)
-        assertFalse(model["temperature"].asBoolean)
+        assertTrue(model["capabilities"].asJsonObject["reasoning"].asJsonObject["supported"].asBoolean)
+        assertTrue(model["capabilities"].asJsonObject["tools"].asBoolean)
+        assertFalse(model["capabilities"].asJsonObject["temperature"].asBoolean)
         assertEquals(32000, model.getAsJsonObject("limit")["context"].asInt)
         assertEquals(4000, model.getAsJsonObject("limit")["output"].asInt)
         assertFalse(model.has("variants"))
@@ -116,11 +116,11 @@ class AgentConfigAdaptersTest {
             providerModels = listOf(ProviderModelOption(id = "current")),
             existingConfigJson = """{"provider":{"omnibot":{"models":{"stale":{},"current":{"options":{"temperature":0.3}}}},"custom":{"models":{"mine":{}}}}}""",
         )).asJsonObject
-        val providers = root["provider"].asJsonObject
+        val providers = root["providers"].asJsonObject
         val models = providers["omnibot"].asJsonObject["models"].asJsonObject
         assertEquals(setOf("current"), models.keySet())
-        assertEquals(0.3, models["current"].asJsonObject["options"].asJsonObject["temperature"].asDouble, 0.0)
-        assertTrue(providers["custom"].asJsonObject["models"].asJsonObject.has("mine"))
+        assertEquals(0.3, models["current"].asJsonObject["body"].asJsonObject["temperature"].asDouble, 0.0)
+        assertTrue(root["provider"].asJsonObject["custom"].asJsonObject["models"].asJsonObject.has("mine"))
     }
 
     @Test
@@ -173,10 +173,10 @@ class AgentConfigAdaptersTest {
     fun openCodeUsesTheConfiguredWireAcrossProtocolSwitches() {
         var saved = "{}"
         val cases = listOf(
-            Triple("openai_compatible", "chat_completions", "@ai-sdk/openai-compatible"),
-            Triple("openai_compatible", "responses", "@ai-sdk/openai"),
-            Triple("anthropic", "chat_completions", "@ai-sdk/anthropic"),
-            Triple("openai_compatible", "chat_completions", "@ai-sdk/openai-compatible"),
+            Triple("openai_compatible", "chat_completions", "@opencode/ai/providers/openai-compatible"),
+            Triple("openai_compatible", "responses", "@opencode/ai/providers/openai-compatible/responses"),
+            Triple("anthropic", "chat_completions", "@opencode/ai/providers/anthropic-compatible"),
+            Triple("openai_compatible", "chat_completions", "@opencode/ai/providers/openai-compatible"),
         )
         for ((protocol, wire, npm) in cases) {
             val input = AgentProviderMappingInput(
@@ -190,8 +190,8 @@ class AgentConfigAdaptersTest {
                 listOf(ProviderModelOption(id = "org/model-a")), saved,
             ).single().content
             val root = JsonParser.parseString(saved).asJsonObject
-            val provider = root["provider"].asJsonObject["omnibot"].asJsonObject
-            assertEquals(npm, provider["npm"].asString)
+            val provider = root["providers"].asJsonObject["omnibot"].asJsonObject
+            assertEquals(npm, provider["package"].asString)
             assertEquals("omnibot/org/model-a", root["model"].asString)
             assertTrue(provider["models"].asJsonObject.has("org/model-a"))
             assertFalse(saved.contains("test-secret"))
@@ -203,7 +203,7 @@ class AgentConfigAdaptersTest {
         val root = JsonParser.parseString(buildOpenCodeConfigJson(
             model = "org/model-a", baseUrl = "https://gateway.example/v1",
         )).asJsonObject
-        val models = root["provider"].asJsonObject["omnibot"].asJsonObject["models"].asJsonObject
+        val models = root["providers"].asJsonObject["omnibot"].asJsonObject["models"].asJsonObject
         assertTrue(models.has("org/model-a"))
         assertFalse(models.has("model-a"))
     }
@@ -282,7 +282,7 @@ class AgentConfigAdaptersTest {
             existingConfig = "{}",
         ).single()
         val config = JsonParser.parseString(write.content).asJsonObject
-        assertTrue(config.getAsJsonObject("provider").getAsJsonObject("omnibot")
+        assertTrue(config.getAsJsonObject("providers").getAsJsonObject("omnibot")
             .getAsJsonObject("models").has("model-b"))
     }
     private val provider = AgentProviderCredentials(
@@ -558,8 +558,8 @@ class AgentConfigAdaptersTest {
             existingConfig = "",
         ).single().content
         val openCodeHeaders = JsonParser.parseString(openCodeConfig)
-            .asJsonObject["provider"].asJsonObject["omnibot"]
-            .asJsonObject["options"].asJsonObject["headers"].asJsonObject
+            .asJsonObject["providers"].asJsonObject["omnibot"]
+            .asJsonObject["headers"].asJsonObject
         assertEquals(
             "{env:OMNIBOT_PROVIDER_HEADER_0}",
             openCodeHeaders["X-Trace-Id"].asString,
@@ -963,7 +963,7 @@ class AgentConfigAdaptersTest {
             baseUrl = "https://llmapi.paratera.com/v1"
         )
         assertTrue(config.contains("https://opencode.ai/config.json"))
-        assertTrue(config.contains("@ai-sdk/openai-compatible"))
+        assertTrue(config.contains("@opencode/ai/providers/openai-compatible"))
         assertTrue(config.contains("omnibot/GLM-5.1"))
         assertTrue(config.contains("{env:OPENAI_API_KEY}"))
         assertFalse(config.contains("\"context\""))
@@ -995,8 +995,8 @@ class AgentConfigAdaptersTest {
                 customHeaders = mapOf("X-New" to "new-value"),
             ),
         ).asJsonObject
-        val headers = config["provider"].asJsonObject["omnibot"]
-            .asJsonObject["options"].asJsonObject["headers"].asJsonObject
+        val headers = config["providers"].asJsonObject["omnibot"]
+            .asJsonObject["headers"].asJsonObject
 
         assertTrue("X-Old" !in headers.entrySet().map { it.key })
         assertEquals("keep-me", headers["X-Keep"].asString)

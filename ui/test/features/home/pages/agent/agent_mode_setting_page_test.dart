@@ -456,7 +456,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('后台安装中'), findsOneWidget);
+      expect(find.text('后台安装 / 升级中'), findsOneWidget);
       await tester.tap(find.byTooltip('添加自定义 ACP Agent'));
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('添加自定义 ACP Agent'), findsOneWidget);
@@ -465,7 +465,7 @@ void main() {
       await tester.pump();
       await tester.pumpWidget(buildPage());
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('后台安装中'), findsOneWidget);
+      expect(find.text('后台安装 / 升级中'), findsOneWidget);
 
       await tester.tap(
         find.byKey(const Key('agent-navigation-deepseek-harness-acp')),
@@ -478,7 +478,7 @@ void main() {
         'error': 'expected test completion',
       });
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('后台安装中'), findsNothing);
+      expect(find.text('后台安装 / 升级中'), findsNothing);
     },
   );
 
