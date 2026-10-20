@@ -321,30 +321,19 @@ class _ConversationModelSelectorContentState
 
   Widget _buildSearchRow() {
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     return Padding(
       key: const ValueKey('conversation-model-selector-search'),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: isDark
-              ? palette.surfaceSecondary.withValues(alpha: 0.58)
-              : Colors.white.withValues(alpha: 0.38),
+          color: palette.surfaceSecondary,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark
-                ? palette.borderSubtle.withValues(alpha: 0.62)
-                : Colors.white.withValues(alpha: 0.58),
-          ),
+          border: Border.all(color: palette.borderSubtle),
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.search,
-              size: 18,
-              color: isDark ? palette.textTertiary : const Color(0xFF9AA4B6),
-            ),
+            Icon(Icons.search, size: 18, color: palette.textTertiary),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
@@ -353,10 +342,10 @@ class _ConversationModelSelectorContentState
                 scrollPadding: EdgeInsets.zero,
                 textInputAction: TextInputAction.search,
                 onSubmitted: (_) => widget.onSearchSubmitted?.call(),
-                cursorColor: isDark ? palette.accentPrimary : null,
+                cursorColor: palette.accentPrimary,
                 style: TextStyle(
                   fontSize: 13,
-                  color: isDark ? palette.textPrimary : const Color(0xFF1F2937),
+                  color: palette.textPrimary,
                   fontWeight: FontWeight.w500,
                 ),
                 decoration: InputDecoration(
@@ -366,9 +355,7 @@ class _ConversationModelSelectorContentState
                   hintText: LegacyTextLocalizer.localize('搜索模型 ID'),
                   hintStyle: TextStyle(
                     fontSize: 13,
-                    color: isDark
-                        ? palette.textTertiary
-                        : const Color(0xFF9AA4B6),
+                    color: palette.textTertiary,
                     fontWeight: FontWeight.w500,
                   ),
                   border: InputBorder.none,
@@ -390,7 +377,6 @@ class _ConversationModelSelectorContentState
     final isSelectedProvider =
         widget.currentSelection?.providerProfileId == profile.id;
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
       child: InkWell(
@@ -410,13 +396,7 @@ class _ConversationModelSelectorContentState
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: isSelectedProvider
-                ? (isDark
-                      ? Color.lerp(
-                          palette.surfaceSecondary.withValues(alpha: 0.46),
-                          palette.accentPrimary,
-                          0.14,
-                        )!
-                      : const Color(0xFF2C7FEB).withValues(alpha: 0.10))
+                ? palette.surfaceSecondary
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
@@ -429,9 +409,7 @@ class _ConversationModelSelectorContentState
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark
-                        ? palette.textSecondary
-                        : const Color(0xFF64748B),
+                    color: palette.textSecondary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -445,9 +423,7 @@ class _ConversationModelSelectorContentState
                     : '${models.length}',
                 style: TextStyle(
                   fontSize: 11,
-                  color: isDark
-                      ? palette.textTertiary
-                      : const Color(0xFF9AA4B6),
+                  color: palette.textTertiary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -456,9 +432,7 @@ class _ConversationModelSelectorContentState
                 Icon(
                   Icons.check_circle_rounded,
                   size: 13,
-                  color: isDark
-                      ? palette.accentPrimary
-                      : const Color(0xFF2C7FEB),
+                  color: palette.accentPrimary,
                 ),
               ],
               if (widget.allowProfileCollapse) ...[
@@ -470,9 +444,7 @@ class _ConversationModelSelectorContentState
                       ? Icons.expand_less_rounded
                       : Icons.expand_more_rounded,
                   size: 16,
-                  color: isDark
-                      ? palette.textTertiary
-                      : const Color(0xFF94A3B8),
+                  color: palette.textTertiary,
                 ),
               ],
             ],
@@ -492,7 +464,6 @@ class _ConversationModelSelectorContentState
         : widget.currentSelection?.providerProfileId == profile?.id &&
               widget.currentSelection?.modelId == model.id;
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     final rowKeyPrefix = widget.modelRowKeyPrefix;
     return Padding(
       key: selected ? _selectedModelRowKey : null,
@@ -529,15 +500,7 @@ class _ConversationModelSelectorContentState
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: selected
-                    ? (isDark
-                          ? Color.lerp(
-                              palette.surfaceSecondary.withValues(alpha: 0.48),
-                              palette.accentPrimary,
-                              0.18,
-                            )!
-                          : const Color(0xFF2C7FEB).withValues(alpha: 0.12))
-                    : Colors.transparent,
+                color: selected ? palette.surfaceSecondary : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -560,9 +523,7 @@ class _ConversationModelSelectorContentState
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 13,
-                        color: isDark
-                            ? palette.textPrimary
-                            : const Color(0xFF1F2937),
+                        color: palette.textPrimary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -571,9 +532,7 @@ class _ConversationModelSelectorContentState
                     Icon(
                       Icons.check_rounded,
                       size: 15,
-                      color: isDark
-                          ? palette.accentPrimary
-                          : const Color(0xFF2C7FEB),
+                      color: palette.accentPrimary,
                     ),
                 ],
               ),
@@ -589,12 +548,7 @@ class _ConversationModelSelectorContentState
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       child: Text(
         label ?? LegacyTextLocalizer.localize('该 Provider 暂无可选模型'),
-        style: TextStyle(
-          fontSize: 12,
-          color: context.isDarkTheme
-              ? context.omniPalette.textTertiary
-              : const Color(0xFF94A3B8),
-        ),
+        style: TextStyle(fontSize: 12, color: context.omniPalette.textTertiary),
       ),
     );
   }
@@ -675,9 +629,7 @@ class _ConversationModelSelectorContentState
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
-                        color: context.isDarkTheme
-                            ? palette.textTertiary
-                            : const Color(0xFF94A3B8),
+                        color: palette.textTertiary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -691,9 +643,7 @@ class _ConversationModelSelectorContentState
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
-                        color: context.isDarkTheme
-                            ? palette.textTertiary
-                            : const Color(0xFF94A3B8),
+                        color: palette.textTertiary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),

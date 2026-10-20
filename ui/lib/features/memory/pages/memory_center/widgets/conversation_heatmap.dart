@@ -124,32 +124,32 @@ class _ConversationHeatmapState extends State<ConversationHeatmap>
     if (isDark) {
       switch (level) {
         case 0:
-          return const Color(0xFF242728);
+          return const Color(0xFF292929);
         case 1:
-          return const Color(0xFF1A3A5C);
+          return const Color(0xFF444444);
         case 2:
-          return const Color(0xFF1B5E94);
+          return const Color(0xFF777777);
         case 3:
-          return const Color(0xFF2178BD);
+          return const Color(0xFFAAAAAA);
         case 4:
-          return const Color(0xFF3B9FE8);
+          return const Color(0xFFDDDDDD);
         default:
-          return const Color(0xFF242728);
+          return const Color(0xFF292929);
       }
     } else {
       switch (level) {
         case 0:
-          return const Color(0xFFEBF0F5);
+          return const Color(0xFFEBEBEB);
         case 1:
-          return const Color(0xFFBFDBF7);
+          return const Color(0xFFCCCCCC);
         case 2:
-          return const Color(0xFF7BBCE6);
+          return const Color(0xFFAAAAAA);
         case 3:
-          return const Color(0xFF3B8FD4);
+          return const Color(0xFF777777);
         case 4:
-          return const Color(0xFF1A56A8);
+          return const Color(0xFF333333);
         default:
-          return const Color(0xFFEBF0F5);
+          return const Color(0xFFEBEBEB);
       }
     }
   }
@@ -168,15 +168,6 @@ class _ConversationHeatmapState extends State<ConversationHeatmap>
           color: palette.surfacePrimary,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: palette.borderSubtle),
-          boxShadow: [
-            BoxShadow(
-              color: palette.shadowColor.withValues(
-                alpha: isDark ? 0.30 : 0.08,
-              ),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
         ),
         child: _isLoading
             ? _buildSkeleton(palette, isDark)
@@ -198,9 +189,7 @@ class _ConversationHeatmapState extends State<ConversationHeatmap>
   }
 
   Widget _buildSkeleton(OmniThemePalette palette, bool isDark) {
-    final baseColor = isDark
-        ? palette.surfaceSecondary
-        : const Color(0xFFE8EFF8);
+    final baseColor = palette.surfaceSecondary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -272,7 +261,7 @@ class _ConversationHeatmapState extends State<ConversationHeatmap>
   }) {
     final accentColor = highlight
         ? const Color(0xFFF59E0B)
-        : (isDark ? const Color(0xFF7BBCE6) : const Color(0xFF2C7FEB));
+        : (palette.textPrimary);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -301,6 +290,7 @@ class _ConversationHeatmapState extends State<ConversationHeatmap>
   }
 
   Widget _buildHeatmapGrid(bool isDark) {
+    final palette = context.omniPalette;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
@@ -356,9 +346,7 @@ class _ConversationHeatmapState extends State<ConversationHeatmap>
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w500,
-                          color: isDark
-                              ? const Color(0xFF9A9488)
-                              : const Color(0xFF98A5BB),
+                          color: palette.textTertiary,
                         ),
                       ),
                     );
@@ -371,11 +359,9 @@ class _ConversationHeatmapState extends State<ConversationHeatmap>
         // Heatmap grid: day labels + cells
         LayoutBuilder(
           builder: (context, constraints) {
-            final gridAvailableWidth =
-                constraints.maxWidth - dayLabelWidth;
+            final gridAvailableWidth = constraints.maxWidth - dayLabelWidth;
             final actualCellSize = totalWeeks > 0
-                ? (gridAvailableWidth - (totalWeeks - 1) * cellGap) /
-                    totalWeeks
+                ? (gridAvailableWidth - (totalWeeks - 1) * cellGap) / totalWeeks
                 : cellSize;
             final clampedCellSize = actualCellSize.clamp(4.0, 14.0);
             final gridHeight = 7 * clampedCellSize + 6 * cellGap;
@@ -400,9 +386,7 @@ class _ConversationHeatmapState extends State<ConversationHeatmap>
                                     style: TextStyle(
                                       fontSize: 9,
                                       fontWeight: FontWeight.w500,
-                                      color: isDark
-                                          ? const Color(0xFF9A9488)
-                                          : const Color(0xFF98A5BB),
+                                      color: palette.textTertiary,
                                     ),
                                   )
                                 : const SizedBox.shrink(),
@@ -449,14 +433,12 @@ class _ConversationHeatmapState extends State<ConversationHeatmap>
                           preferBelow: false,
                           verticalOffset: 12,
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF2D3032)
-                                : const Color(0xFF353E53),
+                            color: palette.textPrimary,
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          textStyle: const TextStyle(
+                          textStyle: TextStyle(
                             fontSize: 11,
-                            color: Colors.white,
+                            color: palette.pageBackground,
                           ),
                           child: Container(
                             width: clampedCellSize,
@@ -485,10 +467,7 @@ class _ConversationHeatmapState extends State<ConversationHeatmap>
       children: [
         Text(
           LegacyTextLocalizer.isEnglish ? 'Less' : '少',
-          style: TextStyle(
-            fontSize: 9,
-            color: palette.textTertiary,
-          ),
+          style: TextStyle(fontSize: 9, color: palette.textTertiary),
         ),
         const SizedBox(width: 4),
         for (int level = 0; level <= 4; level++) ...[
@@ -505,10 +484,7 @@ class _ConversationHeatmapState extends State<ConversationHeatmap>
         const SizedBox(width: 4),
         Text(
           LegacyTextLocalizer.isEnglish ? 'More' : '多',
-          style: TextStyle(
-            fontSize: 9,
-            color: palette.textTertiary,
-          ),
+          style: TextStyle(fontSize: 9, color: palette.textTertiary),
         ),
       ],
     );
@@ -534,8 +510,19 @@ class _ConversationHeatmapState extends State<ConversationHeatmap>
       return names[month];
     }
     const names = [
-      '', '1月', '2月', '3月', '4月', '5月', '6月',
-      '7月', '8月', '9月', '10月', '11月', '12月',
+      '',
+      '1月',
+      '2月',
+      '3月',
+      '4月',
+      '5月',
+      '6月',
+      '7月',
+      '8月',
+      '9月',
+      '10月',
+      '11月',
+      '12月',
     ];
     return names[month];
   }

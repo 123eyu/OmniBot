@@ -258,10 +258,10 @@ class _AboutPageState extends State<AboutPage> {
     return Column(
       children: [
         SizedBox(
-          width: compact ? 88 : 104,
-          height: compact ? 64 : 76,
+          width: compact ? 72 : 88,
+          height: compact ? 72 : 88,
           child: Image.asset(
-            'assets/my/about_icon.png',
+            'assets/common/omnibot_launcher.png',
             fit: BoxFit.contain,
             errorBuilder: (context, error, stackTrace) {
               return Icon(
@@ -339,9 +339,7 @@ class _AboutPageState extends State<AboutPage> {
             ),
           )
           .toList(),
-      onChanged: _isUpdatingDownloadSource
-          ? null
-          : _handleSelectDownloadSource,
+      onChanged: _isUpdatingDownloadSource ? null : _handleSelectDownloadSource,
     );
   }
 

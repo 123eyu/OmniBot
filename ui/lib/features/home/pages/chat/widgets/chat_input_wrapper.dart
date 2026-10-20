@@ -17,6 +17,7 @@ class ChatInputWrapper extends StatelessWidget {
   final bool useLargeComposerStyle;
   final bool useAttachmentPickerForPlus;
   final Future<void> Function()? onPickAttachment;
+  final Future<void> Function()? onPickImages;
   final List<ChatInputAttachment> attachments;
   final bool hasExternalSendPayload;
   final bool isEditingUserMessage;
@@ -59,6 +60,7 @@ class ChatInputWrapper extends StatelessWidget {
     this.useLargeComposerStyle = false,
     this.useAttachmentPickerForPlus = false,
     this.onPickAttachment,
+    this.onPickImages,
     this.attachments = const [],
     this.hasExternalSendPayload = false,
     this.isEditingUserMessage = false,
@@ -111,6 +113,7 @@ class ChatInputWrapper extends StatelessWidget {
             minimalComposer: true,
             useAttachmentPickerForPlus: useAttachmentPickerForPlus,
             onPickAttachment: onPickAttachment,
+            onPickImages: onPickImages,
             attachments: attachments,
             hasExternalSendPayload: hasExternalSendPayload,
             isEditingUserMessage: isEditingUserMessage,

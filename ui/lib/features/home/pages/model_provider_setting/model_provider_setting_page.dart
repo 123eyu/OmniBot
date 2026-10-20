@@ -24,7 +24,7 @@ import 'chatgpt_account_section.dart';
 const double _kProviderSwitchPopupMaxHeight = 320;
 const double _kProviderTypePopupMinWidth = 200;
 const double _kProviderTypePopupHorizontalMargin = 16;
-const double _kProviderTypePopupTextFontSize = 13;
+const double _kProviderTypePopupTextFontSize = 15;
 
 enum _ProviderModelSource { manual, remote }
 
@@ -241,14 +241,10 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
 
   bool get _isDarkTheme => context.isDarkTheme;
   Color get _pageBackground => context.omniPalette.pageBackground;
-  Color get _cardColor =>
-      _isDarkTheme ? context.omniPalette.surfacePrimary : Colors.white;
-  Color get _primaryTextColor =>
-      _isDarkTheme ? context.omniPalette.textPrimary : AppColors.text;
-  Color get _secondaryTextColor =>
-      _isDarkTheme ? context.omniPalette.textSecondary : AppColors.text70;
-  Color get _tertiaryTextColor =>
-      _isDarkTheme ? context.omniPalette.textTertiary : AppColors.text50;
+  Color get _cardColor => context.omniPalette.surfacePrimary;
+  Color get _primaryTextColor => context.omniPalette.textPrimary;
+  Color get _secondaryTextColor => context.omniPalette.textSecondary;
+  Color get _tertiaryTextColor => context.omniPalette.textTertiary;
 
   bool get _isChatGptProvider =>
       _selectedSourceType == ChatGptOAuthService.sourceType;
@@ -1711,8 +1707,8 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     final selected = await showMenu<String>(
       context: context,
       color: _cardColor,
-      elevation: _isDarkTheme ? 0 : 8,
-      shadowColor: _isDarkTheme ? context.omniPalette.shadowColor : null,
+      elevation: 3,
+      shadowColor: context.omniPalette.shadowColor,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -1798,8 +1794,8 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     return showMenu<String>(
       context: context,
       color: _cardColor,
-      elevation: _isDarkTheme ? 0 : 8,
-      shadowColor: _isDarkTheme ? context.omniPalette.shadowColor : null,
+      elevation: 3,
+      shadowColor: context.omniPalette.shadowColor,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -1879,7 +1875,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: _primaryTextColor,
-                              fontSize: 14,
+                              fontSize: 15,
                               fontWeight: FontWeight.w600,
                               fontFamily: 'PingFang SC',
                             ),
@@ -1966,15 +1962,9 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                     vertical: 14,
                   ),
                   decoration: BoxDecoration(
-                    color: _isDarkTheme
-                        ? context.omniPalette.surfaceSecondary
-                        : const Color(0xFFF7F9FC),
+                    color: context.omniPalette.surfaceSecondary,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: _isDarkTheme
-                          ? context.omniPalette.borderSubtle
-                          : const Color(0x14000000),
-                    ),
+                    border: Border.all(color: context.omniPalette.borderSubtle),
                   ),
                   child: Text(
                     _headerText('暂未配置自定义请求头', 'No custom headers configured'),
@@ -2025,15 +2015,9 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 8, 8),
       decoration: BoxDecoration(
-        color: _isDarkTheme
-            ? context.omniPalette.surfaceSecondary
-            : const Color(0xFFF7F9FC),
+        color: context.omniPalette.surfaceSecondary,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _isDarkTheme
-              ? context.omniPalette.borderSubtle
-              : const Color(0x14000000),
-        ),
+        border: Border.all(color: context.omniPalette.borderSubtle),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2090,9 +2074,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
   }) {
     final isEnabled = onPressed != null;
     final useHighlightStyle = highlighted || loading;
-    final accentColor = _isDarkTheme
-        ? context.omniPalette.accentPrimary
-        : const Color(0xFF2C7FEB);
+    final accentColor = context.omniPalette.accentPrimary;
     final iconColor = !isEnabled && !loading
         ? _tertiaryTextColor
         : useHighlightStyle
@@ -2135,9 +2117,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     bool highlighted = false,
   }) {
     final isEnabled = onPressed != null;
-    final accentColor = _isDarkTheme
-        ? context.omniPalette.accentPrimary
-        : const Color(0xFF2C7FEB);
+    final accentColor = context.omniPalette.accentPrimary;
     final iconColor = !isEnabled
         ? _tertiaryTextColor
         : highlighted
@@ -2207,11 +2187,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
         decoration: BoxDecoration(
           color: _cardColor,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: _isDarkTheme
-                ? context.omniPalette.borderSubtle
-                : const Color(0x14000000),
-          ),
+          border: Border.all(color: context.omniPalette.borderSubtle),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -2258,11 +2234,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
         decoration: BoxDecoration(
           color: _cardColor,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: _isDarkTheme
-                ? context.omniPalette.borderSubtle
-                : const Color(0x14000000),
-          ),
+          border: Border.all(color: context.omniPalette.borderSubtle),
         ),
         child: Text(
           label,
@@ -2288,11 +2260,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
       decoration: BoxDecoration(
         color: _cardColor,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: _isDarkTheme
-              ? context.omniPalette.borderSubtle
-              : const Color(0x14000000),
-        ),
+        border: Border.all(color: context.omniPalette.borderSubtle),
       ),
       child: Text(
         modality.toUpperCase(),
@@ -2514,9 +2482,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                       child: Container(
                         key: Key('provider-model-group-line-$groupName'),
                         height: 1,
-                        color: _isDarkTheme
-                            ? palette.borderSubtle.withValues(alpha: 0.56)
-                            : const Color(0x16000000),
+                        color: palette.borderSubtle,
                       ),
                     ),
                     const SizedBox(width: lineToIconGap),
@@ -2673,7 +2639,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                             child: Text(
                               item.id,
                               style: TextStyle(
-                                fontSize: 13,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w600,
                                 color: _primaryTextColor,
                                 fontFamily: 'PingFang SC',
@@ -2748,8 +2714,8 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     final selected = await showMenu<String>(
       context: context,
       color: _cardColor,
-      elevation: _isDarkTheme ? 0 : 8,
-      shadowColor: _isDarkTheme ? context.omniPalette.shadowColor : null,
+      elevation: 3,
+      shadowColor: context.omniPalette.shadowColor,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -2809,8 +2775,8 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     await showMenu<String>(
       context: context,
       color: _cardColor,
-      elevation: _isDarkTheme ? 0 : 8,
-      shadowColor: _isDarkTheme ? context.omniPalette.shadowColor : null,
+      elevation: 3,
+      shadowColor: context.omniPalette.shadowColor,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -2856,7 +2822,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: _primaryTextColor,
-            fontSize: 14,
+            fontSize: 15,
             fontWeight: FontWeight.w600,
             fontFamily: 'PingFang SC',
           ),
@@ -2962,7 +2928,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: _primaryTextColor,
-                          fontSize: 14,
+                          fontSize: 15,
                           fontWeight: FontWeight.w600,
                           fontFamily: 'PingFang SC',
                         ),
@@ -3053,7 +3019,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
             : ListView(
                 padding: edgeToEdgeScrollPadding(
                   context,
-                  const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                  const EdgeInsets.fromLTRB(22, 12, 22, 24),
                 ),
                 children: [
                   SettingsSectionTitle(
@@ -3069,43 +3035,10 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                             Expanded(
                               child: LayoutBuilder(
                                 builder: (context, constraints) {
-                                  const providerTitleMinWidth = 72.0;
-                                  const protocolButtonPreferredWidth = 176.0;
-                                  const titleSpacing = 4.0;
-                                  final availableWidth =
-                                      constraints.maxWidth.isFinite
-                                      ? constraints.maxWidth
-                                      : providerTitleMinWidth +
-                                            titleSpacing +
-                                            protocolButtonPreferredWidth;
-                                  final usableWidth = math.max(
-                                    0.0,
-                                    availableWidth - titleSpacing,
-                                  );
-                                  final protocolButtonMaxWidth =
-                                      (usableWidth - providerTitleMinWidth)
-                                          .clamp(
-                                            0.0,
-                                            protocolButtonPreferredWidth,
-                                          )
-                                          .toDouble();
-                                  final providerTitleMaxWidth = math.max(
-                                    0.0,
-                                    usableWidth - protocolButtonMaxWidth,
-                                  );
                                   return Align(
                                     alignment: Alignment.centerLeft,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        _buildProviderConfigTitle(
-                                          maxWidth: providerTitleMaxWidth,
-                                        ),
-                                        const SizedBox(width: titleSpacing),
-                                        _buildProtocolTypeButton(
-                                          maxWidth: protocolButtonMaxWidth,
-                                        ),
-                                      ],
+                                    child: _buildProviderConfigTitle(
+                                      maxWidth: constraints.maxWidth,
                                     ),
                                   );
                                 },
@@ -3126,6 +3059,30 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                               onPressed: _promptAddProfile,
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 4),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 44),
+                          child: Row(
+                            children: [
+                              Text(
+                                _headerText('提供商', 'Provider'),
+                                style: TextStyle(
+                                  color: _secondaryTextColor,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) =>
+                                      _buildProtocolTypeButton(
+                                        maxWidth: constraints.maxWidth,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
@@ -3323,7 +3280,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
                                             color: _secondaryTextColor,
-                                            fontSize: 14,
+                                            fontSize: 15,
                                             fontWeight: FontWeight.w600,
                                             fontFamily: 'PingFang SC',
                                           ),
@@ -3408,11 +3365,7 @@ class _ProviderSwitchPopupEntryState extends State<_ProviderSwitchPopupEntry> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
-            color: selected
-                ? (_isDarkTheme(context)
-                      ? palette.segmentThumb
-                      : const Color(0xFFEAF3FF))
-                : Colors.transparent,
+            color: selected ? palette.surfaceSecondary : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -3423,23 +3376,15 @@ class _ProviderSwitchPopupEntryState extends State<_ProviderSwitchPopupEntry> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 13,
-                    color: _isDarkTheme(context)
-                        ? palette.textPrimary
-                        : AppColors.text,
+                    fontSize: 15,
+                    color: palette.textPrimary,
                     fontWeight: FontWeight.w500,
                     fontFamily: 'PingFang SC',
                   ),
                 ),
               ),
               if (selected)
-                Icon(
-                  LucideIcons.check,
-                  size: 16,
-                  color: _isDarkTheme(context)
-                      ? palette.accentPrimary
-                      : const Color(0xFF2C7FEB),
-                ),
+                Icon(LucideIcons.check, size: 16, color: palette.accentPrimary),
             ],
           ),
         ),
@@ -3467,9 +3412,7 @@ class _ProviderSwitchPopupEntryState extends State<_ProviderSwitchPopupEntry> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,
-                    color: _isDarkTheme(context)
-                        ? palette.textTertiary
-                        : const Color(0xFF94A3B8),
+                    color: palette.textTertiary,
                     fontWeight: FontWeight.w500,
                     fontFamily: 'PingFang SC',
                   ),
@@ -3609,9 +3552,7 @@ class _ChatModelVisibilityPopupEntryState
     final isDark = context.isDarkTheme;
     final visible = !_hiddenModelIds.contains(model.id);
     final pending = _removingAll || _pendingModelIds.contains(model.id);
-    final accentColor = isDark
-        ? palette.accentPrimary
-        : const Color(0xFF2C7FEB);
+    final accentColor = palette.accentPrimary;
     final removeColor = isDark ? const Color(0xFFFCA5A5) : AppColors.alertRed;
     final actionColor = visible ? removeColor : accentColor;
     final tooltip = visible ? widget.removeTooltip : widget.addTooltip;
@@ -3638,8 +3579,8 @@ class _ChatModelVisibilityPopupEntryState
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? palette.textPrimary : AppColors.text,
+                  fontSize: 15,
+                  color: palette.textPrimary,
                   fontWeight: FontWeight.w600,
                   fontFamily: 'PingFang SC',
                 ),
@@ -3731,8 +3672,8 @@ class _ChatModelVisibilityPopupEntryState
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? palette.textPrimary : AppColors.text,
+                        fontSize: 15,
+                        color: palette.textPrimary,
                         fontWeight: FontWeight.w700,
                         fontFamily: 'PingFang SC',
                       ),
@@ -3742,9 +3683,7 @@ class _ChatModelVisibilityPopupEntryState
                     '$visibleCount/${widget.models.length}',
                     style: TextStyle(
                       fontSize: 12,
-                      color: isDark
-                          ? palette.textTertiary
-                          : const Color(0xFF94A3B8),
+                      color: palette.textTertiary,
                       fontWeight: FontWeight.w600,
                       fontFamily: 'PingFang SC',
                     ),
@@ -3790,9 +3729,7 @@ class _ChatModelVisibilityPopupEntryState
                                       size: 17,
                                       color: canRemoveAll
                                           ? removeColor
-                                          : (isDark
-                                                ? palette.textTertiary
-                                                : const Color(0xFF94A3B8)),
+                                          : (palette.textTertiary),
                                     ),
                             ),
                           ),
@@ -3811,9 +3748,7 @@ class _ChatModelVisibilityPopupEntryState
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark
-                        ? palette.textTertiary
-                        : const Color(0xFF94A3B8),
+                    color: palette.textTertiary,
                     fontWeight: FontWeight.w500,
                     fontFamily: 'PingFang SC',
                   ),
@@ -3890,7 +3825,6 @@ class _SelectionPopupEntry extends PopupMenuEntry<String> {
 class _SelectionPopupEntryState extends State<_SelectionPopupEntry> {
   Widget _buildTile(_SelectionOption option) {
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     final selected = option.value == widget.selectedValue;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
@@ -3900,9 +3834,7 @@ class _SelectionPopupEntryState extends State<_SelectionPopupEntry> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
-            color: selected
-                ? (isDark ? palette.segmentThumb : const Color(0xFFEAF3FF))
-                : Colors.transparent,
+            color: selected ? palette.surfaceSecondary : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -3913,21 +3845,15 @@ class _SelectionPopupEntryState extends State<_SelectionPopupEntry> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? palette.textPrimary : AppColors.text,
+                    fontSize: 15,
+                    color: palette.textPrimary,
                     fontWeight: FontWeight.w500,
                     fontFamily: 'PingFang SC',
                   ),
                 ),
               ),
               if (selected)
-                Icon(
-                  LucideIcons.check,
-                  size: 16,
-                  color: isDark
-                      ? palette.accentPrimary
-                      : const Color(0xFF2C7FEB),
-                ),
+                Icon(LucideIcons.check, size: 16, color: palette.accentPrimary),
             ],
           ),
         ),
@@ -3964,7 +3890,6 @@ class _SelectionPopupEntryState extends State<_SelectionPopupEntry> {
 class _ProviderTypePopupEntryState extends State<_ProviderTypePopupEntry> {
   Widget _buildProtocolTile(_ProviderTypeOption option) {
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     final selected = option.value == widget.selectedValue;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
@@ -3974,9 +3899,7 @@ class _ProviderTypePopupEntryState extends State<_ProviderTypePopupEntry> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
-            color: selected
-                ? (isDark ? palette.segmentThumb : const Color(0xFFEAF3FF))
-                : Colors.transparent,
+            color: selected ? palette.surfaceSecondary : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -3987,21 +3910,15 @@ class _ProviderTypePopupEntryState extends State<_ProviderTypePopupEntry> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? palette.textPrimary : AppColors.text,
+                    fontSize: 15,
+                    color: palette.textPrimary,
                     fontWeight: FontWeight.w500,
                     fontFamily: 'PingFang SC',
                   ),
                 ),
               ),
               if (selected)
-                Icon(
-                  LucideIcons.check,
-                  size: 16,
-                  color: isDark
-                      ? palette.accentPrimary
-                      : const Color(0xFF2C7FEB),
-                ),
+                Icon(LucideIcons.check, size: 16, color: palette.accentPrimary),
             ],
           ),
         ),
@@ -4034,8 +3951,6 @@ class _ProviderTypePopupEntryState extends State<_ProviderTypePopupEntry> {
     );
   }
 }
-
-bool _isDarkTheme(BuildContext context) => context.isDarkTheme;
 
 class _AddModelIdDialog extends StatefulWidget {
   const _AddModelIdDialog();

@@ -2,7 +2,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -19,7 +18,9 @@ import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/widgets/text_input_context_menu.dart';
 
 part 'chat_input_area_composer.dart';
+part 'chat_input_compact_composer.dart';
 part 'chat_input_area_popup.dart';
+part 'chat_input_compact_actions.dart';
 part 'chat_input_actions.dart';
 part 'chat_input_agent_controls.dart';
 part 'chat_input_agent_menus.dart';
@@ -150,6 +151,7 @@ class ChatInputArea extends StatefulWidget {
   final bool minimalComposer;
   final bool useAttachmentPickerForPlus;
   final Future<void> Function()? onPickAttachment;
+  final Future<void> Function()? onPickImages;
   final List<ChatInputAttachment> attachments;
   final bool hasExternalSendPayload;
   final bool isEditingUserMessage;
@@ -191,6 +193,7 @@ class ChatInputArea extends StatefulWidget {
     this.minimalComposer = false,
     this.useAttachmentPickerForPlus = false,
     this.onPickAttachment,
+    this.onPickImages,
     this.attachments = const [],
     this.hasExternalSendPayload = false,
     this.isEditingUserMessage = false,
@@ -237,6 +240,9 @@ abstract class _ChatInputAreaStateBase extends State<ChatInputArea>
   OverlayGlassPopupHandle<_AgentRunSettingsMenuAction>?
   _agentRunSettingsMenuHandle;
   OverlayGlassPopupHandle<AgentPermissionMode>? _agentPermissionMenuHandle;
+  OverlayGlassPopupHandle<_CompactComposerAction>? _compactActionsMenu;
+  bool _compactExpansionHeld = false;
+  bool _hadComposerPopup = false;
 
   final ScrollController _textFieldScrollController = ScrollController();
   final GlobalKey _textFieldKey = GlobalKey(
@@ -417,6 +423,21 @@ abstract class _ChatInputAreaStateBase extends State<ChatInputArea>
     );
   }
 
+  /// Keeps the current composer layout while the existing runtime selector
+  /// temporarily owns focus. This is presentation state only.
+  void setAuxiliaryPopupVisible(bool visible) {
+    if (visible) {
+      _composerStateMachine.popupOpened(ChatComposerPopup.runtimeConfiguration);
+    } else {
+      _composerStateMachine.popupClosed(ChatComposerPopup.runtimeConfiguration);
+    }
+  }
+
+  Duration get _compactAnimationDuration =>
+      MediaQuery.disableAnimationsOf(context)
+      ? Duration.zero
+      : const Duration(milliseconds: 220);
+
   Future<void> openAgentPermissionMenu(BuildContext anchorContext) =>
       _openAgentPermissionMenu(anchorContext);
 
@@ -446,6 +467,15 @@ abstract class _ChatInputAreaStateBase extends State<ChatInputArea>
   }
 
   void _onComposerStateChanged() {
+    final state = _composerStateMachine.value;
+    final hasPopup =
+        state.openPopups.isNotEmpty || state.openingPopups.isNotEmpty;
+    if (hasPopup && !_hadComposerPopup) {
+      _compactExpansionHeld = state.hasFocus;
+    } else if (!hasPopup) {
+      _compactExpansionHeld = false;
+    }
+    _hadComposerPopup = hasPopup;
     final expandsTextField = _composerStateMachine.value.expandsTextField;
     if (expandsTextField == _lastComposerExpansionState) {
       return;
@@ -481,6 +511,8 @@ abstract class _ChatInputAreaStateBase extends State<ChatInputArea>
 
   @override
   void dispose() {
+    unawaited(_compactActionsMenu?.dismiss());
+    _compactActionsMenu = null;
     unawaited(_agentRunSettingsMenuHandle?.dismiss());
     _agentRunSettingsMenuHandle = null;
     unawaited(_agentPermissionMenuHandle?.dismiss());

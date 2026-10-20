@@ -212,7 +212,7 @@ class _WorkspaceMemorySettingPageState
           : ListView(
               padding: edgeToEdgeScrollPadding(
                 context,
-                const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                const EdgeInsets.fromLTRB(22, 12, 22, 32),
               ),
               children: [
                 SettingsSectionTitle(

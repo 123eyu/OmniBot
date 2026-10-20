@@ -336,7 +336,7 @@ class OmniSettingsTile extends StatelessWidget {
                       child: Center(
                         child:
                             leading ??
-                            Icon(icon, size: 22, color: effectiveIconColor),
+                            Icon(icon, size: 20, color: effectiveIconColor),
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -349,7 +349,7 @@ class OmniSettingsTile extends StatelessWidget {
                         Text(
                           translateText ? context.trLegacy(title) : title,
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w400,
                             color: effectiveTitleColor,
                             height: 1.38,

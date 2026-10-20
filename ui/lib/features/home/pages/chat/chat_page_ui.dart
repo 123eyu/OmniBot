@@ -16,17 +16,24 @@ const List<String> _kAgentReasoningEffortOptions = <String>[
 enum _UserMessageQuickAction { copy, edit, retry }
 
 mixin _ChatPageUiMixin on _ChatPageStateBase {
-  Widget _buildAcpConfigButton() {
-    if (_activeMode == ChatPageMode.agent && _activeAcpAgentId == 'na-cloud') {
-      return TextButton.icon(
-        key: const Key('na-cloud-settings'),
-        onPressed: () => GoRouterManager.push('/home/agent_config/na-cloud'),
-        icon: const Icon(Icons.cloud_outlined, size: 16),
-        label: Text(
-          LegacyTextLocalizer.isEnglish ? 'Cloud connection' : '云端连接',
-        ),
-      );
+  bool get _showLocalTerminalActions =>
+      !(_activeMode == ChatPageMode.normal && _isPureChatSelected) &&
+      !(_activeMode == ChatPageMode.agent && _activeAcpAgentId == 'na-cloud');
+
+  String? get _composerModelLabel {
+    if (_activeMode == ChatPageMode.agent) {
+      return _activeAgentModelId ??
+          (_usesSharedProviderModel(_activeAcpAgentId)
+              ? _activeNormalChatModelId
+              : null);
     }
+    return (_showConversationModelMentionChip
+            ? _activeConversationModelOverrideSelection?.modelId
+            : null) ??
+        _activeNormalChatModelId;
+  }
+
+  Widget _buildAcpConfigButton() {
     final generation = _conversationTargetRequestId;
     final mode = _activeMode;
     final agentId = _activeAcpAgentId;
@@ -63,7 +70,11 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       key: _acpConfigButtonKey,
       presentationIdentity: generation,
       isRunning: _isAiResponding,
-      onVisibilityChanged: _onPopupVisibilityChanged,
+      modelLabel: _composerModelLabel,
+      onVisibilityChanged: (visible) {
+        _chatInputAreaKey.currentState?.setAuxiliaryPopupVisible(visible);
+        _onPopupVisibilityChanged(visible);
+      },
       configureModel: _usesSharedProviderModel(agentId)
           ? _openConversationModelSelector
           : null,
@@ -96,42 +107,19 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     final english = LegacyTextLocalizer.isEnglish;
     return [
       if (_isInputAreaVisible) ...[
-        ChatAppBarAction(
-          label: english ? 'Model & settings' : '模型与参数',
-          icon: LucideIcons.slidersHorizontal,
-          onSelected: (anchor) async {
-            if (_activeMode == ChatPageMode.agent &&
-                _activeAcpAgentId == 'na-cloud') {
-              GoRouterManager.push('/home/agent_config/na-cloud');
-            } else {
-              await _acpConfigButtonKey.currentState?.open(
-                anchor,
-                preferBelow: true,
-              );
-            }
-          },
-        ),
-        ChatAppBarAction(
-          label: english ? 'Add attachment' : '添加附件',
-          icon: LucideIcons.paperclip,
-          onSelected: (_) => _pickAttachments(),
-        ),
+        if (_activeMode == ChatPageMode.agent &&
+            _activeAcpAgentId == 'na-cloud')
+          ChatAppBarAction(
+            label: english ? 'Cloud connection' : '云端连接',
+            icon: LucideIcons.cloud,
+            onSelected: (_) =>
+                GoRouterManager.push('/home/agent_config/na-cloud'),
+          ),
         ChatAppBarAction(
           label: english ? 'Commands' : '命令',
           icon: LucideIcons.command,
           onSelected: (_) => _triggerSlashCommandPanel(),
         ),
-        if (_activeMode == ChatPageMode.agent &&
-            _activeAcpAgentId != 'na-cloud')
-          ChatAppBarAction(
-            label: english ? 'Agent permissions' : 'Agent 权限',
-            icon: LucideIcons.shield,
-            onSelected: (anchor) async {
-              await _chatInputAreaKey.currentState?.openAgentPermissionMenu(
-                anchor,
-              );
-            },
-          ),
         if (_activeMode != ChatPageMode.openclaw)
           ChatAppBarAction(
             label: english ? 'Context usage & limit' : '上下文用量与阈值',
@@ -148,7 +136,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     ];
   }
 
-  ChatPaneOverlayAnchorGeometry? _lastStableToolActivityAnchorGeometry;
+  ChatPaneOverlayAnchorGeometry? _lastStableCommandAnchorGeometry;
   static const double _kChatInputWrapperTopPadding = 8.0;
   static const double _kChatInputFallbackHeight = 80.0;
   static const double _kHdPadPaneCollapseWidthRatio = 0.12;
@@ -740,7 +728,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     );
   }
 
-  ChatPaneOverlayAnchorGeometry _resolveToolActivityAnchorGeometry({
+  ChatPaneOverlayAnchorGeometry _resolveCommandAnchorGeometry({
     required BuildContext layoutContext,
     required BoxConstraints constraints,
     required double inputBottomPadding,
@@ -751,9 +739,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         ? inputAreaHeight
         : 0.0;
     final derivedWidth = math.max(0.0, constraints.maxWidth - 48);
-    if (_isSurfacePageScrolling &&
-        _lastStableToolActivityAnchorGeometry != null) {
-      return _lastStableToolActivityAnchorGeometry!;
+    if (_isSurfacePageScrolling && _lastStableCommandAnchorGeometry != null) {
+      return _lastStableCommandAnchorGeometry!;
     }
 
     if (_isInputAreaVisible && normalizedInputHeight > 0.5) {
@@ -763,17 +750,17 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
             inputBottomPadding + keyboardSpacer + normalizedInputHeight,
         anchorHeight: normalizedInputHeight,
       );
-      _lastStableToolActivityAnchorGeometry = geometry;
+      _lastStableCommandAnchorGeometry = geometry;
       return geometry;
     }
 
-    final liveGeometry = _resolveToolActivityAnchorGeometryFromInputArea(
+    final liveGeometry = _resolveCommandAnchorGeometryFromInputArea(
       layoutContext: layoutContext,
       constraints: constraints,
       derivedWidth: derivedWidth,
     );
     if (liveGeometry != null) {
-      _lastStableToolActivityAnchorGeometry = liveGeometry;
+      _lastStableCommandAnchorGeometry = liveGeometry;
       return liveGeometry;
     }
 
@@ -802,12 +789,11 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
           .clamp(0.0, constraints.maxHeight)
           .toDouble(),
     );
-    _lastStableToolActivityAnchorGeometry = geometry;
+    _lastStableCommandAnchorGeometry = geometry;
     return geometry;
   }
 
-  ChatPaneOverlayAnchorGeometry?
-  _resolveToolActivityAnchorGeometryFromInputArea({
+  ChatPaneOverlayAnchorGeometry? _resolveCommandAnchorGeometryFromInputArea({
     required BuildContext layoutContext,
     required BoxConstraints constraints,
     required double derivedWidth,
@@ -831,49 +817,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       bottom: (constraints.maxHeight - top)
           .clamp(0.0, constraints.maxHeight)
           .toDouble(),
-    );
-  }
-
-  void _scheduleToolActivityInsetSync(double height) {
-    final normalized = height.isFinite ? height : 0.0;
-    if ((_toolActivityOccupiedHeight - normalized).abs() < 0.5) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || (_toolActivityOccupiedHeight - normalized).abs() < 0.5) {
-        return;
-      }
-      setState(() {
-        _modeState(_activeMode).toolActivityOccupiedHeight = normalized;
-      });
-    });
-  }
-
-  void _setToolActivityExpanded(bool expanded) {
-    if (_isToolActivityExpanded == expanded) {
-      return;
-    }
-    if (!mounted) {
-      _modeState(_activeMode).toolActivityExpanded = expanded;
-      return;
-    }
-    setState(() {
-      _modeState(_activeMode).toolActivityExpanded = expanded;
-    });
-  }
-
-  bool _shouldShowToolActivityStripForMode({
-    required ChatPageMode mode,
-    required AgentToolActivitySnapshot snapshot,
-  }) {
-    if (mode != _activeMode ||
-        !_isInputAreaVisible ||
-        _showSlashCommandPanel ||
-        _openClawPanelExpanded) {
-      return false;
-    }
-    return shouldShowAgentToolActivitySnapshot(
-      snapshot,
     );
   }
 
@@ -1071,14 +1014,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       // means the turn has not been admitted yet; rendering a page-local
       // dispatch id here would reintroduce a second lifecycle source.
     }
-    final toolActivitySnapshot = resolveAgentToolActivitySnapshot(
-      List<ChatMessageModel>.from(visibleMessages),
-      activeTaskIds: activeAgentTurnIds,
-    );
-    final showToolActivityStrip = _shouldShowToolActivityStripForMode(
-      mode: mode,
-      snapshot: toolActivitySnapshot,
-    );
     final bottomInset = MediaQuery.maybeOf(context)?.viewInsets.bottom ?? 0.0;
     final internalInputKeyboardInset =
         mode == _activeMode && _isMessageListInputFocusedForMode(mode)
@@ -1125,8 +1060,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       navigator: _modeState(mode).messageListNavigator,
       bottomOverlayInset:
           reservedBottomOverlayInset +
-          (mode == _activeMode ? _slashCommandPanelOccupiedHeight : 0) +
-          (showToolActivityStrip ? _toolActivityOccupiedHeight : 0),
+          (mode == _activeMode ? _slashCommandPanelOccupiedHeight : 0),
       onInternalInputFocusChanged: (hasFocus) {
         _handleMessageListInputFocusChanged(mode, hasFocus);
       },
@@ -1348,14 +1282,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     VoidCallback? onWorkspacePaneTap,
     bool showWorkspacePaneButton = false,
   }) {
-    final toolActivitySnapshot = resolveAgentToolActivitySnapshot(
-      List<ChatMessageModel>.from(_messages),
-      activeTaskIds: _activeRuntime?.activeAgentTurnIds ?? const <String>{},
-    );
-    final toolActivityMessages = toolActivitySnapshot.messages;
-    final toolActivityCards = extractAgentToolCards(toolActivityMessages);
-    final isPinnedCompletedToolActivity =
-        toolActivityCards.isNotEmpty && !toolActivitySnapshot.isActiveRun;
     final slashCommandCards =
         _showSlashCommandPanel &&
             !_showModelMentionPanel &&
@@ -1364,39 +1290,20 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         : const <Map<String, dynamic>>[];
     final showSlashCommandStrip =
         _isInputAreaVisible && slashCommandCards.isNotEmpty;
-    final showToolActivityStrip = _shouldShowToolActivityStripForMode(
-      mode: _activeMode,
-      snapshot: toolActivitySnapshot,
-    );
-    final toolActivityCanExpand = toolActivityCards.length > 1;
-    // The activity strip sits flush above the composer, so its downward drop
-    // shadow reads as part of the input surface instead of as separate chrome.
-    final suppressToolActivitySurfaceShadow =
-        showToolActivityStrip || showSlashCommandStrip;
-    final overlayAnchor = (toolActivityCards.isEmpty && !showSlashCommandStrip)
-        ? null
-        : _resolveToolActivityAnchorGeometry(
+    final overlayAnchor = showSlashCommandStrip
+        ? _resolveCommandAnchorGeometry(
             layoutContext: layoutContext,
             constraints: constraints,
             inputBottomPadding: inputBottomPadding,
             keyboardSpacer: keyboardSpacer,
             inputAreaHeight: _inputAreaHeight,
-          );
-    if ((!showToolActivityStrip || toolActivityCards.isEmpty) &&
-        _toolActivityOccupiedHeight > 0) {
-      _scheduleToolActivityInsetSync(0);
-    }
+          )
+        : null;
     if (!showSlashCommandStrip &&
         !_showModelMentionPanel &&
         !_openClawPanelExpanded &&
         _slashCommandPanelOccupiedHeight > 0) {
       _scheduleSlashCommandOccupiedHeightSync(0);
-    }
-    if ((!toolActivityCanExpand || !showToolActivityStrip) &&
-        _isToolActivityExpanded) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _setToolActivityExpanded(false);
-      });
     }
     if (!showSlashCommandStrip && _isSlashCommandExpanded) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1431,27 +1338,11 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               onMenuTap: _returnToConversationHome,
               title: _currentConversation?.title,
               actions: _chatHeaderActions(),
-              tutorialActionsAnchorKey: _firstUseTourModelAnchorKey,
               onPetTap: () {
                 unawaited(_handlePetOverlayTap());
               },
               isPetOpening: _isPetOverlayOpening,
               isPetShowing: _isPetOverlayShowing,
-              onOmniAiTap: () {
-                // Xiaowan and the built-in Xiaowan ACP profile are one
-                // visible Agent. Keep the old shortcut callback only as the
-                // UI compatibility boundary and route it through ACP.
-                unawaited(_handleAcpAgentModeShortcutTap(_kXiaowanAcpAgentId));
-              },
-              onPureChatToggleTap: () {
-                unawaited(_handlePureChatModeShortcutTap());
-              },
-              onAgentTap: () {
-                unawaited(_handleAgentTap());
-              },
-              onAcpAgentTap: (agentId) {
-                unawaited(_handleAcpAgentModeShortcutTap(agentId));
-              },
               onPrimaryModeTap: _activeMode == ChatPageMode.agent
                   ? () => GoRouterManager.push('/home/agent_sessions')
                   : null,
@@ -1469,15 +1360,12 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               hasTerminalEnvironment: _terminalEnvironmentVariables.isNotEmpty,
               isBrowserEnabled: _isBrowserSessionAvailable,
               activeToolType: _lastAgentToolType,
-              isAgentReady: _agentRuntimeStatus.ready,
-              isAgentConnected: _agentRuntimeStatus.connected,
-              isAgentLoading:
-                  _isAgentRuntimeStatusLoading || _isAcpAgentSwitching,
-              isAgentSelected: _activeMode == ChatPageMode.agent,
-              isOmniAiSelected:
-                  _activeMode == ChatPageMode.normal && !_isPureChatSelected,
               acpAgentModes: _chatAcpAgentModeOptions,
-              activeAcpAgentId: _appBarActiveAcpAgentId,
+              activeAcpAgentId: switch (_activeMode) {
+                ChatPageMode.agent => _appBarActiveAcpAgentId,
+                ChatPageMode.openclaw => 'openclaw',
+                ChatPageMode.normal => _kXiaowanAcpAgentId,
+              },
               showAppUpdateIndicator: showAppUpdateIndicator,
               appUpdateTooltip: appUpdateTooltip,
               onAppUpdateTap: showAppUpdateIndicator
@@ -1489,11 +1377,9 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               visualProfile: visualProfile,
               showMenuButton: showMenuButton,
               showSurfaceSwitcher: showSurfaceSwitcher,
-              showPureChatToggle:
-                  _activeMode == ChatPageMode.normal ||
-                  _activeMode == ChatPageMode.agent,
-              isPureChatSelected: _isPureChatSelected,
-              isPureChatToggleLocked: _isPureChatToggleLocked,
+              isPureChatSelected:
+                  _activeMode == ChatPageMode.normal && _isPureChatSelected,
+              showTerminalActions: _showLocalTerminalActions,
               showWorkspacePaneButton: showWorkspacePaneButton,
               onWorkspacePaneTap: onWorkspacePaneTap,
               tutorialMenuAnchorKey: _firstUseTourMenuAnchorKey,
@@ -1529,10 +1415,14 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                       onSendMessage: this._handleComposerSendMessage,
                       onCancelTask: _onCancelTask,
                       onPopupVisibilityChanged: _onPopupVisibilityChanged,
-                      onTerminalTap: _handleTerminalToolTap,
+                      onTerminalTap: _showLocalTerminalActions
+                          ? _handleTerminalToolTap
+                          : null,
                       useLargeComposerStyle: true,
                       useAttachmentPickerForPlus: true,
                       onPickAttachment: _pickAttachments,
+                      onPickImages: () =>
+                          _pickAttachments(type: FileType.image),
                       onTriggerSlashCommand: _triggerSlashCommandPanel,
                       attachments: _pendingAttachments,
                       hasExternalSendPayload: _editingUserMessageHasAttachments,
@@ -1556,7 +1446,14 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                           ? null
                           : this._handleContextUsageRingLongPress,
                       modelPickerSettings: null,
-                      runtimeConfigButton: _buildAcpConfigButton(),
+                      runtimeConfigButton:
+                          _activeMode == ChatPageMode.agent &&
+                              _activeAcpAgentId == 'na-cloud'
+                          ? null
+                          : KeyedSubtree(
+                              key: _firstUseTourModelAnchorKey,
+                              child: _buildAcpConfigButton(),
+                            ),
                       agentRunSettings: null,
                       onAgentRunSettingsOpened: null,
                       onAgentRunSettingsChanged: null,
@@ -1595,31 +1492,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               ),
             ),
           ),
-        if (showToolActivityStrip)
-          Positioned(
-            left: overlayAnchor?.rect.left ?? 24,
-            width:
-                overlayAnchor?.rect.width ??
-                math.max(0.0, constraints.maxWidth - 48),
-            bottom: overlayAnchor?.bottom ?? 0,
-            child: _buildNormalSurfaceTransition(
-              viewportWidth: constraints.maxWidth,
-              child: KeyedSubtree(
-                key: _toolActivityStripKey,
-                child: ChatToolActivityStrip(
-                  messages: toolActivityMessages,
-                  showPreviewThumbnail: toolActivitySnapshot.isActiveRun,
-                  openActiveCardOnTap: isPinnedCompletedToolActivity,
-                  anchorRect: overlayAnchor?.rect,
-                  onOccupiedHeightChanged: _scheduleToolActivityInsetSync,
-                  expanded: _isToolActivityExpanded,
-                  onExpandedChanged: _setToolActivityExpanded,
-                  suppressSurfaceShadow: suppressToolActivitySurfaceShadow,
-                  onStopToolCall: _handleToolActivityStopRequested,
-                ),
-              ),
-            ),
-          ),
         if (showSlashCommandStrip)
           Positioned(
             left: overlayAnchor?.rect.left ?? 24,
@@ -1640,7 +1512,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                     anchorRect: overlayAnchor?.rect,
                     onOccupiedHeightChanged:
                         _scheduleSlashCommandOccupiedHeightSync,
-                    suppressSurfaceShadow: suppressToolActivitySurfaceShadow,
+                    suppressSurfaceShadow: true,
                     onSelectCommand: _handleSlashCommandCardSelected,
                   ),
                 ),
@@ -1676,7 +1548,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
             viewportWidth: constraints.maxWidth,
             child: _buildMessageAnchorBarOverlay(
               composerReservedInset: composerReservedInset,
-              showToolActivityStrip: showToolActivityStrip,
             ),
           ),
         ),
@@ -1688,7 +1559,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
   /// 向左展开的锚点条。始终跟随 composer 顶部（含其上方条带）定位。
   Widget _buildMessageAnchorBarOverlay({
     required double composerReservedInset,
-    required bool showToolActivityStrip,
   }) {
     final mode = _primaryChatMessagePageMode;
     final runtime = _runtimeForMode(mode);
@@ -1707,8 +1577,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       composerReservedInset -
           _kChatMessageBottomSafeSpacing +
           6 +
-          _slashCommandPanelOccupiedHeight +
-          (showToolActivityStrip ? _toolActivityOccupiedHeight : 0),
+          _slashCommandPanelOccupiedHeight,
     );
     final visible =
         _isInputAreaVisible &&

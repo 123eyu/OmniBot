@@ -134,25 +134,12 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
   @override
   Future<void> _refreshAgentRuntimeStatus() async {
     if (!mounted || _isAgentRuntimeStatusLoading) return;
-    final requestEpoch = _agentRuntimeStatusEpoch;
     setState(() {
       _isAgentRuntimeStatusLoading = true;
     });
     try {
       final status = await AgentRuntimeService.status();
       if (!mounted) return;
-      if (requestEpoch != _agentRuntimeStatusEpoch) {
-        // A Harness switch invalidates an older status request. Do not let
-        // that request leave the AppBar's loading flag latched forever: the
-        // switch has its own loading state and will keep the spinner visible
-        // until its commit completes.
-        if (_isAgentRuntimeStatusLoading) {
-          setState(() {
-            _isAgentRuntimeStatusLoading = false;
-          });
-        }
-        return;
-      }
       setState(() {
         _agentRuntimeStatus = status;
         _isAgentRuntimeStatusLoading = false;
@@ -163,201 +150,11 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
       }
     } catch (_) {
       if (!mounted) return;
-      if (requestEpoch != _agentRuntimeStatusEpoch) {
-        if (_isAgentRuntimeStatusLoading) {
-          setState(() {
-            _isAgentRuntimeStatusLoading = false;
-          });
-        }
-        return;
-      }
       setState(() {
         _agentRuntimeStatus = AgentRuntimeStatus.disconnected;
         _isAgentRuntimeStatusLoading = false;
       });
     }
-  }
-
-  @override
-  Future<void> _handleAgentTap() async {
-    if (_isAgentRuntimeStatusLoading) return;
-    if (_activeMode == ChatPageMode.agent) {
-      await _leaveAgentMode();
-      return;
-    }
-    setState(() {
-      _isAgentRuntimeStatusLoading = true;
-    });
-    AgentRuntimeStatus status;
-    try {
-      status = await AgentRuntimeService.status();
-      if (status.ready && !status.connected) {
-        status = await AgentRuntimeService.connect();
-        unawaited(AgentRuntimeService.listSessions());
-      }
-    } catch (error) {
-      status = AgentRuntimeStatus(
-        connected: false,
-        ready: false,
-        error: error.toString(),
-      );
-    }
-    if (!mounted) return;
-    setState(() {
-      _agentRuntimeStatus = status;
-      _isAgentRuntimeStatusLoading = false;
-    });
-    if (!status.ready) {
-      if (status.remoteEnabled) {
-        _showSnackBar(
-          LegacyTextLocalizer.isEnglish
-              ? 'Remote Agent Bridge is unavailable'
-              : '远程 Agent Bridge 不可用',
-        );
-        GoRouterManager.push('/home/remote_codex_setting');
-        return;
-      }
-      _showSnackBar(
-        LegacyTextLocalizer.isEnglish
-            ? (status.error?.trim().isNotEmpty == true
-                  ? status.error!.trim()
-                  : 'The selected ACP Agent is unavailable')
-            : (status.error?.trim().isNotEmpty == true
-                  ? status.error!.trim()
-                  : '所选 ACP Agent 当前不可用'),
-      );
-      GoRouterManager.push('/home/agent_mode_setting');
-      return;
-    }
-
-    await _showAgentAccountStatus();
-
-    final target = _newAgentThreadTarget(
-      agentId: _activeAcpAgentId,
-      agentRuntime: status.runtime == 'remote' || status.remoteEnabled
-          ? 'remote'
-          : 'local',
-      conversationId: _modeState(ChatPageMode.agent).currentConversationId,
-    );
-    if (!mounted) return;
-    await _applyConversationThreadTarget(target);
-  }
-
-  @override
-  Future<void> _handleAcpAgentModeShortcutTap(String agentId) async {
-    final normalized = agentId.trim();
-    if (normalized.isEmpty) {
-      return;
-    }
-    final selectsRemote = normalized == _kRemoteCodexModeAgentId;
-    final observedTargetRequestId = _conversationTargetRequestId;
-    final switchGeneration = _harnessSwitchSendBarrier.begin();
-    var switchSucceeded = false;
-    // Invalidate every status/catalog refresh already in flight. Only the
-    // ACP response produced by this switch may become the next global
-    // runtime snapshot.
-    _agentRuntimeStatusEpoch++;
-    _agentCatalogEpoch++;
-    setState(() {
-      _optimisticAcpAgentId = normalized;
-      _isAcpAgentSwitching = true;
-    });
-    try {
-      if (!mounted ||
-          !_harnessSwitchSendBarrier.isCurrent(switchGeneration) ||
-          observedTargetRequestId != _conversationTargetRequestId) {
-        return;
-      }
-
-      // A conversation binding is not proof that the native ACP runtime is
-      // selected. On restart the binding can still point at Xiaowan while the
-      // persisted ACP profile is another Harness.
-      final runtimeActiveAgentId =
-          _agentRuntimeStatus.activeAgentId?.trim() ?? '';
-      final sameVisibleAgent =
-          _activeMode == ChatPageMode.agent &&
-          normalized == _committedAcpAgentId;
-      final sameRuntimeAgent = selectsRemote
-          ? _agentRuntimeStatus.connected &&
-                (_agentRuntimeStatus.runtime == 'remote' ||
-                    _agentRuntimeStatus.remoteEnabled)
-          : _agentRuntimeStatus.connected && runtimeActiveAgentId == normalized;
-      if (sameVisibleAgent && sameRuntimeAgent) {
-        switchSucceeded = true;
-        return;
-      }
-
-      await _harnessSwitchSendBarrier.runIfCurrent(switchGeneration, () async {
-        final previousTarget = _threadTargetForMode;
-        final target = buildHarnessSwitchTarget(
-          agentId: normalized,
-          agentRuntime: selectsRemote
-              ? 'remote'
-              : normalized == 'na-cloud'
-              ? 'na'
-              : 'local',
-          requestKey: DateTime.now().microsecondsSinceEpoch.toString(),
-        );
-        // Only a real switch invalidates bootstrap/navigation work. A no-op
-        // tap or failed Provider preflight must not strand the page.
-        final switchTargetRequestId = _beginConversationTargetRequest();
-        final selected = selectsRemote
-            ? await _selectRemoteCodexRuntime()
-            : await _selectAgent(normalized);
-        // A newer tap may have arrived while the native selection was in
-        // flight. Never let this older result install a visible target; the
-        // serialized latest request will reconcile the native runtime next.
-        if (!_harnessSwitchSendBarrier.isCurrent(switchGeneration) ||
-            !_isConversationTargetRequestCurrent(switchTargetRequestId)) {
-          return;
-        }
-        if (selected) {
-          await _applyConversationThreadTarget(
-            target,
-            preserveComposer: true,
-            requestId: switchTargetRequestId,
-          );
-          switchSucceeded = _isConversationTargetRequestCurrent(
-            switchTargetRequestId,
-          );
-        } else {
-          await _applyConversationThreadTarget(
-            previousTarget,
-            preserveComposer: true,
-          );
-        }
-      });
-    } finally {
-      // Also invalidate refreshes started during the switch. They can carry
-      // a pre-handshake/disconnected snapshot and must not overwrite the
-      // committed result after the loading state is cleared.
-      _agentRuntimeStatusEpoch++;
-      _agentCatalogEpoch++;
-      if (mounted && _harnessSwitchSendBarrier.isCurrent(switchGeneration)) {
-        setState(() {
-          _optimisticAcpAgentId = null;
-          _isAcpAgentSwitching = false;
-        });
-      }
-      _harnessSwitchSendBarrier.finish(
-        switchGeneration,
-        succeeded: switchSucceeded,
-      );
-    }
-  }
-
-  Future<void> _leaveAgentMode() async {
-    _storeDraftForActiveConversationMode();
-    await _persistVisibleThreadTargetIfNeeded();
-    if (!mounted) return;
-
-    final target = _resolveAgentExitTarget();
-    if (!mounted) return;
-    await _applyConversationThreadTarget(target);
-  }
-
-  ConversationThreadTarget _resolveAgentExitTarget() {
-    return _newThreadTargetForConversationMode(ConversationMode.normal);
   }
 
   @override
@@ -596,23 +393,19 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
       return;
     }
     if (!mounted) return;
-    final requestEpoch = _agentCatalogEpoch;
     setState(() {
       _isAgentCatalogLoading = true;
     });
     try {
       final catalog = await AgentRuntimeService.listAgents();
-      if (!mounted || requestEpoch != _agentCatalogEpoch) return;
+      if (!mounted) return;
       setState(() {
         _agentCatalog = catalog;
       });
     } catch (error) {
       debugPrint('Load ACP agent catalog failed: $error');
     } finally {
-      // A forced catalog refresh can overlap a previous request when the
-      // user switches Harness quickly. The older request must not clear the
-      // loading state owned by the newer request.
-      if (mounted && requestEpoch == _agentCatalogEpoch) {
+      if (mounted) {
         setState(() {
           _isAgentCatalogLoading = false;
         });
@@ -943,145 +736,6 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
     if (clearComposer) {
       _messageController.clear();
       _hideSlashCommandPanel();
-    }
-  }
-
-  @override
-  Future<bool> _selectAgent(String agentId) async {
-    final normalized = agentId.trim();
-    if (normalized.isEmpty) {
-      return false;
-    }
-    if (normalized == _kRemoteCodexModeAgentId) {
-      return _selectRemoteCodexRuntime();
-    }
-    final wasRemote =
-        _agentRuntimeStatus.runtime == 'remote' ||
-        _agentRuntimeStatus.remoteEnabled;
-    CodexRemoteBridgeConfig? previousRemoteConfig;
-    try {
-      if (wasRemote) {
-        final remote = await AgentRuntimeService.readRemoteBridgeConfig();
-        previousRemoteConfig = remote;
-        await AgentRuntimeService.writeRemoteBridgeConfig(
-          remoteEnabled: false,
-          remoteBridgeUrl: remote.remoteBridgeUrl,
-          remoteBridgeToken: remote.remoteBridgeToken,
-          remoteCwd: remote.remoteCwd,
-        );
-      }
-      final catalog = await AgentRuntimeService.selectAgent(normalized);
-      // Choose the assistant first. Model configuration/session admission
-      // owns initialization; a failed connection must not undo selection.
-      final status =
-          catalog.runtimeStatus ?? await AgentRuntimeService.status();
-      if (!mounted) return false;
-      setState(() {
-        _agentCatalog = catalog;
-        _agentRuntimeStatus = status;
-        _activeAgentThreadId = null;
-        _activeAgentTurnId = null;
-        _activeAgentModelId = null;
-        _agentReasoningEffortConfigId = null;
-        _agentModelConfigSupported = false;
-        _agentModelOptions = const <String>[];
-        _loadedAgentModelSourceKey = null;
-        _loadingAgentModelSourceKey = null;
-        _agentModelListError = null;
-        _agentModelListRequestId++;
-      });
-      unawaited(_loadAgentModelOptions(force: true));
-      return true;
-    } catch (error) {
-      final remote = previousRemoteConfig;
-      if (wasRemote && remote != null && remote.remoteEnabled) {
-        try {
-          await AgentRuntimeService.writeRemoteBridgeConfig(
-            remoteEnabled: true,
-            remoteBridgeUrl: remote.remoteBridgeUrl,
-            remoteBridgeToken: remote.remoteBridgeToken,
-            remoteCwd: remote.remoteCwd,
-          );
-        } catch (restoreError) {
-          debugPrint('Failed to restore remote Agent config: $restoreError');
-        }
-      }
-      if (!mounted) return false;
-      showToast(
-        formatAgentRuntimeErrorForUser(
-          error,
-          english: LegacyTextLocalizer.isEnglish,
-          fallback: LegacyTextLocalizer.isEnglish
-              ? 'Could not switch assistants. Please try again.'
-              : '未能切换助手，请重试。',
-        ),
-        type: ToastType.error,
-      );
-      return false;
-    }
-  }
-
-  Future<bool> _selectRemoteCodexRuntime() async {
-    final isRemote =
-        _agentRuntimeStatus.runtime == 'remote' ||
-        _agentRuntimeStatus.remoteEnabled;
-    if (isRemote) {
-      return true;
-    }
-    try {
-      final remote = await AgentRuntimeService.readRemoteBridgeConfig();
-      if (!remote.remoteConfigured) {
-        if (mounted) {
-          _showSnackBar(
-            LegacyTextLocalizer.isEnglish
-                ? 'Remote Agent Bridge is not configured'
-                : '远程 Agent Bridge 尚未配置',
-          );
-          GoRouterManager.push('/home/remote_codex_setting');
-        }
-        return false;
-      }
-      await AgentRuntimeService.writeRemoteBridgeConfig(
-        remoteEnabled: true,
-        remoteBridgeUrl: remote.remoteBridgeUrl,
-        remoteBridgeToken: remote.remoteBridgeToken,
-        remoteCwd: remote.remoteCwd,
-      );
-      var status = await AgentRuntimeService.status();
-      if (status.ready && !status.connected) {
-        status = await AgentRuntimeService.connect();
-      }
-      if (!mounted) return false;
-      setState(() {
-        _agentRuntimeStatus = status;
-        _activeAgentThreadId = null;
-        _activeAgentTurnId = null;
-        _activeAgentModelId = null;
-        _agentModelConfigSupported = false;
-        _activeAgentReasoningEffort = null;
-        _agentReasoningEffortConfigId = null;
-        _activeAgentCollaborationMode = null;
-        _agentModelOptions = const <String>[];
-        _agentReasoningEffortOptions = const <String>[];
-        _agentCollaborationModes = const <String>[];
-        _agentModelListError = null;
-        _agentCollaborationModeListError = null;
-        _loadedAgentModelSourceKey = null;
-        _loadingAgentModelSourceKey = null;
-        _agentModelListRequestId++;
-      });
-      unawaited(_loadAgentModelOptions(force: true));
-      return true;
-    } catch (error) {
-      if (!mounted) return false;
-      showToast(
-        formatAgentRuntimeErrorForUser(
-          error,
-          english: LegacyTextLocalizer.isEnglish,
-        ),
-        type: ToastType.error,
-      );
-      return false;
     }
   }
 
@@ -2141,87 +1795,16 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
     );
   }
 
-  Future<void> _showAgentAccountStatus() async {
-    if (_agentRuntimeStatus.runtime != 'remote' &&
-        !_agentRuntimeStatus.remoteEnabled) {
-      return;
-    }
-    try {
-      final account = await AgentRuntimeService.readAccount();
-      final accountMap = account['account'];
-      final requiresOpenaiAuth = account['requiresOpenaiAuth'] == true;
-      final accountType = accountMap is Map
-          ? accountMap['type']?.toString().trim()
-          : null;
-      final isLoggedInWithChatGpt = accountType == 'chatgpt';
-      if (isLoggedInWithChatGpt || !requiresOpenaiAuth) {
-        return;
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(
-          content: Text(
-            Localizations.localeOf(context).languageCode == 'en'
-                ? 'Agent login required'
-                : '需要登录 Agent',
-          ),
-          action: SnackBarAction(
-            label: Localizations.localeOf(context).languageCode == 'en'
-                ? 'Login'
-                : '登录',
-            onPressed: () {
-              if (_agentRuntimeStatus.runtime == 'remote' ||
-                  _agentRuntimeStatus.remoteEnabled) {
-                unawaited(_startRemoteCodexLogin());
-              } else {
-                GoRouterManager.push('/home/remote_codex_setting');
-              }
-            },
-          ),
-        ),
-      );
-    } catch (error) {
-      debugPrint('Read Agent account failed: $error');
-    }
-  }
-
-  Future<void> _startRemoteCodexLogin() async {
-    try {
-      final response = await AgentRuntimeService.startLogin();
-      final authUrl = _asAgentString(response['authUrl']);
-      if (authUrl == null) return;
-      await launchUrlString(authUrl, mode: LaunchMode.externalApplication);
-    } catch (error) {
-      debugPrint('Start remote Agent login failed: $error');
-    }
-  }
-
   Future<AgentRuntimeStatus> _refreshConnectedAgentRuntimeStatus() async {
-    final requestEpoch = _agentRuntimeStatusEpoch;
     var status = await AgentRuntimeService.status();
     if (!status.connected) {
       status = await AgentRuntimeService.connect();
-    }
-    if (requestEpoch != _agentRuntimeStatusEpoch) {
-      return _agentRuntimeStatus;
     }
     _applyRefreshedAgentRuntimeStatus(status);
     return status;
   }
 
   void _applyRefreshedAgentRuntimeStatus(AgentRuntimeStatus status) {
-    if (_isAcpAgentSwitching) {
-      final expectedAgentId = _optimisticAcpAgentId?.trim() ?? '';
-      final observedAgentId = status.activeAgentId?.trim() ?? '';
-      if (expectedAgentId.isNotEmpty &&
-          observedAgentId.isNotEmpty &&
-          observedAgentId != expectedAgentId) {
-        // A late status response from the previous Harness is not allowed to
-        // change the right-top identity while the requested switch is still
-        // in flight.
-        return;
-      }
-    }
     final sourceChanged =
         agentModelSourceKey(_agentRuntimeStatus) != agentModelSourceKey(status);
     if (!mounted) return;

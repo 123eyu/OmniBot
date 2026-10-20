@@ -224,6 +224,10 @@ extension _HomeDrawerSearch on HomeDrawerState {
   }
 
   Future<void> _loadConversations() async {
+    if (_isBatchConversationActionRunning) {
+      _refreshConversationsAfterBatch = true;
+      return;
+    }
     final generation = ++_conversationLoadGeneration;
     debugPrint('[HomeDrawer] Loading conversations...');
     setState(() {
@@ -251,6 +255,7 @@ extension _HomeDrawerSearch on HomeDrawerState {
       if (!mounted || generation != _conversationLoadGeneration) return;
       setState(() {
         _allConversations = loadedConversations;
+        _reconcileConversationSelection();
         _scheduledTasks = loadedScheduledTasks;
         isLoadingConversations = false;
       });

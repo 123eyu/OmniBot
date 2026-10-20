@@ -22,10 +22,7 @@ class _UserMessageQuickMenuContent extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
-    final foregroundColor = isDark
-        ? palette.textPrimary
-        : const Color(0xFF172033);
+    final foregroundColor = palette.textPrimary;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -52,9 +49,7 @@ class _UserMessageQuickMenuContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    final dividerColor = context.isDarkTheme
-        ? palette.borderSubtle.withValues(alpha: 0.58)
-        : Colors.white.withValues(alpha: 0.62);
+    final dividerColor = palette.borderSubtle;
     return SizedBox(
       width: width,
       child: OmniGlassPanel(
@@ -133,13 +128,13 @@ class _PaneResizeHandle extends StatelessWidget {
       onHorizontalDragUpdate: (details) => onDragUpdate(details.delta.dx),
       onHorizontalDragEnd: (_) => onDragEnd?.call(),
       onHorizontalDragCancel: () => onDragEnd?.call(),
-      child: const SizedBox(
+      child: SizedBox(
         width: HdPadPaneLayoutResolver.dividerHitWidth,
         child: Center(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Color(0xFFD7E5FB),
-              borderRadius: BorderRadius.all(Radius.circular(999)),
+              color: context.omniPalette.borderStrong,
+              borderRadius: const BorderRadius.all(Radius.circular(999)),
             ),
             child: SizedBox(width: 3, height: 52),
           ),

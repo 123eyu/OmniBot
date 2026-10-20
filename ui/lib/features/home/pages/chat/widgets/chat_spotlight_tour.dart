@@ -47,7 +47,9 @@ class _ChatSpotlightTourState extends State<ChatSpotlightTour> {
       if (anchorBox == null ||
           overlayBox == null ||
           !anchorBox.hasSize ||
-          !overlayBox.hasSize) {
+          !overlayBox.hasSize ||
+          anchorBox.size.isEmpty ||
+          overlayBox.size.isEmpty) {
         return;
       }
 
@@ -304,10 +306,10 @@ const List<_SpotlightItem> _items = <_SpotlightItem>[
   ),
   _SpotlightItem(
     icon: LucideIcons.workflow,
-    titleZh: '选择工作模式',
-    titleEn: 'Choose a work mode',
-    descriptionZh: '点击聊天标题下方的模式名称，可在小万、其他 Agent 与纯聊天之间切换。',
-    descriptionEn: 'Use the mode name below the conversation title to switch between OmniBot, other agents, and pure chat.',
+    titleZh: '当前对话模式',
+    titleEn: 'Conversation mode',
+    descriptionZh: '标题前的图标标识当前模式。返回首页选择分类后，可新建对应模式的对话。',
+    descriptionEn: 'The icon beside the title identifies this mode. Select a category on the home page to start a chat in that mode.',
   ),
   _SpotlightItem(
     icon: LucideIcons.pawPrint,
@@ -320,22 +322,22 @@ const List<_SpotlightItem> _items = <_SpotlightItem>[
     icon: LucideIcons.squareTerminal,
     titleZh: '环境、终端与浏览器',
     titleEn: 'Environment, terminal, and browser',
-    descriptionZh: '右上角菜单可管理环境变量、打开本地终端，以及查看 Agent 正在使用的浏览器会话。',
-    descriptionEn: 'The top-right menu provides environment variables, the local terminal, and the agent browser session.',
+    descriptionZh: '支持本地工具的模式可在右上角菜单打开终端、管理环境变量；已有浏览器会话也在这里。',
+    descriptionEn: 'Modes with local tools offer terminal and environment settings in the top-right menu. Available browser sessions also appear here.',
   ),
   _SpotlightItem(
     icon: LucideIcons.circleGauge,
     titleZh: '模型与上下文',
     titleEn: 'Model and context',
-    descriptionZh: '在右上角菜单选择“模型与参数”切换模型，选择“上下文用量与阈值”查看与调整容量。',
-    descriptionEn: 'Choose Model & settings or Context usage & limit from the top-right menu.',
+    descriptionZh: '点击输入框中的模型名称选择模型与参数；上下文用量与阈值可在右上角菜单查看和调整。',
+    descriptionEn: 'Use the model name in the composer for model and parameter choices. Context usage and limits are in the top-right menu.',
   ),
   _SpotlightItem(
     icon: LucideIcons.paperclip,
     titleZh: '附件、命令与发送',
     titleEn: 'Attachments, commands, and send',
-    descriptionZh: '通过右上角菜单添加图片或文件，输入“/”打开命令面板；执行期间发送按钮会变为停止按钮。',
-    descriptionEn: 'Use the top-right menu for files, slash for commands, and the send button to submit or stop a run.',
+    descriptionZh: '点击输入框左侧加号添加图片或文件，并选择可用的权限模式。输入“/”打开命令面板；执行期间发送按钮会变为停止按钮。',
+    descriptionEn: 'Use the composer’s plus button for images, files, and available permission modes. Type slash for commands; the send button stops an active run.',
   ),
 ];
 

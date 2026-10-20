@@ -42,10 +42,6 @@ class ChatAppBar extends StatelessWidget {
   final VoidCallback? onPetTap;
   final bool isPetOpening;
   final bool isPetShowing;
-  final VoidCallback? onOmniAiTap;
-  final VoidCallback? onPureChatToggleTap;
-  final VoidCallback? onAgentTap;
-  final ValueChanged<String>? onAcpAgentTap;
   final VoidCallback? onPrimaryModeTap;
   final ChatSurfaceMode activeMode;
   final ValueChanged<ChatSurfaceMode> onModeChanged;
@@ -56,12 +52,8 @@ class ChatAppBar extends StatelessWidget {
   final VoidCallback onBrowserTap;
   final bool hasTerminalEnvironment;
   final bool isBrowserEnabled;
+  final bool showTerminalActions;
   final String? activeToolType;
-  final bool isAgentReady;
-  final bool isAgentConnected;
-  final bool isAgentLoading;
-  final bool isAgentSelected;
-  final bool isOmniAiSelected;
   final List<ChatAcpAgentModeOption> acpAgentModes;
   final String? activeAcpAgentId;
   final bool showAppUpdateIndicator;
@@ -71,9 +63,7 @@ class ChatAppBar extends StatelessWidget {
   final AppBackgroundVisualProfile visualProfile;
   final bool showMenuButton;
   final bool showSurfaceSwitcher;
-  final bool showPureChatToggle;
   final bool isPureChatSelected;
-  final bool isPureChatToggleLocked;
   final bool showWorkspacePaneButton;
   final VoidCallback? onWorkspacePaneTap;
   final Key? tutorialMenuAnchorKey;
@@ -90,10 +80,6 @@ class ChatAppBar extends StatelessWidget {
     this.onPetTap,
     this.isPetOpening = false,
     this.isPetShowing = false,
-    this.onOmniAiTap,
-    this.onPureChatToggleTap,
-    this.onAgentTap,
-    this.onAcpAgentTap,
     this.onPrimaryModeTap,
     required this.activeMode,
     required this.onModeChanged,
@@ -104,12 +90,8 @@ class ChatAppBar extends StatelessWidget {
     required this.onBrowserTap,
     this.hasTerminalEnvironment = false,
     this.isBrowserEnabled = false,
+    this.showTerminalActions = true,
     this.activeToolType,
-    this.isAgentReady = false,
-    this.isAgentConnected = false,
-    this.isAgentLoading = false,
-    this.isAgentSelected = false,
-    this.isOmniAiSelected = true,
     this.acpAgentModes = const <ChatAcpAgentModeOption>[],
     this.activeAcpAgentId,
     this.showAppUpdateIndicator = false,
@@ -119,9 +101,7 @@ class ChatAppBar extends StatelessWidget {
     this.visualProfile = AppBackgroundVisualProfile.defaultProfile,
     this.showMenuButton = true,
     this.showSurfaceSwitcher = true,
-    this.showPureChatToggle = false,
     this.isPureChatSelected = false,
-    this.isPureChatToggleLocked = true,
     this.showWorkspacePaneButton = false,
     this.onWorkspacePaneTap,
     this.tutorialMenuAnchorKey,
@@ -134,6 +114,14 @@ class ChatAppBar extends StatelessWidget {
     if (isPureChatSelected) return english ? 'Pure chat' : '纯聊天';
     for (final agent in acpAgentModes) {
       if (agent.id == activeAcpAgentId) return agent.name;
+    }
+    final id = activeAcpAgentId?.trim();
+    if (id == 'na-cloud') return 'Na';
+    if (id == 'openclaw') return 'OpenClaw';
+    if (id != null &&
+        id.isNotEmpty &&
+        AgentBrandIcon.normalizeAgentId(id) != 'xiaowan-acp') {
+      return id;
     }
     return english ? 'OmniBot Agent' : '小万 Agent';
   }
@@ -158,83 +146,6 @@ class ChatAppBar extends StatelessWidget {
     );
   }
 
-  Future<void> _openModeMenu(BuildContext anchorContext) async {
-    final english = Localizations.localeOf(anchorContext).languageCode == 'en';
-    final available = acpAgentModes
-        .where((agent) => agent.isAvailable)
-        .toList();
-    if (!available.any((agent) => agent.id == 'xiaowan-acp')) {
-      available.insert(
-        0,
-        ChatAcpAgentModeOption(
-          id: 'xiaowan-acp',
-          name: english ? 'OmniBot Agent' : '小万 Agent',
-        ),
-      );
-    }
-    final selected = await showMenu<String>(
-      context: anchorContext,
-      position: _menuPosition(anchorContext),
-      color: anchorContext.omniPalette.surfacePrimary,
-      elevation: 8,
-      shadowColor: anchorContext.omniPalette.shadowColor.withValues(
-        alpha: 0.12,
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
-      requestFocus: false,
-      items: [
-        for (final agent in available)
-          PopupMenuItem<String>(
-            key: ValueKey(
-              'chat-app-bar-mode-menu-${agent.id == 'xiaowan-acp' ? 'xiaowan-acp' : 'acp-${agent.id}'}',
-            ),
-            value: agent.id,
-            child: Row(
-              children: [
-                AgentBrandIcon(
-                  agentId: agent.id,
-                  size: 20,
-                  tint: anchorContext.omniPalette.textPrimary,
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Text(agent.name)),
-                if (!isPureChatSelected &&
-                    (agent.id == activeAcpAgentId ||
-                        (agent.id == 'xiaowan-acp' &&
-                            (activeAcpAgentId?.isEmpty ?? true))))
-                  const Icon(LucideIcons.check, size: 18),
-              ],
-            ),
-          ),
-        if (isAgentSelected ||
-            (!isPureChatToggleLocked && onPureChatToggleTap != null))
-          PopupMenuItem<String>(
-            key: const ValueKey('chat-app-bar-mode-menu-pure-chat'),
-            value: 'pure-chat',
-            child: Row(
-              children: [
-                const Icon(LucideIcons.messageCircle, size: 20),
-                const SizedBox(width: 12),
-                Expanded(child: Text(english ? 'Pure chat' : '纯聊天')),
-                if (isPureChatSelected) const Icon(LucideIcons.check, size: 18),
-              ],
-            ),
-          ),
-      ],
-    );
-    if (!anchorContext.mounted || selected == null) return;
-    if (selected == 'pure-chat') {
-      onPureChatToggleTap?.call();
-    } else if (onAcpAgentTap != null) {
-      onAcpAgentTap!(selected);
-    } else if (selected == 'xiaowan-acp') {
-      onOmniAiTap?.call();
-    } else {
-      onAgentTap?.call();
-    }
-  }
-
   Future<void> _openActionsMenu(BuildContext anchorContext) async {
     final english = Localizations.localeOf(anchorContext).languageCode == 'en';
     final items = <ChatAppBarAction>[
@@ -256,16 +167,18 @@ class ChatAppBar extends StatelessWidget {
           }
         },
       ),
-      ChatAppBarAction(
-        label: english ? 'Terminal' : '终端',
-        icon: LucideIcons.terminal,
-        onSelected: (_) => onTerminalTap(),
-      ),
-      ChatAppBarAction(
-        label: english ? 'Environment variables' : '环境变量',
-        icon: LucideIcons.slidersHorizontal,
-        onSelected: onTerminalEnvironmentTap,
-      ),
+      if (showTerminalActions)
+        ChatAppBarAction(
+          label: english ? 'Terminal' : '终端',
+          icon: LucideIcons.terminal,
+          onSelected: (_) => onTerminalTap(),
+        ),
+      if (showTerminalActions)
+        ChatAppBarAction(
+          label: english ? 'Environment variables' : '环境变量',
+          icon: LucideIcons.slidersHorizontal,
+          onSelected: onTerminalEnvironmentTap,
+        ),
       if (isBrowserEnabled)
         ChatAppBarAction(
           label: english ? 'Browser' : '浏览器',
@@ -332,15 +245,12 @@ class ChatAppBar extends StatelessWidget {
     final foreground = translucent
         ? visualProfile.appBarIconColor
         : palette.textPrimary;
-    final secondary = translucent
-        ? visualProfile.secondaryTextColor
-        : palette.textSecondary;
     return TextFieldTapRegion(
       child: ColoredBox(
         key: const ValueKey('chat-app-bar-background'),
         color: translucent ? Colors.transparent : palette.pageBackground,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
           child: Row(
             children: [
               if (showMenuButton) ...[
@@ -349,89 +259,68 @@ class ChatAppBar extends StatelessWidget {
                   child: OmniCircleButton(
                     key: const ValueKey('chat-app-bar-menu-button'),
                     icon: LucideIcons.chevronLeft,
+                    size: 40,
+                    iconSize: 20,
+                    tapTargetSize: MaterialTapTargetSize.padded,
                     tooltip: english ? 'Back to conversations' : '返回会话列表',
                     foregroundColor: palette.textPrimary,
                     onPressed: onMenuTap,
                   ),
                 ),
-                const SizedBox(width: 18),
+                const SizedBox(width: 8),
               ],
               Expanded(
                 child: KeyedSubtree(
                   key: tutorialModeAnchorKey,
-                  child: Tooltip(
-                    message: english ? 'Switch chat mode' : '切换聊天模式',
-                    child: Builder(
-                      builder: (anchorContext) => InkWell(
-                        key: const ValueKey('chat-app-bar-pure-chat-button'),
-                        onTap: () => _openModeMenu(anchorContext),
-                        borderRadius: BorderRadius.circular(8),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(minHeight: 48),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                activeMode == ChatSurfaceMode.workspace
-                                    ? (english ? 'Workspace' : '工作区')
-                                    : ((title?.trim().isNotEmpty ?? false)
-                                          ? title!
-                                          : (english
-                                                ? 'New conversation'
-                                                : '新对话')),
-                                key: const ValueKey('chat-app-bar-title'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  height: 1.35,
-                                  fontWeight: FontWeight.w600,
+                  child: Row(
+                    children: [
+                      Semantics(
+                        key: const ValueKey('chat-app-bar-mode-icon'),
+                        label: _modeLabel(english),
+                        image: true,
+                        child: ExcludeSemantics(
+                          child: isPureChatSelected
+                              ? Icon(
+                                  LucideIcons.messageCircle,
+                                  size: 20,
                                   color: foreground,
+                                )
+                              : AgentBrandIcon(
+                                  agentId:
+                                      activeAcpAgentId?.trim().isNotEmpty ==
+                                          true
+                                      ? activeAcpAgentId!
+                                      : 'xiaowan-acp',
+                                  size: 20,
+                                  fallbackColor: foreground,
+                                  tint: translucent ? foreground : null,
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    isPureChatSelected
-                                        ? LucideIcons.messageCircle
-                                        : LucideIcons.bot,
-                                    size: 15,
-                                    color: secondary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Flexible(
-                                    child: Text(
-                                      _modeLabel(english),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        height: 1.2,
-                                        color: secondary,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    LucideIcons.chevronDown,
-                                    size: 14,
-                                    color: secondary,
-                                  ),
-                                ],
-                              ),
-                            ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          activeMode == ChatSurfaceMode.workspace
+                              ? (english ? 'Workspace' : '工作区')
+                              : ((title?.trim().isNotEmpty ?? false)
+                                    ? title!
+                                    : (english ? 'New conversation' : '新对话')),
+                          key: const ValueKey('chat-app-bar-title'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 17,
+                            height: 1.3,
+                            fontWeight: FontWeight.w600,
+                            color: foreground,
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               KeyedSubtree(
                 key: tutorialActionsAnchorKey,
                 child: KeyedSubtree(
@@ -442,6 +331,9 @@ class ChatAppBar extends StatelessWidget {
                       builder: (anchorContext) => OmniCircleButton(
                         key: const ValueKey('chat-app-bar-more-button'),
                         icon: LucideIcons.ellipsis,
+                        size: 40,
+                        iconSize: 20,
+                        tapTargetSize: MaterialTapTargetSize.padded,
                         tooltip: english ? 'Conversation options' : '对话选项',
                         foregroundColor: palette.textPrimary,
                         onPressed: () => _openActionsMenu(anchorContext),

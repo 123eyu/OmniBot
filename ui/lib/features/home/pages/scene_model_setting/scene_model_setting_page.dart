@@ -5,7 +5,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/services/model_provider_config_service.dart';
 import 'package:ui/services/scene_model_config_service.dart';
 import 'package:ui/services/voice_playback_coordinator.dart';
-import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/popup_menu_anchor_position.dart';
 import 'package:ui/utils/ui.dart';
@@ -113,14 +112,10 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
 
   bool get _isDarkTheme => context.isDarkTheme;
   Color get _pageBackground => context.omniPalette.pageBackground;
-  Color get _cardColor =>
-      _isDarkTheme ? context.omniPalette.surfacePrimary : Colors.white;
-  Color get _primaryTextColor =>
-      _isDarkTheme ? context.omniPalette.textPrimary : AppColors.text;
-  Color get _secondaryTextColor =>
-      _isDarkTheme ? context.omniPalette.textSecondary : AppColors.text70;
-  Color get _tertiaryTextColor =>
-      _isDarkTheme ? context.omniPalette.textTertiary : AppColors.text50;
+  Color get _cardColor => context.omniPalette.surfacePrimary;
+  Color get _primaryTextColor => context.omniPalette.textPrimary;
+  Color get _secondaryTextColor => context.omniPalette.textSecondary;
+  Color get _tertiaryTextColor => context.omniPalette.textTertiary;
   String _sceneDisplayName(String sceneId) {
     return _sceneDisplayNameMap[sceneId] ?? sceneId;
   }
@@ -763,7 +758,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
               _sceneDisplayName(scene.sceneId),
               style: TextStyle(
                 color: _primaryTextColor,
-                fontSize: 14,
+                fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
               overflow: TextOverflow.ellipsis,
@@ -892,7 +887,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
                     context.trLegacy('语音回复'),
                     style: TextStyle(
                       color: _primaryTextColor,
-                      fontSize: 14.5,
+                      fontSize: 15,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -913,9 +908,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
               Text(
                 bound
                     ? context.trLegacy('开启后，助手回复会在当前消息旁显示播放按钮，并可自动朗读。')
-                    : context.trLegacy(
-                        '请先在上方“语音合成”中绑定 Provider 和模型，绑定后即可播放。',
-                      ),
+                    : context.trLegacy('请先在上方“语音合成”中绑定 Provider 和模型，绑定后即可播放。'),
                 style: TextStyle(color: secondary, fontSize: 12, height: 1.48),
               ),
               const SizedBox(height: 8),
@@ -948,7 +941,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
             : ListView(
                 padding: edgeToEdgeScrollPadding(
                   context,
-                  const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                  const EdgeInsets.fromLTRB(22, 12, 22, 24),
                 ),
                 children: [
                   SettingsSectionTitle(
@@ -1112,15 +1105,10 @@ class _SceneSelectionPopupEntryState extends State<_SceneSelectionPopupEntry> {
   }
 
   bool get _isDarkTheme => context.isDarkTheme;
-  Color get _selectedSurfaceColor =>
-      _isDarkTheme ? context.omniPalette.segmentThumb : const Color(0xFFEAF3FF);
-  Color get _primaryTextColor =>
-      _isDarkTheme ? context.omniPalette.textPrimary : AppColors.text;
-  Color get _secondaryTextColor => _isDarkTheme
-      ? context.omniPalette.textSecondary
-      : const Color(0xFF64748B);
-  Color get _tertiaryTextColor =>
-      _isDarkTheme ? context.omniPalette.textTertiary : const Color(0xFF94A3B8);
+  Color get _selectedSurfaceColor => context.omniPalette.surfaceSecondary;
+  Color get _primaryTextColor => context.omniPalette.textPrimary;
+  Color get _secondaryTextColor => context.omniPalette.textSecondary;
+  Color get _tertiaryTextColor => context.omniPalette.textTertiary;
 
   Widget _buildSearchRow() {
     final palette = context.omniPalette;
@@ -1152,7 +1140,7 @@ class _SceneSelectionPopupEntryState extends State<_SceneSelectionPopupEntry> {
                     FocusManager.instance.primaryFocus?.unfocus(),
                 cursorColor: palette.accentPrimary,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 15,
                   color: _primaryTextColor,
                   fontWeight: FontWeight.w500,
                 ),
@@ -1179,11 +1167,7 @@ class _SceneSelectionPopupEntryState extends State<_SceneSelectionPopupEntry> {
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: _searchController.clear,
-                child: Icon(
-                  LucideIcons.x,
-                  size: 14,
-                  color: _tertiaryTextColor,
-                ),
+                child: Icon(LucideIcons.x, size: 14, color: _tertiaryTextColor),
               ),
             ],
           ],
@@ -1219,7 +1203,7 @@ class _SceneSelectionPopupEntryState extends State<_SceneSelectionPopupEntry> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 15,
                     color: _primaryTextColor,
                     fontWeight: FontWeight.w500,
                     fontFamily: 'PingFang SC',
@@ -1230,9 +1214,7 @@ class _SceneSelectionPopupEntryState extends State<_SceneSelectionPopupEntry> {
                 Icon(
                   LucideIcons.check,
                   size: 15,
-                  color: _isDarkTheme
-                      ? context.omniPalette.accentPrimary
-                      : const Color(0xFF2C7FEB),
+                  color: context.omniPalette.accentPrimary,
                 ),
             ],
           ),
@@ -1297,9 +1279,7 @@ class _SceneSelectionPopupEntryState extends State<_SceneSelectionPopupEntry> {
                 Icon(
                   LucideIcons.circleCheck,
                   size: 13,
-                  color: _isDarkTheme
-                      ? context.omniPalette.accentPrimary
-                      : const Color(0xFF2C7FEB),
+                  color: context.omniPalette.accentPrimary,
                 ),
               ],
               const SizedBox(width: 6),
@@ -1354,7 +1334,7 @@ class _SceneSelectionPopupEntryState extends State<_SceneSelectionPopupEntry> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 15,
                       color: _primaryTextColor,
                       fontWeight: FontWeight.w500,
                       fontFamily: 'PingFang SC',
@@ -1365,9 +1345,7 @@ class _SceneSelectionPopupEntryState extends State<_SceneSelectionPopupEntry> {
                   Icon(
                     LucideIcons.check,
                     size: 15,
-                    color: _isDarkTheme
-                        ? context.omniPalette.accentPrimary
-                        : const Color(0xFF2C7FEB),
+                    color: context.omniPalette.accentPrimary,
                   ),
               ],
             ),

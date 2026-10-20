@@ -6,7 +6,6 @@ import 'package:ui/features/home/pages/agent/codex_remote_file_preview_page.dart
 import 'package:ui/services/agent_runtime_service.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
-import 'package:ui/widgets/app_background_widgets.dart';
 
 class _RemoteWorkspaceBreadcrumbSegment {
   const _RemoteWorkspaceBreadcrumbSegment({
@@ -75,13 +74,7 @@ class CodexRemoteWorkspaceBrowserState
     return root.isNotEmpty && current.isNotEmpty && current != root;
   }
 
-  Color _surfaceColor({double opacity = 0.8}) {
-    return backgroundSurfaceColor(
-      translucent: widget.translucentSurfaces,
-      baseColor: context.omniPalette.surfacePrimary,
-      opacity: opacity,
-    );
-  }
+  Color _surfaceColor() => context.omniPalette.surfacePrimary;
 
   @override
   void initState() {
@@ -238,7 +231,7 @@ class CodexRemoteWorkspaceBrowserState
     final isDirectory = entry.isDirectory;
     final action = await showModalBottomSheet<_RemoteWorkspaceEntryAction>(
       context: context,
-      backgroundColor: _surfaceColor(opacity: 0.92),
+      backgroundColor: _surfaceColor(),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -354,12 +347,7 @@ class CodexRemoteWorkspaceBrowserState
     }
   }
 
-  Color _secondarySurfaceColor({double opacity = 0.64}) {
-    final palette = context.omniPalette;
-    return widget.translucentSurfaces
-        ? palette.surfaceSecondary.withValues(alpha: opacity)
-        : palette.surfaceSecondary;
-  }
+  Color _secondarySurfaceColor() => context.omniPalette.surfaceSecondary;
 
   Widget _buildActionTile({
     required BuildContext context,
@@ -598,12 +586,14 @@ class CodexRemoteWorkspaceBrowserState
                             index++
                           ) ...[
                             if (index > 0)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 2),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                ),
                                 child: Icon(
                                   Icons.chevron_right_rounded,
                                   size: 16,
-                                  color: Color(0xFF98A2B3),
+                                  color: palette.textTertiary,
                                 ),
                               ),
                             _buildBreadcrumbChip(breadcrumbs[index]),

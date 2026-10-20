@@ -481,7 +481,7 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
         child: ListView.separated(
           padding: edgeToEdgeScrollPadding(
             context,
-            const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            const EdgeInsets.fromLTRB(22, 12, 22, 32),
           ),
           itemCount: sections.length + 1,
           separatorBuilder: (_, __) => const SizedBox(height: 22),
@@ -514,7 +514,7 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
               ),
               key: ValueKey<int>(_readyCorePermissionCount),
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 17,
                 fontWeight: FontWeight.w600,
                 color: _titleColor,
                 height: 1.35,

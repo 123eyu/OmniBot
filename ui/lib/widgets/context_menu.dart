@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/theme/app_colors.dart';
-import 'package:ui/theme/app_text_styles.dart';
+import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/popup_menu_anchor_position.dart';
 
 enum RecordMenuAction { edit, delete }
@@ -19,96 +18,65 @@ Future<RecordMenuAction?> showRecordContextMenu({
   bool showEdit = true,
   bool showDelete = true,
 }) {
-  final isEnglish = Localizations.localeOf(context).languageCode == 'en';
-  final resolvedEditLabel = editLabel ?? (isEnglish ? 'Edit' : '编辑');
-  final resolvedDeleteLabel = deleteLabel ?? (isEnglish ? 'Delete record' : '删除记录');
-  final List<PopupMenuEntry<RecordMenuAction>> items = [];
-
-  if (showEdit) {
-    items.add(
-      PopupMenuItem<RecordMenuAction>(
-        value: RecordMenuAction.edit,
-        padding: EdgeInsets.zero,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(18, items.isEmpty && !showDelete ? 16 : 16, 0, items.isEmpty && !showDelete ? 16 : 10),
-          child: Row(
-            children: [
-              SvgPicture.asset(
-                editIconAsset,
-                width: 22.5,
-                height: 18.28,
-                colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.70), BlendMode.srcIn),
-                errorBuilder: (ctx, err, stack) {
-                  return const Icon(Icons.edit_outlined, size: 18, color: Colors.black);
-                },
-              ),
-              const SizedBox(width: 20),
-              Text(
-                resolvedEditLabel,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: AppTextStyles.fontSizeMain,
-                  fontWeight: AppTextStyles.fontWeightRegular,
-                ),
-              ),
-            ],
-          ),
+  final palette = context.omniPalette;
+  final english = Localizations.localeOf(context).languageCode == 'en';
+  PopupMenuItem<RecordMenuAction> item({
+    required RecordMenuAction action,
+    required String label,
+    required String asset,
+    required IconData fallback,
+    required Color color,
+  }) => PopupMenuItem<RecordMenuAction>(
+    value: action,
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    child: Row(
+      children: [
+        SvgPicture.asset(
+          asset,
+          width: 18,
+          height: 18,
+          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+          errorBuilder: (_, _, _) => Icon(fallback, size: 18, color: color),
         ),
-      ),
-    );
-  }
-
-  if (showEdit && showDelete) {
-    items.add(const PopupMenuDivider(height: 1, color: AppColors.text10));
-  }
-
-  if (showDelete) {
-    items.add(
-      PopupMenuItem<RecordMenuAction>(
-        value: RecordMenuAction.delete,
-        padding: EdgeInsets.zero,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(18, showEdit ? 16 : 16, 0, !showEdit ? 16 : 10),
-          child: Row(
-            children: [
-              SvgPicture.asset(
-                deleteIconAsset,
-                width: 18.28,
-                height: 18.28,
-                colorFilter: const ColorFilter.mode(AppColors.alertRed, BlendMode.srcIn),
-                errorBuilder: (ctx, err, stack) {
-                  return const Icon(Icons.close, size: 18, color: AppColors.alertRed);
-                },
-              ),
-              const SizedBox(width: 20),
-              Text(
-                resolvedDeleteLabel,
-                style: const TextStyle(
-                  color: AppColors.alertRed,
-                  fontSize: AppTextStyles.fontSizeMain,
-                  fontWeight: AppTextStyles.fontWeightRegular,
-                ),
-              ),
-            ],
-          ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(label, style: TextStyle(color: color, fontSize: 14)),
         ),
-      ),
-    );
-  }
-
+      ],
+    ),
+  );
   return showMenu<RecordMenuAction>(
     context: context,
     position: PopupMenuAnchorPosition.fromGlobalOffset(
       context: context,
       globalOffset: position,
-      estimatedMenuHeight: showEdit && showDelete ? 120 : 90,
+      estimatedMenuHeight: showEdit && showDelete ? 112 : 64,
     ),
-    color: const Color(0xFFF9F9F9).withOpacity(0.9),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    elevation: 5,
-    shadowColor: Colors.black.withOpacity(0.05),
-    menuPadding: EdgeInsets.zero,
+    color: palette.surfacePrimary,
+    surfaceTintColor: Colors.transparent,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    elevation: 6,
+    shadowColor: palette.shadowColor,
     constraints: BoxConstraints(maxWidth: maxWidth),
-    items: items,
+    items: [
+      if (showEdit)
+        item(
+          action: RecordMenuAction.edit,
+          label: editLabel ?? (english ? 'Edit' : '编辑'),
+          asset: editIconAsset,
+          fallback: Icons.edit_outlined,
+          color: palette.textPrimary,
+        ),
+      if (showEdit && showDelete)
+        PopupMenuDivider(height: 1, color: palette.borderSubtle),
+      if (showDelete)
+        item(
+          action: RecordMenuAction.delete,
+          label: deleteLabel ?? (english ? 'Delete record' : '删除记录'),
+          asset: deleteIconAsset,
+          fallback: Icons.close,
+          color: deleteColor,
+        ),
+    ],
   );
 }

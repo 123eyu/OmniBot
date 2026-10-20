@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/theme/theme_context.dart';
 
@@ -22,7 +23,10 @@ class HomeDrawerSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(listenable: focusNode, builder: _buildField);
+    return ListenableBuilder(
+      listenable: Listenable.merge([focusNode, controller]),
+      builder: _buildField,
+    );
   }
 
   Widget _buildField(BuildContext context, Widget? _) {
@@ -58,7 +62,6 @@ class HomeDrawerSearchField extends StatelessWidget {
           color: textColor,
           fontWeight: FontWeight.w500,
           height: 1.2,
-          fontFamily: 'PingFang SC',
         ),
         cursorColor: palette.accentPrimary,
         decoration: InputDecoration(
@@ -67,7 +70,6 @@ class HomeDrawerSearchField extends StatelessWidget {
             fontSize: 13,
             color: palette.textTertiary,
             fontWeight: FontWeight.w400,
-            fontFamily: 'PingFang SC',
           ),
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
@@ -86,7 +88,7 @@ class HomeDrawerSearchField extends StatelessWidget {
             minWidth: 34,
             minHeight: 38,
           ),
-          prefixIcon: Icon(Icons.search_rounded, size: 18, color: iconColor),
+          prefixIcon: Icon(LucideIcons.search, size: 18, color: iconColor),
           suffixIcon: isSearching
               ? Padding(
                   padding: const EdgeInsets.all(10),
@@ -103,11 +105,12 @@ class HomeDrawerSearchField extends StatelessWidget {
                 )
               : _hasQuery
               ? IconButton(
+                  key: const ValueKey('home-search-clear'),
                   tooltip: context.l10n.homeDrawerClearSearch,
                   splashRadius: 16,
                   onPressed: controller.clear,
                   icon: Icon(
-                    Icons.close_rounded,
+                    LucideIcons.x,
                     size: 16,
                     color: palette.textSecondary,
                   ),

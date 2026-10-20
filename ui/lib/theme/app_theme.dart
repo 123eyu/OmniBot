@@ -27,7 +27,6 @@ class AppTheme {
     final onAccentColor = _foregroundForAccent(palette.accentPrimary);
     final globalInputDecorationTheme = _buildInputDecorationTheme(
       palette: palette,
-      isDark: isDark,
     );
     final colorScheme =
         ColorScheme.fromSeed(
@@ -152,9 +151,46 @@ class AppTheme {
         textColor: palette.textPrimary,
         iconColor: palette.textSecondary,
       ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          disabledBackgroundColor: palette.surfaceElevated,
+          disabledForegroundColor: palette.textTertiary,
+          minimumSize: const Size(0, 44),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          disabledBackgroundColor: palette.surfaceElevated,
+          disabledForegroundColor: palette.textTertiary,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          minimumSize: const Size(0, 44),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: palette.textPrimary,
+          disabledForegroundColor: palette.textTertiary,
+          side: BorderSide(color: palette.borderStrong),
+          minimumSize: const Size(0, 44),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: palette.surfacePrimary,
         surfaceTintColor: Colors.transparent,
+        modalBarrierColor: palette.overlayScrim,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
@@ -162,33 +198,49 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: palette.surfacePrimary,
         surfaceTintColor: Colors.transparent,
+        shadowColor: palette.shadowColor,
+        elevation: 6,
+        titleTextStyle: TextStyle(
+          color: palette.textPrimary,
+          fontSize: 17,
+          fontWeight: FontWeight.w600,
+        ),
+        contentTextStyle: TextStyle(color: palette.textSecondary, fontSize: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: palette.surfacePrimary,
         surfaceTintColor: Colors.transparent,
         shadowColor: palette.shadowColor,
-        elevation: 8,
+        elevation: 6,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         textStyle: TextStyle(color: palette.textPrimary, fontSize: 15),
       ),
     );
 
     return baseTheme.copyWith(
-      textTheme: baseTheme.textTheme.apply(
-        bodyColor: palette.textPrimary,
-        displayColor: palette.textPrimary,
-      ),
+      textTheme: baseTheme.textTheme
+          .copyWith(
+            bodyLarge: baseTheme.textTheme.bodyLarge?.copyWith(fontSize: 15),
+            bodyMedium: baseTheme.textTheme.bodyMedium?.copyWith(fontSize: 14),
+            bodySmall: baseTheme.textTheme.bodySmall?.copyWith(fontSize: 12),
+            titleLarge: baseTheme.textTheme.titleLarge?.copyWith(fontSize: 18),
+            titleMedium: baseTheme.textTheme.titleMedium?.copyWith(
+              fontSize: 15,
+            ),
+            titleSmall: baseTheme.textTheme.titleSmall?.copyWith(fontSize: 14),
+          )
+          .apply(
+            bodyColor: palette.textPrimary,
+            displayColor: palette.textPrimary,
+          ),
     );
   }
 
   static InputDecorationTheme _buildInputDecorationTheme({
     required OmniThemePalette palette,
-    required bool isDark,
   }) {
-    final fillColor = palette.surfaceSecondary.withValues(
-      alpha: isDark ? 0.72 : 0.64,
-    );
+    final fillColor = palette.surfaceSecondary;
     final radius = BorderRadius.circular(10);
     return InputDecorationTheme(
       filled: true,

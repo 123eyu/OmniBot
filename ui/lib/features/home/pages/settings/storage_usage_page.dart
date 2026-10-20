@@ -357,7 +357,7 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
               child: ListView(
                 padding: edgeToEdgeScrollPadding(
                   context,
-                  const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                  const EdgeInsets.fromLTRB(22, 12, 22, 32),
                 ),
                 children: [
                   SettingsSectionTitle(
@@ -1027,8 +1027,8 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
         break;
       default:
         text = _t(context, '只读', 'Read-only');
-        bgColor = isDark ? const Color(0xFF2B3138) : const Color(0xFFF1F5F9);
-        fgColor = isDark ? const Color(0xFFB0BCCB) : const Color(0xFF475569);
+        bgColor = context.omniPalette.surfaceSecondary;
+        fgColor = context.omniPalette.textSecondary;
         break;
     }
     return Container(
@@ -1066,9 +1066,7 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
     List<StorageUsageCategory> categories,
     Map<String, Color> colorMap,
   ) {
-    final fallbackColor = context.isDarkTheme
-        ? const Color(0xFF9AA4B2)
-        : const Color(0xFF94A3B8);
+    final fallbackColor = context.omniPalette.textTertiary;
     final sorted = [...categories]..sort((a, b) => b.bytes.compareTo(a.bytes));
     if (sorted.length <= 7) {
       return sorted.map((item) {

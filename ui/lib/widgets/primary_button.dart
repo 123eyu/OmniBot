@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:ui/theme/theme_context.dart';
 
 /// 按钮类型枚举
 enum PrimaryButtonType {
-  /// 填充类型：蓝色背景，白色文字
+  /// 填充类型：主题强调色背景。
   filled,
-  
-  /// 轮廓类型：白色背景，蓝色边框，蓝色文字
+
+  /// 轮廓类型：实色表面与细边框。
   outlined,
 }
 
 /// 通用主要按钮组件
-/// 
+///
 /// 基于 ElevatedButton 封装的可定制按钮组件
 class PrimaryButton extends StatelessWidget {
   /// 按钮文字
@@ -83,6 +84,7 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.omniPalette;
     // 根据 type 设置默认值
     Color effectiveBackgroundColor;
     Color effectiveTextColor;
@@ -95,9 +97,8 @@ class PrimaryButton extends StatelessWidget {
     TextAlign effectiveTextAlign;
 
     if (type == PrimaryButtonType.filled) {
-      // 填充类型：蓝色背景，白色文字
-      effectiveBackgroundColor = const Color(0xFF00AEFF);
-      effectiveTextColor = Colors.white;
+      effectiveBackgroundColor = palette.accentPrimary;
+      effectiveTextColor = Theme.of(context).colorScheme.onPrimary;
       effectiveBorderColor = null;
       effectiveBorderWidth = 0;
       effectiveFontSize = 10;
@@ -106,10 +107,9 @@ class PrimaryButton extends StatelessWidget {
       effectiveElevation = 0;
       effectiveTextAlign = TextAlign.center;
     } else if (type == PrimaryButtonType.outlined) {
-      // 轮廓类型：白色背景，蓝色边框，蓝色文字
-      effectiveBackgroundColor = Colors.white;
-      effectiveTextColor = const Color(0xFF00AEFF);
-      effectiveBorderColor = const Color(0xFF00AEFF);
+      effectiveBackgroundColor = palette.surfacePrimary;
+      effectiveTextColor = palette.textPrimary;
+      effectiveBorderColor = palette.borderStrong;
       effectiveBorderWidth = 1;
       effectiveFontSize = 10;
       effectiveBorderRadius = 60;
@@ -118,12 +118,12 @@ class PrimaryButton extends StatelessWidget {
       effectiveTextAlign = TextAlign.center;
     } else {
       // 默认样式
-      effectiveBackgroundColor = const Color(0xFF00AEFF);
-      effectiveTextColor = Colors.white;
+      effectiveBackgroundColor = palette.accentPrimary;
+      effectiveTextColor = Theme.of(context).colorScheme.onPrimary;
       effectiveBorderColor = null;
       effectiveBorderWidth = 0;
-      effectiveFontSize = 16;
-      effectiveBorderRadius = 50;
+      effectiveFontSize = 15;
+      effectiveBorderRadius = 14;
       effectivePadding = const EdgeInsets.symmetric(horizontal: 0, vertical: 0);
       effectiveElevation = 0;
       effectiveTextAlign = TextAlign.center;
@@ -143,11 +143,17 @@ class PrimaryButton extends StatelessWidget {
     Widget button = ElevatedButton(
       style: ElevatedButton.styleFrom(
         backgroundColor: effectiveBackgroundColor,
-        disabledBackgroundColor: disabledBackgroundColor,
+        foregroundColor: effectiveTextColor,
+        disabledBackgroundColor:
+            disabledBackgroundColor ?? palette.surfaceElevated,
+        disabledForegroundColor: palette.textTertiary,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(effectiveBorderRadius),
           side: effectiveBorderColor != null && effectiveBorderWidth > 0
-              ? BorderSide(color: effectiveBorderColor, width: effectiveBorderWidth)
+              ? BorderSide(
+                  color: effectiveBorderColor,
+                  width: effectiveBorderWidth,
+                )
               : BorderSide.none,
         ),
         padding: effectivePadding,
@@ -157,9 +163,12 @@ class PrimaryButton extends StatelessWidget {
       child: Text(
         text,
         textAlign: effectiveTextAlign,
-        style: textStyle ??
+        style:
+            textStyle ??
             TextStyle(
-              color: effectiveTextColor,
+              color: onPressed == null
+                  ? palette.textTertiary
+                  : effectiveTextColor,
               fontSize: effectiveFontSize,
               fontFamily: 'PingFang SC',
               fontWeight: FontWeight.w500,
@@ -171,14 +180,9 @@ class PrimaryButton extends StatelessWidget {
 
     // 如果设置了宽高，则使用 SizedBox 包裹
     if (width != null || height != null) {
-      return SizedBox(
-        width: width,
-        height: height,
-        child: button,
-      );
+      return SizedBox(width: width, height: height, child: button);
     }
 
     return button;
   }
 }
-

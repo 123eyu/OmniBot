@@ -34,21 +34,76 @@ Future<void> showAgentRunDetailsSheet({
   required ValueListenable<AgentRunTimelineGroup> group,
   ValueChanged<ModalRoute<void>>? onRouteCreated,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    useRootNavigator: true,
-    isScrollControlled: true,
-    useSafeArea: true,
-    requestFocus: false,
-    enableDrag: false,
-    backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.10),
-    builder: (sheetContext) {
-      final route = ModalRoute.of<void>(sheetContext);
-      if (route != null) onRouteCreated?.call(route);
-      return AgentRunDetailsSheet(group: group);
-    },
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final localizations = MaterialLocalizations.of(context);
+  return navigator.push<void>(
+    _AgentRunDetailsRoute(
+      capturedThemes: InheritedTheme.capture(
+        from: context,
+        to: navigator.context,
+      ),
+      barrierLabel: localizations.scrimLabel,
+      barrierOnTapHint: localizations.scrimOnTapHint(
+        localizations.bottomSheetLabel,
+      ),
+      builder: (sheetContext) {
+        final route = ModalRoute.of<void>(sheetContext);
+        if (route != null) onRouteCreated?.call(route);
+        return AgentRunDetailsSheet(group: group);
+      },
+    ),
   );
+}
+
+/// Keep Flutter's sheet transition, drag layout and barrier semantics. Only
+/// an outside tap bypasses the detail page's back veto; system back still
+/// follows detail -> timeline -> conversation through the existing PopScope.
+class _AgentRunDetailsRoute extends ModalBottomSheetRoute<void> {
+  _AgentRunDetailsRoute({
+    required super.builder,
+    required super.capturedThemes,
+    required super.barrierLabel,
+    required super.barrierOnTapHint,
+  }) : super(
+         isScrollControlled: true,
+         useSafeArea: true,
+         requestFocus: false,
+         enableDrag: false,
+         backgroundColor: Colors.transparent,
+         modalBarrierColor: Colors.black.withValues(alpha: 0.10),
+       );
+
+  void _dismissFromBarrier() {
+    if (isCurrent) navigator?.pop();
+  }
+
+  @override
+  Widget buildModalBarrier() {
+    final barrier = super.buildModalBarrier();
+    return switch (barrier) {
+      AnimatedModalBarrier() => AnimatedModalBarrier(
+        key: const ValueKey('agent-run-details-scrim'),
+        color: barrier.color,
+        dismissible: barrier.dismissible,
+        onDismiss: _dismissFromBarrier,
+        semanticsLabel: barrier.semanticsLabel,
+        barrierSemanticsDismissible: barrier.barrierSemanticsDismissible,
+        clipDetailsNotifier: barrier.clipDetailsNotifier,
+        semanticsOnTapHint: barrier.semanticsOnTapHint,
+      ),
+      ModalBarrier() => ModalBarrier(
+        key: const ValueKey('agent-run-details-scrim'),
+        color: barrier.color,
+        dismissible: barrier.dismissible,
+        onDismiss: _dismissFromBarrier,
+        semanticsLabel: barrier.semanticsLabel,
+        barrierSemanticsDismissible: barrier.barrierSemanticsDismissible,
+        clipDetailsNotifier: barrier.clipDetailsNotifier,
+        semanticsOnTapHint: barrier.semanticsOnTapHint,
+      ),
+      _ => barrier,
+    };
+  }
 }
 
 /// Sheet navigation is presentation state only. Selecting an item never
@@ -130,9 +185,6 @@ class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet> {
             .firstOrNull;
         final isEnglish =
             Localizations.maybeLocaleOf(context)?.languageCode == 'en';
-        final title = selected == null
-            ? _summaryTitle(group, isEnglish)
-            : _messageTitle(selected, isEnglish);
         final palette = context.omniPalette;
         return PopScope<void>(
           canPop: selected == null,
@@ -175,8 +227,8 @@ class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet> {
                               height: 28,
                               child: Center(
                                 child: Container(
-                                  width: 40,
-                                  height: 5,
+                                  width: 32,
+                                  height: 4,
                                   decoration: BoxDecoration(
                                     color: palette.borderStrong,
                                     borderRadius: BorderRadius.circular(99),
@@ -184,55 +236,51 @@ class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet> {
                                 ),
                               ),
                             ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(24, 8, 24, 18),
-                              child: Row(
-                                children: [
-                                  SizedBox.square(
-                                    dimension: 44,
-                                    child: selected == null
-                                        ? null
-                                        : OmniCircleButton(
-                                            key: const ValueKey(
-                                              'agent-run-details-back',
-                                            ),
-                                            icon: LucideIcons.chevronLeft,
-                                            tooltip: isEnglish ? 'Back' : '返回',
-                                            foregroundColor:
-                                                palette.textSecondary,
-                                            onPressed: _showTimeline,
-                                          ),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      title,
+                            if (selected != null)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    OmniCircleButton(
                                       key: const ValueKey(
-                                        'agent-run-details-title',
+                                        'agent-run-details-back',
                                       ),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: palette.textPrimary,
-                                        fontSize: 18,
-                                        height: 1.3,
-                                        fontWeight: FontWeight.w600,
+                                      icon: LucideIcons.chevronLeft,
+                                      size: 40,
+                                      iconSize: 20,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.padded,
+                                      tooltip: isEnglish
+                                          ? 'Back to steps'
+                                          : '返回过程列表',
+                                      foregroundColor: palette.textSecondary,
+                                      onPressed: _showTimeline,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _messageTitle(selected, isEnglish),
+                                        key: const ValueKey(
+                                          'agent-run-details-title',
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: palette.textPrimary,
+                                          fontSize: 17,
+                                          height: 1.3,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  OmniCircleButton(
-                                    key: const ValueKey(
-                                      'agent-run-details-close',
-                                    ),
-                                    icon: LucideIcons.x,
-                                    tooltip: isEnglish ? 'Close' : '关闭',
-                                    foregroundColor: palette.textSecondary,
-                                    onPressed: () =>
-                                        Navigator.of(context).pop(),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ),
@@ -289,7 +337,7 @@ class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet> {
                                       '',
                                   style: TextStyle(
                                     color: palette.textSecondary,
-                                    fontSize: 16,
+                                    fontSize: 15,
                                     height: 1.55,
                                   ),
                                   isFinal: true,
@@ -308,21 +356,6 @@ class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet> {
       },
     );
   }
-}
-
-String _summaryTitle(AgentRunTimelineGroup group, bool isEnglish) {
-  final label = switch (group.status) {
-    AgentRunStatus.failed => isEnglish ? 'Failed' : '执行失败',
-    AgentRunStatus.cancelled => isEnglish ? 'Cancelled' : '已取消',
-    AgentRunStatus.running => isEnglish ? 'Processing' : '正在处理',
-    AgentRunStatus.finished => isEnglish ? 'Processed' : '已处理',
-  };
-  if (group.toolCount == 0) {
-    return isEnglish ? '$label · Details' : '$label · 过程';
-  }
-  return isEnglish
-      ? '$label ${group.toolCount} actions'
-      : '$label ${group.toolCount} 个操作';
 }
 
 String _messageTitle(ChatMessageModel message, bool isEnglish) {
@@ -376,7 +409,7 @@ class _AgentRunTimelineRow extends StatelessWidget {
             'success' || 'completed' =>
               context.isDarkTheme
                   ? const Color(0xFF7ACFA4)
-                : const Color(0xFF39996A),
+                  : const Color(0xFF39996A),
             'error' || 'failed' => Theme.of(context).colorScheme.error,
             _ => palette.textSecondary,
           };
@@ -409,7 +442,7 @@ class _AgentRunTimelineRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: palette.textPrimary,
-                        fontSize: 16,
+                        fontSize: 15,
                         height: 1.4,
                       ),
                     ),

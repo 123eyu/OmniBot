@@ -262,9 +262,7 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
 
   Future<void> _pickLocalImage() async {
     try {
-      final file = await FilePicker.pickFile(
-        type: FileType.image,
-      );
+      final file = await FilePicker.pickFile(type: FileType.image);
       if (file == null) {
         return;
       }
@@ -508,7 +506,7 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
         child: SingleChildScrollView(
           padding: edgeToEdgeScrollPadding(
             context,
-            const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            const EdgeInsets.fromLTRB(22, 12, 22, 24),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1001,9 +999,8 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
     }
     final customOptions = dedupedDiscovered.values.toList()
       ..sort((left, right) {
-        final timeCompare = _petSortTimestamp(
-          left,
-        ).compareTo(_petSortTimestamp(right));
+        final timeCompare = _petSortTimestamp(left)
+            .compareTo(_petSortTimestamp(right));
         if (timeCompare != 0) {
           return timeCompare;
         }
@@ -2015,15 +2012,16 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
   }
 
   String _baseNameWithoutExtension(File file) {
-    return _displayFileNameForPetImage(
-      file,
-    ).replaceAll(RegExp(r'\.[^.]+$'), '').trim();
+    return _displayFileNameForPetImage(file)
+        .replaceAll(RegExp(r'\.[^.]+$'), '')
+        .trim();
   }
 
   String _pathBaseName(String path) {
-    final segments = _normalizePath(
-      path,
-    ).split('/').where((segment) => segment.isNotEmpty).toList();
+    final segments = _normalizePath(path)
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .toList();
     return segments.isEmpty ? '' : segments.last;
   }
 
@@ -2467,7 +2465,12 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
               overlayColor: palette.accentPrimary.withValues(alpha: 0.12),
               trackHeight: 3,
             ),
-            child: Slider(value: value, min: min, max: max, onChanged: onChanged),
+            child: Slider(
+              value: value,
+              min: min,
+              max: max,
+              onChanged: onChanged,
+            ),
           ),
         ],
       ),

@@ -258,8 +258,8 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   }
 
   Color _cellColor(int level, bool isDark) {
-    const light = [0xFFEBF0F5, 0xFFBFDBF7, 0xFF7BBCE6, 0xFF3B8FD4, 0xFF1A56A8];
-    const dark = [0xFF242728, 0xFF1A3A5C, 0xFF1B5E94, 0xFF2178BD, 0xFF3B9FE8];
+    const light = [0xFFEBEBEB, 0xFFCCCCCC, 0xFFAAAAAA, 0xFF777777, 0xFF333333];
+    const dark = [0xFF292929, 0xFF444444, 0xFF777777, 0xFFAAAAAA, 0xFFDDDDDD];
     final c = isDark ? dark : light;
     return Color(c[level.clamp(0, 4)]);
   }
@@ -349,7 +349,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   // -----------------------------------------------------------------------
 
   Widget _buildSkeleton(OmniThemePalette palette, bool isDark) {
-    final c = isDark ? palette.surfaceSecondary : const Color(0xFFE8EFF8);
+    final c = palette.surfaceSecondary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -397,9 +397,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   // -----------------------------------------------------------------------
 
   Widget _buildStatsRow(OmniThemePalette palette, bool isDark) {
-    final accentBlue = isDark
-        ? const Color(0xFF7BBCE6)
-        : const Color(0xFF2C7FEB);
+    final accentBlue = palette.textPrimary;
     final streakColor = _currentStreak >= 3
         ? const Color(0xFFF59E0B)
         : accentBlue;
@@ -535,10 +533,10 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
           _switchTab(local.dx >= box.size.width / 2 ? _tokenTab : _convTab);
         },
         child: Container(
-          height: 28,
-          padding: const EdgeInsets.all(2),
+          height: 40,
+          padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
-            color: context.isDarkTheme ? palette.segmentTrack : Colors.white,
+            color: palette.segmentTrack,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: context.isDarkTheme
@@ -560,40 +558,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
                     margin: const EdgeInsets.symmetric(horizontal: 1),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
-                      gradient: context.isDarkTheme
-                          ? LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color.lerp(
-                                  palette.surfaceElevated,
-                                  palette.accentPrimary,
-                                  0.18,
-                                )!,
-                                Color.lerp(
-                                  palette.surfaceSecondary,
-                                  palette.accentPrimary,
-                                  0.30,
-                                )!,
-                              ],
-                            )
-                          : const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [Color(0xFF2DA5F0), Color(0xFF1930D9)],
-                            ),
-                      boxShadow: context.isDarkTheme
-                          ? null
-                          : const [
-                              BoxShadow(
-                                color: Color(0x1F1930D9),
-                                blurRadius: 10,
-                                offset: Offset(0, 4),
-                              ),
-                            ],
-                      border: context.isDarkTheme
-                          ? Border.all(color: palette.borderSubtle)
-                          : null,
+                      color: palette.textPrimary,
                     ),
                   ),
                 ),
@@ -627,12 +592,8 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
             style: TextStyle(
-              color: selected
-                  ? (context.isDarkTheme ? palette.textPrimary : Colors.white)
-                  : (context.isDarkTheme
-                        ? palette.textSecondary
-                        : AppColors.text70),
-              fontSize: 12,
+              color: selected ? palette.pageBackground : palette.textSecondary,
+              fontSize: 14,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
             ),
             child: Text(label),
@@ -666,6 +627,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   }
 
   Widget _buildHeatmapGrid(bool isDark) {
+    final palette = context.omniPalette;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final daysBack = widget.weeksToShow * 7 - 1;
@@ -714,9 +676,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w500,
-                              color: isDark
-                                  ? const Color(0xFF9A9488)
-                                  : const Color(0xFF98A5BB),
+                              color: palette.textTertiary,
                             ),
                           ),
                         ),
@@ -757,9 +717,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
                                     style: TextStyle(
                                       fontSize: 9,
                                       fontWeight: FontWeight.w500,
-                                      color: isDark
-                                          ? const Color(0xFF9A9488)
-                                          : const Color(0xFF98A5BB),
+                                      color: palette.textTertiary,
                                     ),
                                   )
                                 : const SizedBox.shrink(),
@@ -798,14 +756,12 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
                           preferBelow: false,
                           verticalOffset: 12,
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF2D3032)
-                                : const Color(0xFF353E53),
+                            color: palette.textPrimary,
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          textStyle: const TextStyle(
+                          textStyle: TextStyle(
                             fontSize: 11,
-                            color: Colors.white,
+                            color: palette.pageBackground,
                           ),
                           child: Container(
                             width: cellSize,
@@ -1030,12 +986,13 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
                   preferBelow: false,
                   verticalOffset: 12,
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xFF2D3032)
-                        : const Color(0xFF353E53),
+                    color: palette.textPrimary,
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  textStyle: const TextStyle(fontSize: 11, color: Colors.white),
+                  textStyle: TextStyle(
+                    fontSize: 11,
+                    color: palette.pageBackground,
+                  ),
                   child: SizedBox(
                     width: barWidth,
                     height: barAreaHeight,

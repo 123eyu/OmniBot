@@ -2,7 +2,7 @@
 
 part of 'home_drawer.dart';
 
-enum _ConversationContextAction { pin, rename, copy, archive, delete }
+enum _ConversationContextAction { pin, rename, copy, select, archive, delete }
 
 extension _HomeDrawerActions on HomeDrawerState {
   bool get _shouldCloseOnNavigate => widget.closeOnNavigate && !widget.embedded;
@@ -68,9 +68,8 @@ extension _HomeDrawerActions on HomeDrawerState {
     // 永远不应继承它(否则 subagent_dispatch / schedule_* / alarm_* / calendar_*
     // 都会被 AgentConversationModePolicy 过滤掉)。chatOnly 保持继承,因为那是用户
     // 主动选择的纯聊天模式。
-    final requestedMode =
-        widget.homePage && _homeFilter == _HomeConversationFilter.chat
-        ? ConversationMode.chatOnly
+    final requestedMode = widget.homePage
+        ? _homeFilter.mode
         : widget.newConversationMode;
     final newMode = requestedMode == ConversationMode.subagent
         ? ConversationMode.agent
@@ -78,6 +77,9 @@ extension _HomeDrawerActions on HomeDrawerState {
     _openThreadTarget(
       ConversationThreadTarget.newConversation(
         mode: newMode,
+        agentId: widget.homePage && newMode == ConversationMode.agent
+            ? _homeFilter.agentId ?? 'xiaowan-acp'
+            : null,
         requestKey: DateTime.now().microsecondsSinceEpoch.toString(),
       ),
     );
@@ -199,6 +201,10 @@ extension _HomeDrawerActions on HomeDrawerState {
   }
 
   void _openConversationFromDrawer(ConversationModel conversation) {
+    if (_isSelectingConversations) {
+      _toggleConversationSelection(conversation);
+      return;
+    }
     if (_busyConversationKeys.contains(conversation.threadKey)) {
       return;
     }
@@ -210,11 +216,11 @@ extension _HomeDrawerActions on HomeDrawerState {
         // persisted. Resolve that missing binding at the boundary so a
         // switch cannot temporarily inherit whichever ACP is selected in the
         // global UI state.
-        agentId:
-            conversation.agentId ??
-            (conversation.mode == ConversationMode.agent
-                ? 'xiaowan-acp'
-                : null),
+        agentId: conversation.agentId?.trim().isNotEmpty == true
+            ? conversation.agentId!.trim()
+            : (conversation.mode == ConversationMode.agent
+                  ? 'xiaowan-acp'
+                  : null),
       ),
     );
   }
@@ -225,7 +231,7 @@ extension _HomeDrawerActions on HomeDrawerState {
     }
 
     final originalIndex = _allConversations.indexWhere(
-      (item) => item.id == conversation.id,
+      (item) => item.threadKey == conversation.threadKey,
     );
     if (originalIndex < 0) {
       return;
@@ -446,18 +452,21 @@ extension _HomeDrawerActions on HomeDrawerState {
       _activeContextMenuThreadKey = conversation.threadKey;
     });
 
-    final selectedAction = await showGeneralDialog<_ConversationContextAction>(
-      context: rowContext,
+    final route = RawDialogRoute<_ConversationContextAction>(
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(rowContext)
           .modalBarrierDismissLabel,
       barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 170),
+      transitionDuration: MediaQuery.disableAnimationsOf(rowContext)
+          ? Duration.zero
+          : const Duration(milliseconds: 320),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         final isEnglish =
             Localizations.localeOf(dialogContext).languageCode == 'en';
         String tr(String zh, String en) => isEnglish ? en : zh;
         return ConversationContextMenu(
+          animation: animation,
+          onDismiss: () => Navigator.of(dialogContext).pop(),
           anchor: Rect.fromPoints(rowTopLeft, rowBottomRight),
           title: _resolveConversationTitle(conversation),
           actions: [
@@ -484,6 +493,13 @@ extension _HomeDrawerActions on HomeDrawerState {
               icon: LucideIcons.copy,
               label: tr('复制对话', 'Copy'),
             ),
+            if (widget.homePage)
+              _buildConversationMenuOption(
+                dialogContext,
+                action: _ConversationContextAction.select,
+                icon: LucideIcons.listChecks,
+                label: tr('多选', 'Select'),
+              ),
             _buildConversationMenuOption(
               dialogContext,
               action: _ConversationContextAction.archive,
@@ -504,17 +520,18 @@ extension _HomeDrawerActions on HomeDrawerState {
           ],
         );
       },
-      transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
-        return FadeTransition(
-          opacity: CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-            reverseCurve: Curves.easeInCubic,
-          ),
-          child: child,
-        );
-      },
+      transitionBuilder: (_, animation, _, child) => AbsorbPointer(
+        absorbing: animation.status == AnimationStatus.reverse,
+        child: child,
+      ),
     );
+    final selectedAction = await Navigator.of(
+      rowContext,
+      rootNavigator: true,
+    ).push<_ConversationContextAction>(route);
+    // push completes when pop starts. Keep the original row hidden until the
+    // focused preview has returned to its anchor and its overlay is removed.
+    await route.completed;
 
     if (mounted) {
       setState(() {
@@ -535,6 +552,8 @@ extension _HomeDrawerActions on HomeDrawerState {
         _startEditingTitle(conversation);
       case _ConversationContextAction.copy:
         await _copyConversation(conversation);
+      case _ConversationContextAction.select:
+        _startConversationSelection(conversation);
       case _ConversationContextAction.archive:
         if (conversation.isArchived) {
           await _unarchiveConversation(conversation);
@@ -567,6 +586,7 @@ extension _HomeDrawerActions on HomeDrawerState {
         key: ValueKey('home-drawer-context-${action.name}'),
         borderRadius: BorderRadius.circular(18),
         onTap: () {
+          if (ModalRoute.of(dialogContext)?.isCurrent != true) return;
           performOmniSelectionHaptic();
           Navigator.of(dialogContext).pop(action);
         },

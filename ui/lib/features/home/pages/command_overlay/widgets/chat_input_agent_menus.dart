@@ -243,7 +243,6 @@ class _AgentRunSettingsMenuContentState
     required VoidCallback onTap,
   }) {
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
       child: InkWell(
@@ -255,11 +254,7 @@ class _AgentRunSettingsMenuContentState
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           child: Row(
             children: [
-              Icon(
-                icon,
-                size: 16,
-                color: isDark ? palette.textSecondary : const Color(0xFF66758E),
-              ),
+              Icon(icon, size: 16, color: palette.textSecondary),
               const SizedBox(width: 9),
               Text(
                 label,
@@ -278,9 +273,7 @@ class _AgentRunSettingsMenuContentState
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark
-                        ? palette.textTertiary
-                        : const Color(0xFF8490A3),
+                    color: palette.textTertiary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -289,7 +282,7 @@ class _AgentRunSettingsMenuContentState
               Icon(
                 Icons.chevron_right_rounded,
                 size: 18,
-                color: isDark ? palette.textTertiary : const Color(0xFF9AA4B6),
+                color: palette.textTertiary,
               ),
             ],
           ),
@@ -365,7 +358,6 @@ class _AgentRunSettingsMenuContentState
 
   Widget _buildSearch() {
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     return Padding(
       key: const ValueKey('chat-input-agent-run-settings-model-search'),
       padding: const EdgeInsets.fromLTRB(10, 5, 10, 6),
@@ -373,23 +365,13 @@ class _AgentRunSettingsMenuContentState
         height: 36,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: isDark
-              ? palette.surfaceSecondary.withValues(alpha: 0.58)
-              : Colors.white.withValues(alpha: 0.42),
+          color: palette.surfaceSecondary,
           borderRadius: BorderRadius.circular(11),
-          border: Border.all(
-            color: isDark
-                ? palette.borderSubtle.withValues(alpha: 0.60)
-                : Colors.white.withValues(alpha: 0.66),
-          ),
+          border: Border.all(color: palette.borderSubtle),
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.search_rounded,
-              size: 17,
-              color: isDark ? palette.textTertiary : const Color(0xFF929EB0),
-            ),
+            Icon(Icons.search_rounded, size: 17, color: palette.textTertiary),
             const SizedBox(width: 7),
             Expanded(
               child: TextField(
@@ -407,9 +389,7 @@ class _AgentRunSettingsMenuContentState
                   hintText: widget.searchHint,
                   hintStyle: TextStyle(
                     fontSize: 12,
-                    color: isDark
-                        ? palette.textTertiary
-                        : const Color(0xFF929EB0),
+                    color: palette.textTertiary,
                     fontWeight: FontWeight.w500,
                   ),
                   border: InputBorder.none,

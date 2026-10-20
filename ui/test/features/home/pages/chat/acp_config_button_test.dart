@@ -8,6 +8,67 @@ import 'package:ui/widgets/provider_vendor_icon.dart';
 
 void main() {
   testWidgets(
+    'compact label projects official selection without eager session loading',
+    (tester) async {
+      var loads = 0;
+      var identity = 'conversation-a';
+      String? label = 'provider/gpt-5.4';
+      late StateSetter update;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                update = setState;
+                return AcpConfigButton(
+                  modelLabel: label,
+                  presentationIdentity: identity,
+                  isRunning: false,
+                  load: () async {
+                    loads++;
+                    return {
+                      'sessionId': 'session-a',
+                      'configOptions': [
+                        {
+                          'id': 'model',
+                          'category': 'model',
+                          'type': 'select',
+                          'currentValue': 'server-model',
+                          'options': [
+                            {'value': 'server-model', 'name': 'Server model'},
+                          ],
+                        },
+                      ],
+                    };
+                  },
+                  write: (_, _, _) async => {},
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('gpt-5.4'), findsOneWidget);
+      expect(loads, 0);
+      await tester.tap(find.byKey(const ValueKey('chat-acp-config-button')));
+      await tester.pumpAndSettle();
+      expect(loads, 1);
+      expect(find.text('Server model'), findsWidgets);
+      update(() {
+        identity = 'conversation-b';
+        label = null;
+      });
+      await tester.pumpAndSettle();
+      expect(find.byType(AcpConfigPanel), findsNothing);
+      expect(find.text('Server model'), findsNothing);
+      expect(find.text('Model'), findsOneWidget);
+      expect(find.text('Auto'), findsNothing);
+      expect(loads, 1);
+    },
+  );
+
+  testWidgets(
     'header opens the existing hidden config owner and a conversation switch dismisses it',
     (tester) async {
       final configKey = GlobalKey<AcpConfigButtonState>();

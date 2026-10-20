@@ -267,7 +267,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                           plugin.name,
                           style: TextStyle(
                             color: palette.textPrimary,
-                            fontSize: 18,
+                            fontSize: 17,
                             fontWeight: FontWeight.w600,
                             height: 1.3,
                           ),
@@ -301,7 +301,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                 _pluginDescription(plugin),
                 style: TextStyle(
                   color: palette.textSecondary,
-                  fontSize: 13.5,
+                  fontSize: 15,
                   height: 1.65,
                 ),
               ),
@@ -368,7 +368,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                 context.l10n.pluginInformationTitle,
                 style: TextStyle(
                   color: palette.textPrimary,
-                  fontSize: 14,
+                  fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -420,7 +420,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
       label,
       style: TextStyle(
         color: palette.textPrimary,
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: FontWeight.w700,
         height: 1.35,
       ),
@@ -448,7 +448,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
               label,
               style: TextStyle(
                 color: palette.textPrimary,
-                fontSize: 14,
+                fontSize: 15,
                 fontWeight: FontWeight.w500,
                 height: 1.45,
               ),
@@ -504,7 +504,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                   title,
                   style: TextStyle(
                     color: palette.textPrimary,
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -584,7 +584,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                   _localized(ready['title'], fallback: plugin.name),
                   style: TextStyle(
                     color: palette.textPrimary,
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -686,7 +686,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
     final palette = context.omniPalette;
     final installedAction = _map(plugin.presentation['installedAction']);
     return Material(
-      color: context.isDarkTheme ? palette.surfacePrimary : Colors.white,
+      color: palette.surfacePrimary,
       child: SafeArea(
         top: false,
         child: Padding(
@@ -707,7 +707,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                                   context.l10n.pluginEnableTitle,
                                   style: TextStyle(
                                     color: palette.textPrimary,
-                                    fontSize: 14,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -835,10 +835,11 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
   List<Object?> _list(Object? value) =>
       value is List ? List<Object?>.from(value) : const <Object?>[];
 
-  List<Map<String, dynamic>> _mapList(Object? value) => _list(value)
-      .whereType<Map>()
-      .map((item) => Map<String, dynamic>.from(item))
-      .toList(growable: false);
+  List<Map<String, dynamic>> _mapList(Object? value) =>
+      _list(value)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList(growable: false);
 
   String _localized(Object? value, {String fallback = ''}) {
     if (value is String) return value.trim().isEmpty ? fallback : value.trim();

@@ -35,7 +35,7 @@ void main() {
   });
 
   testWidgets(
-    'minimal composer keeps send and draft but moves auxiliary controls out',
+    'minimal composer keeps send, draft, model and add controls together',
     (tester) async {
       var sends = 0;
       await tester.pumpWidget(
@@ -60,11 +60,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Keep this draft'), findsOneWidget);
-      expect(find.byKey(const ValueKey('runtime-control')), findsNothing);
-      expect(
-        find.byKey(const ValueKey('runtime-control'), skipOffstage: false),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('runtime-control')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('chat-input-agent-permission-button')),
         findsNothing,
@@ -75,7 +71,7 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('chat-input-add-or-cancel-edit-button')),
-        findsNothing,
+        findsOneWidget,
       );
       await tester.tap(
         find.byKey(const ValueKey('chat-input-send-or-stop-button')),

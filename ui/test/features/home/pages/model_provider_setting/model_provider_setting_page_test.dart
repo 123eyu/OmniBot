@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -388,13 +389,14 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('模型类型'), findsNothing);
-      final providerRight = tester
-          .getTopRight(find.byKey(const Key('provider-config-title')))
-          .dx;
-      final protocolLeft = tester
-          .getTopLeft(find.byKey(const Key('provider-protocol-type-button')))
-          .dx;
-      expect(protocolLeft - providerRight, 4);
+      final profileRect = tester.getRect(
+        find.byKey(const Key('provider-config-title')),
+      );
+      final presetRect = tester.getRect(
+        find.byKey(const Key('provider-protocol-type-button')),
+      );
+      expect(presetRect.top, greaterThan(profileRect.bottom));
+      expect(presetRect.width, greaterThan(176));
       expect(tester.takeException(), isNull);
     },
   );
@@ -630,6 +632,14 @@ void main() {
           matching: find.text(entry['label']!),
         ),
         findsOneWidget,
+      );
+      expect(
+        tester
+            .renderObject<RenderParagraph>(
+              find.byKey(const Key('provider-config-title-text')),
+            )
+            .didExceedMaxLines,
+        isFalse,
       );
       expect(tester.takeException(), isNull);
 

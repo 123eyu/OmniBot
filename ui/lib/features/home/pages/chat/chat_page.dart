@@ -13,7 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../../../models/conversation_model.dart';
 import '../../../../models/conversation_thread_target.dart';
@@ -83,7 +82,6 @@ import 'mixins/conversation_manager.dart';
 
 // 导入 Widgets
 import 'chat_page_models.dart';
-import 'tool_activity_utils.dart';
 import 'widgets/chat_widgets.dart';
 import 'widgets/chat_browser_overlay.dart';
 import 'widgets/chat_message_anchor_bar.dart';
@@ -162,7 +160,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   final GlobalKey _embeddedDrawerSearchFieldKey = GlobalKey();
   final GlobalKey _browserOverlayKey = GlobalKey();
   final GlobalKey _slashCommandStripKey = GlobalKey();
-  final GlobalKey _toolActivityStripKey = GlobalKey();
   final GlobalKey _firstUseTourMenuAnchorKey = GlobalKey();
   final GlobalKey _firstUseTourPetAnchorKey = GlobalKey();
   final GlobalKey _firstUseTourIslandAnchorKey = GlobalKey();
@@ -280,13 +277,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   AcpAgentCatalog? _agentCatalog;
   bool _isAgentCatalogLoading = false;
   bool _isAgentRuntimeStatusLoading = false;
-  bool _isAcpAgentSwitching = false;
-  // Monotonic epoch for status snapshots. A status request started before a
-  // Harness switch may complete afterwards; without an epoch it can paint
-  // the previous runtime over the newly selected one in the AppBar.
-  int _agentRuntimeStatusEpoch = 0;
-  int _agentCatalogEpoch = 0;
-  String? _optimisticAcpAgentId;
   final Map<int, String> _agentIdByConversationId = <int, String>{};
   int? _activeRemoteCodexRuntimeId;
   String? _activeAgentThreadId;
@@ -355,6 +345,11 @@ abstract class _ChatPageStateBase extends State<ChatPage>
         _firstUseTourStep >= ChatSpotlightTour.stepCount - 1) {
       return;
     }
+    if (_firstUseTourStep + 1 == 4) {
+      // The model action lives in the focused composer row. Reveal that same
+      // editor before the tour measures its anchor.
+      _requestComposerFocus();
+    }
     setState(() {
       _firstUseTourStep += 1;
     });
@@ -363,6 +358,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   void _handleFirstUseTourBack() {
     if (!mounted || !_isFirstUseTourActive) return;
     if (_firstUseTourStep > 0) {
+      if (_firstUseTourStep - 1 == 4) _requestComposerFocus();
       setState(() {
         _firstUseTourStep -= 1;
       });
@@ -417,19 +413,10 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     return null;
   }
 
-  String? get _activeAcpAgentId {
-    // Pure chat is still an ACP session; it only disables tool capabilities.
-    // Keep the selected Agent identity available so the chat chrome and run
-    // headers render the same brand avatar after switching Harnesses.
-    final optimisticAgentId = _optimisticAcpAgentId?.trim() ?? '';
-    if (optimisticAgentId.isNotEmpty) {
-      return optimisticAgentId;
-    }
-    return _committedAcpAgentId;
-  }
+  // Pure chat remains an ACP session with tool capabilities disabled.
+  String? get _activeAcpAgentId => _committedAcpAgentId;
 
-  // Optimistic chrome is not a Conversation/Session identity. In particular,
-  // failed switching must restore the owner from before the pending selection.
+  // The visible conversation's target and binding own its Agent identity.
   String? get _committedAcpAgentId {
     if (_activeMode == ChatPageMode.normal &&
         activeConversationModeValue == ConversationMode.normal) {
@@ -820,14 +807,10 @@ abstract class _ChatPageStateBase extends State<ChatPage>
         ? false
         : _modeState(_activeMode).isAiResponding,
   );
-  double get _toolActivityOccupiedHeight =>
-      _modeState(_activeMode).toolActivityOccupiedHeight;
   double get _slashCommandPanelOccupiedHeight =>
       _modeState(_activeMode).slashCommandPanelOccupiedHeight;
   bool get _isSlashCommandExpanded =>
       _modeState(_activeMode).slashCommandExpanded;
-  bool get _isToolActivityExpanded =>
-      _modeState(_activeMode).toolActivityExpanded;
 
   double get _inputAreaHeight => _modeState(_activeMode).inputAreaHeight;
   // ACP Agent lifecycle state has one owner: the conversation runtime. The
@@ -1548,39 +1531,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     );
   }
 
-  Future<bool> _handleToolActivityStopRequested(
-    String taskId,
-    String cardId,
-  ) async {
-    final activeMode = _activeConversationMode;
-    final isNormalAcp =
-        activeMode == ChatPageMode.normal &&
-        activeConversationModeValue != ConversationMode.chatOnly;
-    String? runId;
-    for (final message
-        in _activeRuntime?.messages ?? const <ChatMessageModel>[]) {
-      final cardData = message.cardData;
-      final messageCardId = (cardData?['cardId'] ?? '').toString().trim();
-      if (message.id != cardId && messageCardId != cardId) {
-        continue;
-      }
-      final candidate = (cardData?['runId'] ?? cardData?['run_id'])
-          ?.toString()
-          .trim();
-      if (candidate != null && candidate.isNotEmpty) {
-        runId = candidate;
-      }
-      break;
-    }
-    final response = await AgentRuntimeService.cancelPrompt(
-      conversationId: _currentConversationId,
-      sessionId: isNormalAcp ? _normalAcpSessionId : _activeAgentThreadId,
-      promptId: isNormalAcp ? _normalAcpTurnId : _activeAgentTurnId,
-      runId: runId,
-    );
-    return isAgentCancellationSuccessful(response);
-  }
-
   String _buildOpenClawSessionKey(int conversationId) {
     final normalizedUserId = _openClawUserId.trim();
     if (normalizedUserId.isNotEmpty) {
@@ -1770,10 +1720,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
 
   Future<void> _selectAgentModel(String modelId, {bool clearComposer = true});
 
-  Future<bool> _selectAgent(String agentId);
-
-  Future<void> _handleAcpAgentModeShortcutTap(String agentId);
-
   Future<void> _selectAgentReasoningEffort(String effort);
 
   Future<void> _selectAgentPermissionMode(AgentPermissionMode mode);
@@ -1799,8 +1745,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   });
 
   Future<void> _startAgentReviewCommand();
-
-  Future<void> _handleAgentTap();
 
   String? _remoteCodexWorkspaceNameForGreeting();
 
@@ -1992,7 +1936,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     bool lockCompleted = true,
   });
 
-  Future<void> _pickAttachments();
+  Future<void> _pickAttachments({FileType type = FileType.any});
 
   void _removePendingAttachment(String id);
 
@@ -2042,7 +1986,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   void _onCancelTaskFromCard(String taskId);
 
   void _updateThinkingCardToCancelled(String taskId);
-
 
   void _onPopupVisibilityChanged(bool visible);
 

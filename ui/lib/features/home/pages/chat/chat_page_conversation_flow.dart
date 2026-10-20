@@ -300,9 +300,9 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
   }
 
   @override
-  Future<void> _pickAttachments() async {
+  Future<void> _pickAttachments({FileType type = FileType.any}) async {
     try {
-      final files = await FilePicker.pickFiles(type: FileType.any);
+      final files = await FilePicker.pickFiles(type: type);
       if (files.isEmpty || !mounted) return;
       var rejectedNaAttachment = false;
       setState(() {

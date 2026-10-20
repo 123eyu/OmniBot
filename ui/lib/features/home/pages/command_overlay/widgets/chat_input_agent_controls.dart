@@ -339,7 +339,10 @@ extension _ChatInputAgentControls on _ChatInputAreaStateBase {
     );
   }
 
-  Future<void> _openAgentPermissionMenu(BuildContext anchorContext) async {
+  Future<void> _openAgentPermissionMenu(
+    BuildContext anchorContext, {
+    bool? preferBelow,
+  }) async {
     final selected =
         widget.agentPermissionMode ?? AgentPermissionMode.fullAccess;
     final palette = context.omniPalette;
@@ -359,16 +362,14 @@ extension _ChatInputAgentControls on _ChatInputAreaStateBase {
     final handle = showOverlayGlassPopup<AgentPermissionMode>(
       context: anchorContext,
       anchor: anchor,
-      preferBelow: widget.minimalComposer,
+      preferBelow: preferBelow ?? widget.minimalComposer,
       reverseTransitionDuration: Duration.zero,
       builder: (handle) => _AgentPermissionGlassMenuContent(
         width: 196,
         selected: selected,
         selectedColor: selectedColor,
         inactiveColor: inactiveColor,
-        textColor: context.isDarkTheme
-            ? palette.textPrimary
-            : const Color(0xFF232D3D),
+        textColor: palette.textPrimary,
         options: [
           for (final mode in widget.agentPermissionModes)
             _AgentPermissionOptionData(

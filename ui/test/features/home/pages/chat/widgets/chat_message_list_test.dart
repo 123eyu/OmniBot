@@ -1752,7 +1752,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('详细思考过程', findRichText: true), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('agent-run-details-close')));
+    await _tapOutsideAgentRunSheet(tester);
     await tester.pumpAndSettle();
     expect(find.byType(AgentRunDetailsSheet), findsNothing);
     expect(find.textContaining('详细思考过程', findRichText: true), findsNothing);
@@ -1798,7 +1798,7 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.byKey(const ValueKey('agent-run-details-close')));
+    await _tapOutsideAgentRunSheet(tester);
     await tester.pumpAndSettle();
     expect(find.byType(AgentRunDetailsSheet), findsNothing);
     expect(find.text('运行 git status'), findsNothing);
@@ -1899,8 +1899,17 @@ void main() {
       expect(controller.position.maxScrollExtent, closeTo(initialExtent, 0.1));
       expect(tester.state(find.byType(ChatMessageList)), same(originalListState));
 
-      await tester.tap(find.byKey(const ValueKey('agent-run-details-close')));
+      await tester.tap(
+        find.byKey(const ValueKey('agent-run-details-row-task-1-tool')),
+      );
       await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('agent-run-details-item-task-1-tool')),
+        findsOneWidget,
+      );
+      await _tapOutsideAgentRunSheet(tester);
+      await tester.pumpAndSettle();
+      expect(find.byType(AgentRunDetailsSheet), findsNothing);
       expect(controller.offset, closeTo(initialOffset, 0.1));
       expect(tester.getTopLeft(summaryToggle).dy, closeTo(initialTop, 0.1));
       expect(controller.position.maxScrollExtent, closeTo(initialExtent, 0.1));
@@ -2500,6 +2509,11 @@ Widget _buildLocalizedApp({required Widget child}) {
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(body: child),
   );
+}
+
+Future<void> _tapOutsideAgentRunSheet(WidgetTester tester) async {
+  final sheet = find.byKey(const ValueKey('agent-run-details-sheet-task-1'));
+  await tester.tapAt(Offset(20, tester.getTopLeft(sheet).dy - 20));
 }
 
 Future<void> _sendTestBackGesture(

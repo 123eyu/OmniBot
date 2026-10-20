@@ -1374,9 +1374,9 @@ class OmnibotWorkspaceBrowserState extends State<OmnibotWorkspaceBrowser> {
                         fontFamily: 'PingFang SC',
                       ),
                     ),
-                    onTap: () => Navigator.of(
-                      sheetContext,
-                    ).pop(_WorkspaceEntryAction.edit),
+                    onTap: () =>
+                        Navigator.of(sheetContext)
+                            .pop(_WorkspaceEntryAction.edit),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -1398,9 +1398,9 @@ class OmnibotWorkspaceBrowserState extends State<OmnibotWorkspaceBrowser> {
                         fontFamily: 'PingFang SC',
                       ),
                     ),
-                    onTap: () => Navigator.of(
-                      sheetContext,
-                    ).pop(_WorkspaceEntryAction.rename),
+                    onTap: () =>
+                        Navigator.of(sheetContext)
+                            .pop(_WorkspaceEntryAction.rename),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -2222,7 +2222,9 @@ class _WorkspaceInlineFilePreviewState
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF2C7FEB)),
+                  borderSide: BorderSide(
+                    color: context.omniPalette.accentPrimary,
+                  ),
                 ),
               ),
             ),

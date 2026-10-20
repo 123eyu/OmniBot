@@ -484,7 +484,7 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
               : ListView(
                   padding: edgeToEdgeScrollPadding(
                     context,
-                    const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                    const EdgeInsets.fromLTRB(22, 12, 22, 28),
                   ),
                   children: [
                     SettingsSectionTitle(
@@ -865,7 +865,7 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
               child: Text(
                 _text('启用 Agent', 'Enable Agent'),
                 style: TextStyle(
-                  fontSize: 14.5,
+                  fontSize: 15,
                   fontWeight: FontWeight.w500,
                   color: context.omniPalette.textPrimary,
                 ),

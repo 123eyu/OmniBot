@@ -57,6 +57,7 @@ class AcpConfigButton extends StatefulWidget {
     this.onVisibilityChanged,
     this.configureModel,
     this.presentationIdentity,
+    this.modelLabel,
   });
   final Future<Map<String, dynamic>> Function() load;
   final Future<Map<String, dynamic>> Function()? refresh;
@@ -66,16 +67,57 @@ class AcpConfigButton extends StatefulWidget {
   final Future<void> Function(BuildContext anchorContext)? configureModel;
   final Object? presentationIdentity;
 
+  /// Actual selection supplied by the conversation/runtime owner. An absent
+  /// value is shown as “Model”, never as an invented automatic selection.
+  final String? modelLabel;
+
   @override
   State<AcpConfigButton> createState() => AcpConfigButtonState();
 }
 
 class AcpConfigButtonState extends State<AcpConfigButton> {
   OverlayGlassPopupHandle<void>? _popup;
+  String? _returnedModelLabel;
+  bool _openingSharedSelector = false;
+
+  Future<Map<String, dynamic>> _projectConfigResponse(
+    Future<Map<String, dynamic>> response,
+    Object? identity,
+  ) async {
+    final result = await response;
+    if (!mounted || identity != widget.presentationIdentity) return result;
+    for (final option in acpConfigOptions(result)) {
+      if (option['category'] != 'model' && option['id'] != 'model') continue;
+      final value = option['currentValue']?.toString().trim() ?? '';
+      if (value.isEmpty) continue;
+      final choices = <Map>[];
+      for (final item
+          in (option['options'] as List? ?? const []).whereType<Map>()) {
+        if (item['options'] is List) {
+          choices.addAll((item['options'] as List).whereType<Map>());
+        } else {
+          choices.add(item);
+        }
+      }
+      final current = choices
+          .where((item) => item['value']?.toString() == value)
+          .firstOrNull;
+      final label = current?['name']?.toString().trim();
+      setState(
+        () => _returnedModelLabel = label?.isNotEmpty == true ? label : value,
+      );
+      break;
+    }
+    return result;
+  }
 
   @override
   void didUpdateWidget(covariant AcpConfigButton oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.modelLabel != oldWidget.modelLabel ||
+        widget.presentationIdentity != oldWidget.presentationIdentity) {
+      _returnedModelLabel = null;
+    }
     if (widget.isRunning != oldWidget.isRunning ||
         widget.presentationIdentity != oldWidget.presentationIdentity) {
       final popup = _popup;
@@ -97,9 +139,10 @@ class AcpConfigButtonState extends State<AcpConfigButton> {
     BuildContext anchorContext, {
     bool preferBelow = false,
   }) async {
-    if (_popup != null) return;
+    if (_popup != null || _openingSharedSelector) return;
     final anchor = glassPopupAnchorFromContext(anchorContext);
     if (anchor == null) return;
+    final identity = widget.presentationIdentity;
     final handle = showOverlayGlassPopup<void>(
       context: context,
       anchor: anchor,
@@ -107,16 +150,30 @@ class AcpConfigButtonState extends State<AcpConfigButton> {
       transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,
       builder: (_) => AcpConfigPanel(
-        load: widget.load,
-        refresh: widget.refresh,
-        write: widget.write,
+        load: () => _projectConfigResponse(widget.load(), identity),
+        refresh: widget.refresh == null
+            ? null
+            : () => _projectConfigResponse(widget.refresh!(), identity),
+        write: (session, option, value) => _projectConfigResponse(
+          widget.write(session, option, value),
+          identity,
+        ),
         readOnly: widget.isRunning,
         configureModel: widget.configureModel == null
             ? null
             : () async {
-                await _popup?.dismiss();
-                if (mounted && anchorContext.mounted) {
-                  await widget.configureModel!(anchorContext);
+                if (_openingSharedSelector) return;
+                _openingSharedSelector = true;
+                try {
+                  await _popup?.dismiss();
+                  if (mounted &&
+                      anchorContext.mounted &&
+                      identity == widget.presentationIdentity) {
+                    await widget.configureModel!(anchorContext);
+                  }
+                } finally {
+                  _openingSharedSelector = false;
+                  if (mounted) widget.onVisibilityChanged?.call(false);
                 }
               },
       ),
@@ -127,34 +184,66 @@ class AcpConfigButtonState extends State<AcpConfigButton> {
       await handle.future;
     } finally {
       if (_popup == handle) _popup = null;
-      if (mounted) widget.onVisibilityChanged?.call(false);
+      if (mounted && !_openingSharedSelector) {
+        widget.onVisibilityChanged?.call(false);
+      }
     }
   }
 
   @override
-  Widget build(BuildContext context) => TextFieldTapRegion(
-    child: Builder(
-      builder: (anchor) => Tooltip(
-        message: Localizations.localeOf(context).languageCode == 'en'
-            ? 'Model & settings'
-            : '模型与参数',
-        child: InkWell(
-          key: const ValueKey('chat-acp-config-button'),
-          borderRadius: BorderRadius.circular(8),
-          onTap: () => open(anchor),
-          child: SizedBox(
-            width: 28,
-            height: 28,
-            child: Icon(
-              LucideIcons.slidersHorizontal,
-              size: 20,
-              color: context.omniPalette.accentPrimary,
+  Widget build(BuildContext context) {
+    final english = Localizations.localeOf(context).languageCode == 'en';
+    final rawLabel = (_returnedModelLabel ?? widget.modelLabel ?? '').trim();
+    // Provider prefixes are redundant in this narrow control; the complete
+    // value remains available to accessibility and in the configuration panel.
+    final label = rawLabel.isEmpty
+        ? (english ? 'Model' : '模型')
+        : rawLabel.split('/').last;
+    final palette = context.omniPalette;
+    return TextFieldTapRegion(
+      child: Builder(
+        builder: (anchor) => Tooltip(
+          message: rawLabel.isEmpty
+              ? (english ? 'Model & settings' : '模型与参数')
+              : (english ? 'Model & settings: $rawLabel' : '模型与参数：$rawLabel'),
+          child: InkWell(
+            key: const ValueKey('chat-acp-config-button'),
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => open(anchor),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 144, minHeight: 36),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: palette.textSecondary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      LucideIcons.chevronDown,
+                      size: 13,
+                      color: palette.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// Shows every declared option, including unfamiliar options, without inventing defaults.
@@ -307,8 +396,9 @@ class _AcpConfigPanelState extends State<AcpConfigPanel> {
                     return;
                   }
                   setState(() => _expandedId = expanded ? null : id);
-                  if (!expanded && option['category'] == 'model')
+                  if (!expanded && option['category'] == 'model') {
                     unawaited(_load(refresh: true));
+                  }
                 }
               : null,
           child: Padding(

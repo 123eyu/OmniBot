@@ -5,8 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:ui/features/memory/pages/memory_center/widgets/tag_chip.dart';
 import 'package:ui/features/memory/pages/memory_center/widgets/tag_section.dart';
-import 'package:ui/theme/app_colors.dart';
-import 'package:ui/theme/app_text_styles.dart';
+import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/ai_generated_badge.dart';
 
 /// 详情内容区域
@@ -32,199 +31,101 @@ class DetailContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 25),
+    final palette = context.omniPalette;
+    final bodyStyle = TextStyle(
+      fontSize: 15,
+      height: 1.55,
+      color: palette.textPrimary,
+    );
+    final headingStyle = bodyStyle.copyWith(
+      fontSize: 17,
+      fontWeight: FontWeight.w600,
+    );
+    return SingleChildScrollView(
+      padding: edgeToEdgeScrollPadding(
+        context,
+        const EdgeInsets.fromLTRB(22, 16, 22, 28),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 标题
-          Text(
-            title,
-            style: const TextStyle(
-              color: AppColors.text,
-              fontSize: AppTextStyles.fontSizeH2,
-              fontWeight: AppTextStyles.fontWeightMedium,
-              height: AppTextStyles.lineHeightH1,
-              letterSpacing: AppTextStyles.letterSpacingWide,
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          // 应用标签和时间
-          Row(
+          Text(title, style: headingStyle),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              // 左侧：渲染tags或app信息 + 时间
-              Expanded(
-                child: Row(
+              if (tags != null && tags!.isNotEmpty)
+                for (final tag in tags!)
+                  TagChip(
+                    title: tag.label,
+                    iconPath: tag.icon ?? Icons.label,
+                    svgPath: tag.svgPath,
+                    appIconProvider: tag.appIconProvider,
+                  )
+              else
+                Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 渲染tags中的数据
-                    if (tags != null && tags!.isNotEmpty) ...[
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: tags!.map((tag) {
-                          return TagChip(
-                            title: tag.label,
-                            iconPath: tag.icon ?? Icons.label,
-                            svgPath: tag.svgPath,
-                            appIconProvider: tag.appIconProvider,
-                          );
-                        }).toList(),
-                      ),
-                    ] else if (appName != null && appName!.isNotEmpty) ...[
-                      if (appSvgPath != null) ...[
-                        SvgPicture.asset(appSvgPath!, width: 14, height: 14),
-                        const SizedBox(width: 4),
-                      ] else if (appIconProvider != null) ...[
-                        Image(image: appIconProvider!, width: 14, height: 14),
-                        const SizedBox(width: 4),
-                      ],
-                      Text(
-                        appName!,
+                    if (appSvgPath != null)
+                      SvgPicture.asset(appSvgPath!, width: 14, height: 14)
+                    else if (appIconProvider != null)
+                      Image(image: appIconProvider!, width: 14, height: 14)
+                    else
+                      Icon(Icons.apps, size: 14, color: palette.textTertiary),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        appName?.isNotEmpty == true ? appName! : '未知应用',
                         style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: AppTextStyles.fontWeightRegular,
-                          letterSpacing: 0.39,
-                          height: 1.6,
-                          color: AppColors.text,
+                          fontSize: 12,
+                          color: palette.textSecondary,
                         ),
-                      ),
-                    ] else ...[
-                      Icon(Icons.apps, size: 14, color: Color(0xFF666666)),
-                      const SizedBox(width: 2),
-                      Text(
-                        '未知应用',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: AppTextStyles.fontWeightRegular,
-                          letterSpacing: 0.39,
-                          height: 1.6,
-                          color: AppColors.text,
-                        ),
-                      ),
-                    ],
-                    // 时间文案
-                    const SizedBox(width: 16),
-                    Text(
-                      timestamp > 0
-                          ? DateFormat('M月 dd日 HH:mm').format(
-                              DateTime.fromMillisecondsSinceEpoch(
-                                timestamp,
-                              ).toLocal(),
-                            )
-                          : '未知时间',
-                      style: TextStyle(
-                        fontSize: AppTextStyles.fontSizeSmall,
-                        fontWeight: AppTextStyles.fontWeightRegular,
-                        letterSpacing: AppTextStyles.letterSpacingNormal,
-                        height: AppTextStyles.lineHeightH2,
-                        color: AppColors.text50,
                       ),
                     ),
                   ],
                 ),
+              Text(
+                timestamp > 0
+                    ? DateFormat('M月 dd日 HH:mm').format(
+                        DateTime.fromMillisecondsSinceEpoch(timestamp)
+                            .toLocal(),
+                      )
+                    : '未知时间',
+                style: TextStyle(fontSize: 12, color: palette.textTertiary),
               ),
-              // 右侧：AI生成标识
-              const AiGeneratedBadge(),
+              AiGeneratedBadge(color: palette.textTertiary),
             ],
           ),
-
-          const SizedBox(height: 16),
-
-          // 正文内容
-          Expanded(
-            child: SingleChildScrollView(
-              padding: edgeToEdgeScrollPadding(
-                context,
-                const EdgeInsets.only(bottom: 25),
+          const SizedBox(height: 20),
+          MarkdownBody(
+            data: content,
+            styleSheet: MarkdownStyleSheet(
+              p: bodyStyle,
+              h1: headingStyle,
+              h2: headingStyle,
+              h3: headingStyle.copyWith(fontSize: 15),
+              strong: bodyStyle.copyWith(fontWeight: FontWeight.w600),
+              em: bodyStyle.copyWith(fontStyle: FontStyle.italic),
+              code: bodyStyle.copyWith(
+                fontSize: 13,
+                fontFamily: 'monospace',
+                backgroundColor: palette.surfaceSecondary,
               ),
-              child: Padding(
-                padding: EdgeInsets.zero,
-                child: MarkdownBody(
-                  data: content,
-                  styleSheet: MarkdownStyleSheet(
-                    p: TextStyle(
-                      fontSize: AppTextStyles.fontSizeSmall,
-                      fontWeight: AppTextStyles.fontWeightRegular,
-                      height: AppTextStyles.lineHeightH2,
-                      letterSpacing: AppTextStyles.letterSpacingWide,
-                      color: AppColors.text70,
-                    ),
-                    h1: TextStyle(
-                      fontSize: AppTextStyles.fontSizeH1,
-                      fontWeight: AppTextStyles.fontWeightMedium,
-                      height: AppTextStyles.lineHeightH1,
-                      letterSpacing: AppTextStyles.letterSpacingWide,
-                      color: AppColors.text,
-                    ),
-                    h2: TextStyle(
-                      fontSize: AppTextStyles.fontSizeH2,
-                      fontWeight: AppTextStyles.fontWeightMedium,
-                      height: AppTextStyles.lineHeightH1,
-                      letterSpacing: AppTextStyles.letterSpacingWide,
-                      color: AppColors.text,
-                    ),
-                    h3: TextStyle(
-                      fontSize: AppTextStyles.fontSizeH3,
-                      fontWeight: AppTextStyles.fontWeightMedium,
-                      height: AppTextStyles.lineHeightH2,
-                      letterSpacing: AppTextStyles.letterSpacingWide,
-                      color: AppColors.text,
-                    ),
-                    strong: TextStyle(
-                      fontSize: AppTextStyles.fontSizeSmall,
-                      fontWeight: AppTextStyles.fontWeightMedium,
-                      height: AppTextStyles.lineHeightH2,
-                      letterSpacing: AppTextStyles.letterSpacingWide,
-                      color: AppColors.text70,
-                    ),
-                    em: TextStyle(
-                      fontSize: AppTextStyles.fontSizeSmall,
-                      fontWeight: AppTextStyles.fontWeightRegular,
-                      height: AppTextStyles.lineHeightH2,
-                      letterSpacing: AppTextStyles.letterSpacingWide,
-                      color: AppColors.text70,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    code: TextStyle(
-                      fontSize: AppTextStyles.fontSizeSmall,
-                      fontWeight: AppTextStyles.fontWeightRegular,
-                      height: AppTextStyles.lineHeightH2,
-                      letterSpacing: AppTextStyles.letterSpacingNormal,
-                      color: AppColors.text70,
-                      fontFamily: 'monospace',
-                      backgroundColor: AppColors.text10,
-                    ),
-                    codeblockDecoration: BoxDecoration(
-                      color: AppColors.text10,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    blockquote: TextStyle(
-                      fontSize: AppTextStyles.fontSizeSmall,
-                      fontWeight: AppTextStyles.fontWeightRegular,
-                      height: AppTextStyles.lineHeightH2,
-                      letterSpacing: AppTextStyles.letterSpacingWide,
-                      color: AppColors.text70,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    blockquoteDecoration: BoxDecoration(
-                      color: AppColors.text10,
-                      border: Border(
-                        left: BorderSide(color: AppColors.text20, width: 4),
-                      ),
-                    ),
-                    listBullet: TextStyle(
-                      fontSize: AppTextStyles.fontSizeSmall,
-                      fontWeight: AppTextStyles.fontWeightRegular,
-                      height: AppTextStyles.lineHeightH2,
-                      letterSpacing: AppTextStyles.letterSpacingWide,
-                      color: AppColors.text70,
-                    ),
-                    listBulletPadding: const EdgeInsets.only(right: 8),
-                  ),
+              codeblockDecoration: BoxDecoration(
+                color: palette.surfaceSecondary,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              blockquote: bodyStyle.copyWith(color: palette.textSecondary),
+              blockquoteDecoration: BoxDecoration(
+                color: palette.surfaceSecondary,
+                border: Border(
+                  left: BorderSide(color: palette.borderStrong, width: 2),
                 ),
               ),
+              listBullet: bodyStyle,
+              listBulletPadding: const EdgeInsets.only(right: 8),
             ),
           ),
         ],

@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
+import 'package:ui/theme/theme_context.dart';
 
-// 自定义带模糊的菜单项
+/// Legacy menu entry using the same opaque surface as other app menus.
 class BlurredMenuItem<T> extends PopupMenuEntry<T> {
   final T value;
   final Widget child;
 
-  const BlurredMenuItem({
-    required this.value,
-    required this.child,
-  });
+  const BlurredMenuItem({required this.value, required this.child});
 
   @override
   double get height => kMinInteractiveDimension;
@@ -26,18 +23,15 @@ class _BlurredMenuItemState<T> extends State<BlurredMenuItem<T>> {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-        child: Container(
-          width: 120,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF9F9F9).withOpacity(0.9),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: InkWell(
-            onTap: () => Navigator.of(context).pop(widget.value),
-            child: widget.child,
-          ),
+      child: Container(
+        width: 120,
+        decoration: BoxDecoration(
+          color: context.omniPalette.surfacePrimary,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: InkWell(
+          onTap: () => Navigator.of(context).pop(widget.value),
+          child: widget.child,
         ),
       ),
     );

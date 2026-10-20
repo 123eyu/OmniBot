@@ -137,7 +137,7 @@ class _Mem0MemorySectionState extends State<Mem0MemorySection> {
           LegacyTextLocalizer.localize('长期记忆'),
           style: TextStyle(
             color: palette.textPrimary,
-            fontSize: AppTextStyles.fontSizeMain,
+            fontSize: 15,
             fontWeight: AppTextStyles.fontWeightSemiBold,
             height: AppTextStyles.lineHeightH2,
           ),
@@ -197,7 +197,7 @@ class _Mem0MemorySectionState extends State<Mem0MemorySection> {
           margin: EdgeInsets.only(bottom: index == 2 ? 0 : 10),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: palette.surfacePrimary.withValues(alpha: 0.84),
+            color: palette.surfacePrimary,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: palette.borderSubtle),
           ),
@@ -208,7 +208,7 @@ class _Mem0MemorySectionState extends State<Mem0MemorySection> {
                 width: double.infinity,
                 height: 16,
                 decoration: BoxDecoration(
-                  color: const Color(0x142C7FEB),
+                  color: palette.surfaceSecondary,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
@@ -217,7 +217,7 @@ class _Mem0MemorySectionState extends State<Mem0MemorySection> {
                 width: 180,
                 height: 12,
                 decoration: BoxDecoration(
-                  color: const Color(0x102C7FEB),
+                  color: palette.surfaceSecondary,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
@@ -238,7 +238,7 @@ class _Mem0MemorySectionState extends State<Mem0MemorySection> {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: context.omniPalette.surfacePrimary.withValues(alpha: 0.84),
+        color: context.omniPalette.surfacePrimary,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.omniPalette.borderSubtle),
       ),
@@ -263,7 +263,7 @@ class _Mem0MemorySectionState extends State<Mem0MemorySection> {
                   title,
                   style: TextStyle(
                     color: palette.textPrimary,
-                    fontSize: AppTextStyles.fontSizeMain,
+                    fontSize: 15,
                     fontWeight: AppTextStyles.fontWeightMedium,
                     height: AppTextStyles.lineHeightH2,
                   ),
@@ -327,7 +327,7 @@ class _Mem0MemorySectionState extends State<Mem0MemorySection> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: palette.textPrimary,
-                      fontSize: AppTextStyles.fontSizeMain,
+                      fontSize: 15,
                       fontWeight: AppTextStyles.fontWeightMedium,
                       height: AppTextStyles.lineHeightH2,
                     ),

@@ -1,11 +1,16 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:flutter/services.dart';
 import 'package:ui/features/memory/models/memory_model.dart';
 import 'package:ui/theme/app_colors.dart';
-import 'package:ui/widgets/auto_invert_icon.dart';
+import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/omni_circle_button.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import 'widgets/detail_content.dart';
+
 import 'package:ui/utils/image_util.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:gal/gal.dart';
@@ -119,124 +124,73 @@ class MemoryDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.omniPalette;
+    final hasImage = memory.imagePath?.trim().isNotEmpty == true;
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: palette.pageBackground,
       appBar: CommonAppBar(
         primary: true,
-        backgroundColor: Colors.transparent,
-        leadingWidth: 60,
-        leading: GestureDetector(
-          onTap: () => Navigator.of(context).pop(),
-          child: Container(
-            width: 60,
-            height: 44,
-            alignment: Alignment.center,
-            child: AutoInvertSvgIcon.asset(
-              'assets/common/chevron_left.svg',
-              width: 24,
-              height: 24,
-              blendMode: BlendMode.difference,
-            ),
-          ),
-        ),
-        trailing: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (details) {
-            _showContextMenu(memory, context, details.globalPosition);
-          },
-          child: Container(
-            width: 60,
-            height: 44,
-            alignment: Alignment.center,
-            child: AutoInvertIcon(
-              Icons.more_vert,
-              size: 24,
-              blendMode: BlendMode.difference,
+        title: '记忆详情',
+        onBackPressed: () => Navigator.of(context).pop(),
+        trailing: Builder(
+          builder: (anchorContext) => Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: OmniCircleButton(
+              icon: LucideIcons.ellipsis,
+              tooltip: MaterialLocalizations.of(context).showMenuTooltip,
+              size: 40,
+              iconSize: 20,
+              tapTargetSize: MaterialTapTargetSize.padded,
+              onPressed: () {
+                final box = anchorContext.findRenderObject() as RenderBox;
+                _showContextMenu(
+                  memory,
+                  context,
+                  box.localToGlobal(box.size.bottomRight(Offset.zero)),
+                );
+              },
             ),
           ),
         ),
       ),
       body: SafeArea(
         top: false,
-        bottom: false,
-        child: Stack(
-          children: [
-            // 上半部分图片：添加点击弹窗
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 370,
-              child: GestureDetector(
-                onTap: () => _showImageDialog(context),
-                child: Container(
-                  child: ImageUtil.buildImage(
-                    memory.imagePath ?? '',
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            ),
-            // 下半部分
-            Positioned(
-              top: 350,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding: EdgeInsets.only(bottom: 18),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(18),
-                    topRight: Radius.circular(18),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.text05,
-                      blurRadius: 8.76,
-                      offset: Offset(0, -3.50),
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  children: [
-                    DetailContent(
-                      title: memory.title,
-                      timestamp: memory.updatedAt ?? 0,
-                      content: memory.description ?? '暂无详细内容',
-                      appName: memory.appName,
-                      appIconProvider: memory.appIcon,
-                      appSvgPath: memory.appSvgPath,
-                      // tags: memory.tags,
-                    ),
-                    // 底部渐变遮罩
-                    Positioned(
-                      bottom: 25,
-                      left: 0,
-                      right: 0,
-                      height: 35, // 渐变高度，可根据需要调整
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.white.withOpacity(0), // 顶部透明
-                              Colors.white, // 底部白色（与背景色一致）
-                            ],
-                          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+            children: [
+              if (hasImage)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: GestureDetector(
+                      onTap: () => _showImageDialog(context),
+                      child: SizedBox(
+                        height: (constraints.maxHeight * 0.32).clamp(
+                          100.0,
+                          250.0,
+                        ),
+                        child: ImageUtil.buildImage(
+                          memory.imagePath!,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
                         ),
                       ),
                     ),
-                  ],
+                  ),
+                ),
+              Expanded(
+                child: DetailContent(
+                  title: memory.title,
+                  timestamp: memory.updatedAt,
+                  content: memory.description ?? '暂无详细内容',
+                  appName: memory.appName,
+                  appIconProvider: memory.appIcon,
+                  appSvgPath: memory.appSvgPath,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -22,7 +22,7 @@ enum GlassPopupHorizontalPlacement {
   centerOnScreen,
 }
 
-/// 给 OverlayEntry 场景用的玻璃 popup 包装：复用 [GlassPopupRoute] 的定位
+/// 给 OverlayEntry 场景用的 popup 包装：复用 [GlassPopupRoute] 的定位
 /// 算法和 unfold 动画，但不走 [Navigator]。
 ///
 /// 为什么不走 Navigator：在输入框聚焦+软键盘弹起时打开菜单，[Navigator.push] →
@@ -140,13 +140,13 @@ class GlassPopupOverlayContentState extends State<GlassPopupOverlayContent>
   }
 }
 
-/// 玻璃风格 popup 的统一入口。
+/// 锚点弹层的统一入口；保留旧 API 名称，面板外观由调用方提供。
 ///
 /// 设计目标：还原 Android 原生 PopupMenu 的"从 anchor 一侧的角先展宽、再展高、
 /// 整段列表跟着展开"的 unfold 动画——这是 `widthFactor` / `heightFactor` 的
 /// 经典 Material 卷帘。
 ///
-/// 实现要点：clip 直接贴在玻璃面板自己身上（在 [CustomSingleChildLayout] **里面**），
+/// 实现要点：clip 直接贴在弹层面板自己身上（在 [CustomSingleChildLayout] **里面**），
 /// 不是包整个页面——否则 clip rect 是相对屏幕的，popup 整体在屏幕里的某个位置，
 /// clip 还没扩到 popup 的时候你什么都看不到，clip 一旦覆盖到 popup 就"咔"地全显示了，
 /// 没有任何 unfold 感。clip 必须直接作用在面板本身的局部坐标系上才能看到生长动画。

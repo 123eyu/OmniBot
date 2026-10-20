@@ -63,7 +63,14 @@ void main() {
               ? OmniThemePalette.dark.pageBackground
               : OmniThemePalette.light.pageBackground,
         );
-        expect(find.text('已处理 1 个操作'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('agent-run-details-title')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const ValueKey('agent-run-details-close')),
+          findsNothing,
+        );
         expect(find.text('最终结论'), findsNothing);
         expect(find.byType(StreamingText), findsNothing);
         final thinking = find.byKey(
@@ -83,7 +90,7 @@ void main() {
           lessThan(tester.getTopLeft(update).dy),
         );
         expect(tester.takeException(), isNull);
-        await tester.tap(find.byKey(const ValueKey('agent-run-details-close')));
+        await _tapOutsideSheet(tester);
         await tester.pumpAndSettle();
         expect(sheet, findsNothing);
       },
@@ -124,7 +131,14 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('agent-run-details-back')));
       await tester.pumpAndSettle();
-      expect(find.text('已处理 1 个操作'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('agent-run-details-title')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-run-details-close')),
+        findsNothing,
+      );
       expect(tester.getRect(sheet), initialRect);
       await tester.tap(
         find.byKey(const ValueKey('agent-run-details-row-thought-1')),
@@ -134,12 +148,45 @@ void main() {
       expect(text.fullText, '已有的思考内容');
       expect(text.isFinal, isTrue);
       expect(text.selectable, isTrue);
-      await tester.tap(find.byKey(const ValueKey('agent-run-details-close')));
+      await _tapOutsideSheet(tester);
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final selectedId in [null, 'tool-1', 'thought-1']) {
+    testWidgets(
+      'outside tap closes the whole sheet from ${selectedId ?? 'timeline'}',
+      (tester) async {
+        await openSheet(tester);
+        if (selectedId != null) {
+          await tester.tap(
+            find.byKey(ValueKey('agent-run-details-row-$selectedId')),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('agent-run-details-back')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('agent-run-details-title')),
+            findsOneWidget,
+          );
+        }
+        expect(
+          find.byKey(const ValueKey('agent-run-details-close')),
+          findsNothing,
+        );
+        await _tapOutsideSheet(tester);
+        await tester.pumpAndSettle();
+        expect(find.byType(AgentRunDetailsSheet), findsNothing);
+        expect(find.byType(BottomSheet), findsNothing);
+        expect(find.text('打开过程'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets('timeline retains its scroll position after selected detail', (
     tester,
@@ -212,6 +259,11 @@ void main() {
     expect(sheet, findsNothing);
     expect(tester.takeException(), isNull);
   });
+}
+
+Future<void> _tapOutsideSheet(WidgetTester tester) async {
+  final sheet = find.byKey(const ValueKey('agent-run-details-sheet-turn-1'));
+  await tester.tapAt(Offset(20, tester.getTopLeft(sheet).dy - 20));
 }
 
 AgentRunTimelineGroup _group({

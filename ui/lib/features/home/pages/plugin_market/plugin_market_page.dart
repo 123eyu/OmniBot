@@ -193,7 +193,7 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: palette.textPrimary,
-                        fontSize: 14.5,
+                        fontSize: 15,
                         fontWeight: FontWeight.w500,
                         height: 1.38,
                       ),

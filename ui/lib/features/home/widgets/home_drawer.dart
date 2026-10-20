@@ -21,6 +21,7 @@ import 'package:ui/models/conversation_model.dart';
 import 'package:ui/models/conversation_thread_target.dart';
 import 'package:ui/models/scheduled_task.dart';
 import 'package:ui/services/agent_web_action_presenter.dart';
+import 'package:ui/services/agent_runtime_service.dart';
 import 'package:ui/services/agent_web_status_service.dart';
 import 'package:ui/services/assists_core_service.dart';
 import 'package:ui/services/conversation_history_service.dart';
@@ -44,6 +45,7 @@ part 'home_drawer_home.dart';
 part 'home_drawer_image_previews.dart';
 part 'home_drawer_models.dart';
 part 'home_drawer_search.dart';
+part 'home_drawer_selection.dart';
 
 const String _kDrawerMemoryIconSvg =
     '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" '
@@ -168,6 +170,11 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
       <String, Set<String>>{};
   final Map<String, bool> _expandedConversationSections = <String, bool>{};
   final Set<String> _busyConversationKeys = <String>{};
+  final Set<String> _selectedConversationKeys = <String>{};
+  bool _isSelectingConversations = false;
+  bool _isBatchConversationActionRunning = false;
+  bool _refreshConversationsAfterBatch = false;
+  String? _selectionFeedback;
   final TextEditingController _titleEditingController = TextEditingController();
   final FocusNode _titleEditingFocusNode = FocusNode();
   List<ConversationModel> _allConversations = <ConversationModel>[];
@@ -177,7 +184,10 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
   bool _isSearching = false;
   bool _homeSearchVisible = false;
   bool _homeMenuOpening = false;
-  _HomeConversationFilter _homeFilter = _HomeConversationFilter.all;
+  _HomeConversationFilter _homeFilter = _HomeConversationFilter.xiaowan;
+  AcpAgentCatalog? _homeAgentCatalog;
+  bool _homeRouteWasCurrent = false;
+  int _homeCatalogRequest = 0;
   int _conversationLoadGeneration = 0;
   int _searchGeneration = 0;
   Timer? _searchDebounceTimer;
@@ -219,6 +229,11 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
         .listen((event) {
           if (event['reason'] == 'na_history_owner_changed') {
             setState(() {
+              _selectedConversationKeys.removeAll(
+                _allConversations
+                    .where((row) => row.agentId == 'na-cloud')
+                    .map((row) => row.threadKey),
+              );
               _allConversations = _allConversations
                   .where((row) => row.agentId != 'na-cloud')
                   .toList();
@@ -227,6 +242,7 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
                   .where((result) => result.conversation.agentId != 'na-cloud')
                   .toList();
               _conversationSearchCache.clear();
+              _reconcileConversationSelection();
             });
             _syncConversationSnapshotCache();
           }
@@ -251,6 +267,17 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
     }
     _loadConversations();
     unawaited(_loadWebQuickActions());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!widget.homePage) return;
+    final isCurrent = ModalRoute.of(context)?.isCurrent ?? true;
+    if (isCurrent && !_homeRouteWasCurrent) {
+      unawaited(_loadHomeAgentCatalog());
+    }
+    _homeRouteWasCurrent = isCurrent;
   }
 
   @override

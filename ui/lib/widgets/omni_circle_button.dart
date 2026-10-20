@@ -11,6 +11,7 @@ class OmniCircleButton extends StatelessWidget {
     this.size = 44,
     this.iconSize = 22,
     this.foregroundColor,
+    this.tapTargetSize = MaterialTapTargetSize.shrinkWrap,
   });
 
   final IconData icon;
@@ -19,6 +20,7 @@ class OmniCircleButton extends StatelessWidget {
   final double size;
   final double iconSize;
   final Color? foregroundColor;
+  final MaterialTapTargetSize tapTargetSize;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +50,7 @@ class OmniCircleButton extends StatelessWidget {
           maximumSize: Size.square(size),
           padding: EdgeInsets.zero,
           shape: const CircleBorder(),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          tapTargetSize: tapTargetSize,
         ),
       ),
     );

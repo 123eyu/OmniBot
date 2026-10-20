@@ -50,13 +50,17 @@ extension _ChatInputActionSupport on _ChatInputAreaStateBase {
     final textColor = palette.textPrimary;
     final hintColor = palette.textTertiary;
     final textStyle = TextStyle(
-      fontSize: widget.minimalComposer ? 16.0 : (multiline ? 15.0 : 14.0),
+      fontSize: multiline ? 15.0 : 14.0,
       height: multiline ? 1.45 : 1.43,
       color: textColor,
       letterSpacing: 0.333,
     );
-    final minLines = multiline ? (expanded ? 2 : 1) : 1;
-    final maxLines = multiline ? 3 : 1;
+    final minLines = widget.minimalComposer
+        ? 1
+        : (multiline ? (expanded ? 2 : 1) : 1);
+    final maxLines = widget.minimalComposer
+        ? (expanded ? 6 : 1)
+        : (multiline ? 3 : 1);
     return GestureDetector(
       onTap: () {
         widget.onRequestFocus?.call();
@@ -107,9 +111,7 @@ extension _ChatInputActionSupport on _ChatInputAreaStateBase {
                 ? 'Describe your task…'
                 : '描述你的任务…',
             hintStyle: TextStyle(
-              fontSize: widget.minimalComposer
-                  ? 16.0
-                  : (multiline ? 15.0 : 14.0),
+              fontSize: multiline ? 15.0 : 14.0,
               color: hintColor,
               height: multiline ? 1.45 : 1.43,
               letterSpacing: 0.333,

@@ -94,9 +94,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
       String? cursor;
       final seenCursors = <String>{};
       while (true) {
-        final payload = await AgentRuntimeService.listSessions(
-          cursor: cursor,
-        );
+        final payload = await AgentRuntimeService.listSessions(cursor: cursor);
         payloads.add(payload);
         final nextCursor = _stringValue(
           payload['nextCursor'] ??
@@ -367,7 +365,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: palette.textPrimary,
-                        fontSize: 14,
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                         fontFamily: 'PingFang SC',
                       ),
@@ -449,7 +447,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                                 _isEnglish ? 'Cancel' : '取消',
                                 style: TextStyle(
                                   color: palette.textPrimary,
-                                  fontSize: 14,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w600,
                                   fontFamily: 'PingFang SC',
                                 ),
@@ -520,7 +518,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                   label,
                   style: TextStyle(
                     color: color,
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                     fontFamily: 'PingFang SC',
                   ),
@@ -702,7 +700,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: edgeToEdgeScrollPadding(
         context,
-        const EdgeInsets.fromLTRB(18, 12, 18, 32),
+        const EdgeInsets.fromLTRB(22, 12, 22, 32),
       ),
       children: [
         _buildOverviewPanel(),
@@ -1159,7 +1157,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: palette.textPrimary,
-                                  fontSize: 14,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w600,
                                   height: 1.35,
                                   fontFamily: 'PingFang SC',
@@ -1297,7 +1295,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: palette.textPrimary,
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: FontWeight.w600,
               fontFamily: 'PingFang SC',
             ),
@@ -2170,9 +2168,9 @@ Map<String, dynamic>? _asStringMap(dynamic value) {
 List<Map<String, dynamic>> extractAgentSessionSummariesForTesting(
   List<dynamic> payloads,
 ) {
-  return _extractAgentSessions(
-    payloads,
-  ).map((session) => session.toDebugMap()).toList(growable: false);
+  return _extractAgentSessions(payloads)
+      .map((session) => session.toDebugMap())
+      .toList(growable: false);
 }
 
 const Set<String> _threadNestedSkipKeys = <String>{

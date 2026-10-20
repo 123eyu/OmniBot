@@ -142,9 +142,7 @@ class _RemoteMcpServersPageState extends State<RemoteMcpServersPage> {
       builder: (sheetContext) => SettingsDetailSheet(
         title: isEn ? 'Delete MCP Service' : '删除 MCP 服务',
         body: Text(
-          isEn
-              ? 'Confirm deleting "${server.name}"?'
-              : '确认删除“${server.name}”？',
+          isEn ? 'Confirm deleting "${server.name}"?' : '确认删除“${server.name}”？',
         ),
         actions: [
           TextButton(
@@ -263,7 +261,7 @@ class _RemoteMcpServersPageState extends State<RemoteMcpServersPage> {
               child: ListView(
                 padding: edgeToEdgeScrollPadding(
                   context,
-                  const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                  const EdgeInsets.fromLTRB(22, 12, 22, 32),
                 ),
                 children: [
                   SettingsSectionTitle(
@@ -451,7 +449,7 @@ class _InputField extends StatelessWidget {
     return TextField(
       controller: controller,
       focusNode: focusNode,
-      style: TextStyle(fontSize: 14, color: palette.textPrimary),
+      style: TextStyle(fontSize: 15, color: palette.textPrimary),
       decoration: omniSettingsInputDecoration(
         context,
         labelText: label,
@@ -547,8 +545,8 @@ class _RemoteMcpServerEditorSheetState
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
+        left: 22,
+        right: 22,
         top: 20,
         bottom: MediaQuery.of(context).viewInsets.bottom + 20,
       ),
@@ -564,7 +562,7 @@ class _RemoteMcpServerEditorSheetState
                 : (Localizations.localeOf(context).languageCode == 'en'
                       ? 'Edit MCP Service'
                       : '编辑 MCP 服务'),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 16),
           _InputField(
@@ -596,7 +594,7 @@ class _RemoteMcpServerEditorSheetState
                       ? 'Enabled'
                       : '启用',
                   style: TextStyle(
-                    fontSize: 14.5,
+                    fontSize: 15,
                     fontWeight: FontWeight.w500,
                     color: context.omniPalette.textPrimary,
                   ),
@@ -639,11 +637,7 @@ class _MetaChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color:
-            color ??
-            (context.isDarkTheme
-                ? palette.surfaceSecondary
-                : AppColors.background),
+        color: color ?? palette.surfaceSecondary,
         borderRadius: BorderRadius.circular(999),
         border: color == null && context.isDarkTheme
             ? Border.all(color: palette.borderSubtle)
@@ -653,9 +647,7 @@ class _MetaChip extends StatelessWidget {
         label,
         style: TextStyle(
           fontSize: 12,
-          color:
-              textColor ??
-              (context.isDarkTheme ? palette.textSecondary : AppColors.text70),
+          color: textColor ?? palette.textSecondary,
         ),
       ),
     );

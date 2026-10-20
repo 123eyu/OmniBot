@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:ui/widgets/agent_brand_icon.dart';
 import 'package:ui/features/home/pages/chat/widgets/chat_widgets.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/services/app_background_service.dart';
@@ -29,22 +31,18 @@ Widget _app({
     ChatAcpAgentModeOption(id: 'codex-acp', name: 'Codex'),
     ChatAcpAgentModeOption(id: 'na-cloud', name: 'Na'),
   ],
-  ValueChanged<String>? onAgent,
   VoidCallback? onBack,
   VoidCallback? onPet,
   VoidCallback? onTerminal,
   VoidCallback? onBrowser,
   VoidCallback? onEnvironment,
   VoidCallback? onUpdate,
-  VoidCallback? onPure,
   ValueChanged<ChatSurfaceMode>? onMode,
   bool pure = false,
-  bool locked = false,
-  bool isAgentLoading = false,
+  bool showTerminalActions = true,
   bool translucent = false,
   AppBackgroundVisualProfile visualProfile =
       AppBackgroundVisualProfile.defaultProfile,
-  bool isAgentSelected = true,
   ChatSurfaceMode surface = ChatSurfaceMode.normal,
   List<ChatAppBarAction> actions = const [],
 }) => DefaultAssetBundle(
@@ -63,18 +61,13 @@ Widget _app({
             onDisplayLayerChanged: (_) {},
             activeMode: surface,
             onModeChanged: onMode ?? (_) {},
-            onAcpAgentTap: onAgent,
-            onPureChatToggleTap: onPure,
             isPureChatSelected: pure,
-            isPureChatToggleLocked: locked,
-            isAgentSelected: isAgentSelected,
-            isOmniAiSelected: false,
             activeAcpAgentId: selectedAgent,
             acpAgentModes: agents,
-            isAgentLoading: isAgentLoading,
             translucent: translucent,
             visualProfile: visualProfile,
             isBrowserEnabled: onBrowser != null,
+            showTerminalActions: showTerminalActions,
             showAppUpdateIndicator: onUpdate != null,
             onAppUpdateTap: onUpdate,
             actions: actions,
@@ -90,182 +83,157 @@ Future<void> _openActions(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> _openModes(WidgetTester tester) async {
-  await tester.tap(find.byKey(const ValueKey('chat-app-bar-pure-chat-button')));
-  await tester.pumpAndSettle();
-}
-
 void main() {
-  testWidgets(
-    'title and mode subtitle replace the island with two circular actions',
-    (tester) async {
-      var backs = 0;
-      await tester.pumpWidget(_app(onBack: () => backs++));
-      expect(find.text('Inspect the current workspace'), findsOneWidget);
-      expect(find.text('OmniBot Agent'), findsOneWidget);
-      expect(find.byKey(const ValueKey('chat-app-bar-island')), findsNothing);
-      expect(
-        tester.getTopLeft(find.text('OmniBot Agent')).dy,
-        greaterThan(
-          tester.getTopLeft(find.text('Inspect the current workspace')).dy,
-        ),
-      );
-      final context = tester.element(find.byType(ChatAppBar));
-      expect(
-        tester
-            .widget<ColoredBox>(
-              find.byKey(const ValueKey('chat-app-bar-background')),
-            )
-            .color,
-        context.omniPalette.pageBackground,
-      );
-      await tester.tap(find.byKey(const ValueKey('chat-app-bar-menu-button')));
-      expect(backs, 1);
-    },
-  );
+  testWidgets('mode mark precedes the title without a switch interaction', (
+    tester,
+  ) async {
+    var backs = 0;
+    await tester.pumpWidget(_app(onBack: () => backs++));
+    await tester.pumpAndSettle();
+    final title = find.byKey(const ValueKey('chat-app-bar-title'));
+    final mark = find.byKey(const ValueKey('chat-app-bar-mode-icon'));
+    expect(find.text('Inspect the current workspace'), findsOneWidget);
+    expect(find.text('OmniBot Agent'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('chat-app-bar-pure-chat-button')),
+      findsNothing,
+    );
+    expect(find.byTooltip('Switch chat mode'), findsNothing);
+    expect(tester.getRect(mark).right, lessThan(tester.getRect(title).left));
+    expect(tester.getCenter(mark).dy, closeTo(tester.getCenter(title).dy, .1));
+    expect(tester.widget<Text>(title).style!.fontSize, 17);
+    await tester.tap(mark, warnIfMissed: false);
+    await tester.tap(title, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(find.byType(PopupMenuItem<String>), findsNothing);
+    final context = tester.element(find.byType(ChatAppBar));
+    expect(
+      tester
+          .widget<ColoredBox>(
+            find.byKey(const ValueKey('chat-app-bar-background')),
+          )
+          .color,
+      context.omniPalette.pageBackground,
+    );
+    await tester.tap(find.byKey(const ValueKey('chat-app-bar-menu-button')));
+    expect(backs, 1);
+  });
 
-  testWidgets(
-    'opaque navigation controls keep contrast over a dark custom wallpaper',
-    (tester) async {
-      await tester.pumpWidget(
-        _app(
-          translucent: true,
-          visualProfile: const AppBackgroundVisualProfile(
-            sampledImageLuminance: 0.05,
-            effectiveLuminance: 0.05,
-            textTone: AppBackgroundTextTone.light,
-          ),
+  testWidgets('compact controls retain contrast over a dark custom wallpaper', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(
+        translucent: true,
+        visualProfile: const AppBackgroundVisualProfile(
+          sampledImageLuminance: .05,
+          effectiveLuminance: .05,
+          textTone: AppBackgroundTextTone.light,
         ),
-      );
-      final context = tester.element(find.byType(ChatAppBar));
-      for (final circle in tester.widgetList<OmniCircleButton>(
-        find.byType(OmniCircleButton),
-      )) {
-        expect(circle.foregroundColor, context.omniPalette.textPrimary);
-        expect(
-          circle.foregroundColor,
-          isNot(context.omniPalette.surfacePrimary),
-        );
-      }
-      final mode = find.byKey(const ValueKey('chat-app-bar-pure-chat-button'));
-      expect(tester.getSize(mode).height, greaterThanOrEqualTo(48));
-      expect(find.byTooltip('Switch chat mode'), findsOneWidget);
-    },
-  );
+      ),
+    );
+    final context = tester.element(find.byType(ChatAppBar));
+    for (final circle in tester.widgetList<OmniCircleButton>(
+      find.byType(OmniCircleButton),
+    )) {
+      expect(circle.foregroundColor, context.omniPalette.textPrimary);
+      expect(circle.foregroundColor, isNot(context.omniPalette.surfacePrimary));
+      expect(circle.size, 40);
+      expect(circle.tapTargetSize, MaterialTapTargetSize.padded);
+    }
+    expect(find.byTooltip('Switch chat mode'), findsNothing);
+  });
 
   for (final width in [320.0, 390.0, 800.0]) {
-    testWidgets('header fits ${width.toInt()} logical pixels with large text', (
-      tester,
-    ) async {
-      tester.view.physicalSize = Size(width, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      tester.platformDispatcher.textScaleFactorTestValue = 1.5;
-      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-      await tester.pumpWidget(_app());
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      final back = tester.getRect(
-        find.byKey(const ValueKey('chat-app-bar-menu-button')),
-      );
-      final more = tester.getRect(
-        find.byKey(const ValueKey('chat-app-bar-more-button')),
-      );
-      expect(back.width, 44);
-      expect(more.width, 44);
-      expect(more.left, greaterThan(back.right));
-      await _openModes(tester);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'compact header fits ${width.toInt()} logical pixels with large text',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pumpWidget(_app());
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        final back = tester.getRect(
+          find.byKey(const ValueKey('chat-app-bar-menu-button')),
+        );
+        final more = tester.getRect(
+          find.byKey(const ValueKey('chat-app-bar-more-button')),
+        );
+        expect(back.width, greaterThanOrEqualTo(44));
+        expect(more.width, greaterThanOrEqualTo(44));
+        expect(more.left, greaterThan(back.right));
+        expect(
+          tester.getSize(find.byType(ChatAppBar)).height,
+          lessThanOrEqualTo(64),
+        );
+      },
+    );
   }
 
   testWidgets(
-    'installed Agent selection uses the existing ACP callback while another is loading',
+    'history selection updates the actual Agent mark without a selector',
     (tester) async {
-      String? selected;
-      await tester.pumpWidget(
-        _app(onAgent: (value) => selected = value, isAgentLoading: true),
-      );
-      await _openModes(tester);
-      await tester.tap(find.text('Na'));
-      await tester.pumpAndSettle();
-      expect(selected, 'na-cloud');
-      expect(find.text('Na'), findsNothing);
-    },
-  );
-
-  testWidgets(
-    'history selection updates the subtitle on every conversation change',
-    (tester) async {
-      for (final agent in ['codex-acp', 'na-cloud', 'xiaowan-acp']) {
+      for (final agent in [
+        'xiaowan-acp',
+        'na-cloud',
+        'codex-acp',
+        'custom-harness',
+      ]) {
         await tester.pumpWidget(_app(selectedAgent: agent));
         await tester.pumpAndSettle();
         expect(
-          find.text(
-            {
-              'codex-acp': 'Codex',
-              'na-cloud': 'Na',
-              'xiaowan-acp': 'OmniBot Agent',
-            }[agent]!,
-          ),
-          findsOneWidget,
+          tester.widget<AgentBrandIcon>(find.byType(AgentBrandIcon)).agentId,
+          agent,
         );
+        if (agent == 'na-cloud') expect(find.text('N'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('chat-app-bar-pure-chat-button')),
+          findsNothing,
+        );
+        expect(find.byType(PopupMenuItem<String>), findsNothing);
       }
     },
   );
 
   testWidgets(
-    'uninstalled and disabled Agents are omitted without blocking the builtin Agent',
+    'pure chat has its own static mark even with a remembered Agent',
     (tester) async {
-      String? selected;
-      await tester.pumpWidget(
-        _app(
-          agents: const [
-            ChatAcpAgentModeOption(
-              id: 'missing',
-              name: 'Missing',
-              installed: false,
-            ),
-            ChatAcpAgentModeOption(
-              id: 'disabled',
-              name: 'Disabled',
-              enabled: false,
-            ),
-          ],
-          onAgent: (value) => selected = value,
-        ),
-      );
-      await _openModes(tester);
-      expect(find.text('Missing'), findsNothing);
-      expect(find.text('Disabled'), findsNothing);
-      await tester.tap(
-        find.byKey(const ValueKey('chat-app-bar-mode-menu-xiaowan-acp')),
-      );
+      await tester.pumpWidget(_app(pure: true, selectedAgent: 'na-cloud'));
       await tester.pumpAndSettle();
-      expect(selected, 'xiaowan-acp');
+      expect(find.byType(AgentBrandIcon), findsNothing);
+      expect(find.byIcon(LucideIcons.messageCircle), findsOneWidget);
+      expect(find.text('Pure chat'), findsNothing);
+      await _openActions(tester);
+      expect(find.text('Pure chat'), findsNothing);
+      expect(find.text('Na'), findsNothing);
+      expect(find.text('OmniBot Agent'), findsNothing);
     },
   );
 
-  testWidgets('pure chat selection respects the existing lock', (tester) async {
-    var switches = 0;
-    await tester.pumpWidget(_app(onPure: () => switches++));
-    await _openModes(tester);
-    await tester.tap(
-      find.byKey(const ValueKey('chat-app-bar-mode-menu-pure-chat')),
-    );
-    await tester.pumpAndSettle();
-    expect(switches, 1);
-    await tester.pumpWidget(
-      _app(onPure: () => switches++, isAgentSelected: false, locked: true),
-    );
-    await _openModes(tester);
-    expect(
-      find.byKey(const ValueKey('chat-app-bar-mode-menu-pure-chat')),
-      findsNothing,
-    );
-    expect(switches, 1);
-  });
+  testWidgets(
+    'terminal visibility leaves workspace and browser actions independent',
+    (tester) async {
+      var browsers = 0;
+      await tester.pumpWidget(
+        _app(
+          selectedAgent: 'na-cloud',
+          showTerminalActions: false,
+          onBrowser: () => browsers++,
+        ),
+      );
+      await _openActions(tester);
+      expect(find.text('Terminal'), findsNothing);
+      expect(find.text('Environment variables'), findsNothing);
+      expect(find.text('Workspace files'), findsOneWidget);
+      await tester.tap(find.text('Browser'));
+      await tester.pumpAndSettle();
+      expect(browsers, 1);
+    },
+  );
 
   testWidgets(
     'all auxiliary actions are menu entries and invoke only their owner',
@@ -349,25 +317,5 @@ void main() {
     expect(find.text('Terminal'), findsNothing);
     expect(backs, 0);
     expect(find.byType(ChatAppBar), findsOneWidget);
-  });
-
-  testWidgets('a long Agent list remains scrollable and selectable', (
-    tester,
-  ) async {
-    String? selected;
-    await tester.pumpWidget(
-      _app(
-        agents: [
-          for (var i = 0; i < 30; i++)
-            ChatAcpAgentModeOption(id: 'agent-$i', name: 'Agent $i'),
-        ],
-        onAgent: (value) => selected = value,
-      ),
-    );
-    await _openModes(tester);
-    await tester.scrollUntilVisible(find.text('Agent 29'), 400);
-    await tester.tap(find.text('Agent 29'));
-    await tester.pumpAndSettle();
-    expect(selected, 'agent-29');
   });
 }

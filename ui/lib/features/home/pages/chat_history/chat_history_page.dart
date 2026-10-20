@@ -98,9 +98,9 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
       if (!mounted) {
         return;
       }
-      final sectionLabels = _buildConversationSections(
-        loadedConversations,
-      ).map((section) => section.label).toSet();
+      final sectionLabels = _buildConversationSections(loadedConversations)
+          .map((section) => section.label)
+          .toSet();
       setState(() {
         _conversations = loadedConversations;
         _expandedDateSections.removeWhere(
@@ -254,9 +254,7 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
         conversation,
         archived: !widget.archivedOnly,
       ),
-      backgroundColor: context.isDarkTheme
-          ? Color.lerp(palette.surfaceElevated, palette.accentPrimary, 0.3)!
-          : AppColors.buttonPrimary,
+      backgroundColor: palette.textPrimary,
       borderRadius: widget.archivedOnly
           ? _flatTrailingActionRadius
           : BorderRadius.zero,
@@ -264,7 +262,7 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
         child: widget.archivedOnly
             ? Icon(
                 Icons.unarchive_outlined,
-                color: Colors.white,
+                color: palette.pageBackground,
                 size: _archivedConversationActionIconSize,
               )
             : SvgPicture.asset(
@@ -648,11 +646,9 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 15,
                               fontWeight: FontWeight.w500,
-                              color: context.isDarkTheme
-                                  ? palette.textPrimary
-                                  : AppColors.text,
+                              color: palette.textPrimary,
                               height: 1.35,
                               fontFamily: 'PingFang SC',
                             ),
@@ -716,22 +712,7 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: context.isDarkTheme
-                  ? <Color>[
-                      Color.lerp(
-                        palette.surfaceElevated,
-                        palette.accentPrimary,
-                        0.24,
-                      )!,
-                      Color.lerp(
-                        palette.surfaceSecondary,
-                        palette.accentPrimary,
-                        0.36,
-                      )!,
-                    ]
-                  : const <Color>[Color(0xFF1930D9), Color(0xFF2CA5F0)],
-            ),
+            color: palette.textPrimary,
             borderRadius: BorderRadius.all(Radius.circular(24)),
             border: context.isDarkTheme
                 ? Border.all(color: palette.borderSubtle)
@@ -742,7 +723,7 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
-              color: context.isDarkTheme ? palette.textPrimary : Colors.white,
+              color: palette.pageBackground,
             ),
           ),
         ),
@@ -752,7 +733,7 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
     return Text(
       context.l10n.chatHistoryArchiveHint,
       style: TextStyle(
-        fontSize: 13,
+        fontSize: 15,
         color: context.isDarkTheme ? palette.textSecondary : Colors.grey[500],
       ),
     );

@@ -18,11 +18,10 @@ import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
-typedef OmnibotResourceOpenCallback =
-    Future<void> Function(
-      BuildContext context,
-      OmnibotResourceMetadata metadata,
-    );
+typedef OmnibotResourceOpenCallback = Future<void> Function(
+  BuildContext context,
+  OmnibotResourceMetadata metadata,
+);
 
 class OmnibotInlineResourceEmbed extends StatelessWidget {
   final OmnibotResourceMetadata metadata;
@@ -228,7 +227,7 @@ class _OmnibotInlineImageCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: plainStyle
               ? null
-              : Border.all(color: const Color(0xFFD8E4F8)),
+              : Border.all(color: context.omniPalette.borderSubtle),
           color: plainStyle ? Colors.transparent : Colors.white,
         ),
         child: ClipRRect(
@@ -353,20 +352,13 @@ class _OmnibotInlineAudioPlayerState extends State<_OmnibotInlineAudioPlayer> {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: widget.plainStyle ? Colors.transparent : Colors.white,
+            color: widget.plainStyle
+                ? Colors.transparent
+                : context.omniPalette.surfacePrimary,
             borderRadius: BorderRadius.circular(16),
             border: widget.plainStyle
                 ? null
-                : Border.all(color: const Color(0xFFD8E4F8)),
-            boxShadow: widget.plainStyle
-                ? null
-                : const [
-                    BoxShadow(
-                      color: Color(0x12243258),
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
+                : Border.all(color: context.omniPalette.borderSubtle),
           ),
           child: Row(
             children: [
@@ -386,8 +378,8 @@ class _OmnibotInlineAudioPlayerState extends State<_OmnibotInlineAudioPlayer> {
                       widget.metadata.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
+                      style: TextStyle(
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -396,9 +388,9 @@ class _OmnibotInlineAudioPlayerState extends State<_OmnibotInlineAudioPlayer> {
                       _duration == null
                           ? (LegacyTextLocalizer.isEnglish ? 'Audio' : '音频资源')
                           : _formatDuration(_duration!),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: Color(0xFF64748B),
+                        color: context.omniPalette.textSecondary,
                       ),
                     ),
                   ],
@@ -531,31 +523,26 @@ class _OmnibotInlineVideoPlayerState extends State<_OmnibotInlineVideoPlayer> {
         height: 180,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: widget.plainStyle ? Colors.transparent : Colors.white,
+          color: widget.plainStyle
+              ? Colors.transparent
+              : context.omniPalette.surfacePrimary,
           borderRadius: BorderRadius.circular(16),
           border: widget.plainStyle
               ? null
-              : Border.all(color: const Color(0xFFD8E4F8)),
+              : Border.all(color: context.omniPalette.borderSubtle),
         ),
         child: const CircularProgressIndicator(),
       );
     }
     return Container(
       decoration: BoxDecoration(
-        color: widget.plainStyle ? Colors.transparent : Colors.white,
+        color: widget.plainStyle
+            ? Colors.transparent
+            : context.omniPalette.surfacePrimary,
         borderRadius: BorderRadius.circular(16),
         border: widget.plainStyle
             ? null
-            : Border.all(color: const Color(0xFFD8E4F8)),
-        boxShadow: widget.plainStyle
-            ? null
-            : const [
-                BoxShadow(
-                  color: Color(0x12243258),
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
-                ),
-              ],
+            : Border.all(color: context.omniPalette.borderSubtle),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
@@ -1046,20 +1033,13 @@ class _OmnibotPdfScrollablePreviewState
         math.min(MediaQuery.sizeOf(context).height * 0.52, 420.0);
     return Container(
       decoration: BoxDecoration(
-        color: widget.plainStyle ? Colors.transparent : Colors.white,
+        color: widget.plainStyle
+            ? Colors.transparent
+            : context.omniPalette.surfacePrimary,
         borderRadius: BorderRadius.circular(16),
         border: widget.plainStyle
             ? null
-            : Border.all(color: const Color(0xFFD8E4F8)),
-        boxShadow: widget.plainStyle
-            ? null
-            : const [
-                BoxShadow(
-                  color: Color(0x12243258),
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
-                ),
-              ],
+            : Border.all(color: context.omniPalette.borderSubtle),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1080,18 +1060,18 @@ class _OmnibotPdfScrollablePreviewState
                     widget.metadata.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
+                    style: TextStyle(
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF0F172A),
+                      color: context.omniPalette.textPrimary,
                     ),
                   ),
                 ),
                 Text(
                   _fileSizeLabel(widget.metadata.path),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
-                    color: Color(0xFF64748B),
+                    color: context.omniPalette.textSecondary,
                   ),
                 ),
               ],
@@ -1513,20 +1493,13 @@ class _OmnibotInlineHtmlCardState extends State<_OmnibotInlineHtmlCard> {
 
     return Container(
       decoration: BoxDecoration(
-        color: widget.plainStyle ? Colors.transparent : Colors.white,
+        color: widget.plainStyle
+            ? Colors.transparent
+            : context.omniPalette.surfacePrimary,
         borderRadius: BorderRadius.circular(16),
         border: widget.plainStyle
             ? null
-            : Border.all(color: const Color(0xFFD8E4F8)),
-        boxShadow: widget.plainStyle
-            ? null
-            : const [
-                BoxShadow(
-                  color: Color(0x12243258),
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
-                ),
-              ],
+            : Border.all(color: context.omniPalette.borderSubtle),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
@@ -1563,7 +1536,7 @@ class _OmnibotInlineHtmlCardState extends State<_OmnibotInlineHtmlCard> {
                 right: 10,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.92),
+                    color: context.omniPalette.surfacePrimary,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: const [
                       BoxShadow(
@@ -1673,20 +1646,13 @@ class _OmnibotInlineOfficePreviewCardState
 
     return Container(
       decoration: BoxDecoration(
-        color: widget.plainStyle ? Colors.transparent : Colors.white,
+        color: widget.plainStyle
+            ? Colors.transparent
+            : context.omniPalette.surfacePrimary,
         borderRadius: BorderRadius.circular(16),
         border: widget.plainStyle
             ? null
-            : Border.all(color: const Color(0xFFD8E4F8)),
-        boxShadow: widget.plainStyle
-            ? null
-            : const [
-                BoxShadow(
-                  color: Color(0x12243258),
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
-                ),
-              ],
+            : Border.all(color: context.omniPalette.borderSubtle),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1699,13 +1665,13 @@ class _OmnibotInlineOfficePreviewCardState
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEAF3FF),
+                    color: context.omniPalette.surfaceSecondary,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     _officeIconForKind(widget.metadata.previewKind),
                     size: 20,
-                    color: const Color(0xFF1F4ED8),
+                    color: context.omniPalette.textPrimary,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1718,18 +1684,18 @@ class _OmnibotInlineOfficePreviewCardState
                         widget.metadata.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
+                        style: TextStyle(
+                          fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF0F172A),
+                          color: context.omniPalette.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
                         _officeKindLabel(widget.metadata.previewKind),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Color(0xFF64748B),
+                          color: context.omniPalette.textSecondary,
                         ),
                       ),
                     ],
@@ -1753,7 +1719,7 @@ class _OmnibotInlineOfficePreviewCardState
             width: double.infinity,
             margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FBFF),
+              color: context.omniPalette.surfaceSecondary,
               borderRadius: BorderRadius.circular(14),
             ),
             child: SizedBox(
@@ -1804,10 +1770,10 @@ class _OfficePreviewBody extends StatelessWidget {
         children: [
           Text(
             data.summary,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF35517A),
+              color: context.omniPalette.textPrimary,
             ),
           ),
           const SizedBox(height: 10),
@@ -1823,7 +1789,7 @@ class _OfficePreviewBody extends StatelessWidget {
                   : '内容较多，当前仅展示前面一部分。',
               style: TextStyle(
                 fontSize: 11,
-                color: Colors.blueGrey.withValues(alpha: 0.78),
+                color: context.omniPalette.textTertiary,
               ),
             ),
           ],
@@ -1844,26 +1810,29 @@ class _OfficePreviewSectionView extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.omniPalette.surfacePrimary,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE1EAF8)),
+        border: Border.all(color: context.omniPalette.borderSubtle),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             section.title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF0F172A),
+              color: context.omniPalette.textPrimary,
             ),
           ),
           if (section.subtitle != null && section.subtitle!.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
               section.subtitle!,
-              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+              style: TextStyle(
+                fontSize: 11,
+                color: context.omniPalette.textSecondary,
+              ),
             ),
           ],
           if (section.lines.isNotEmpty) ...[
@@ -1872,22 +1841,22 @@ class _OfficePreviewSectionView extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
                     child: Icon(
                       Icons.circle,
                       size: 5,
-                      color: Color(0xFF4F6FAE),
+                      color: context.omniPalette.textTertiary,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       line,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         height: 1.45,
-                        color: Color(0xFF334155),
+                        color: context.omniPalette.textPrimary,
                       ),
                     ),
                   ),
@@ -1924,14 +1893,17 @@ class _OfficePreviewTable extends StatelessWidget {
 
     return Table(
       defaultColumnWidth: const IntrinsicColumnWidth(),
-      border: TableBorder.all(color: const Color(0xFFD8E4F8), width: 1),
+      border: TableBorder.all(
+        color: context.omniPalette.borderSubtle,
+        width: 0.5,
+      ),
       children: [
         for (var rowIndex = 0; rowIndex < rows.length; rowIndex++)
           TableRow(
             decoration: BoxDecoration(
               color: rowIndex == 0
-                  ? const Color(0xFFF1F6FF)
-                  : const Color(0xFFFFFFFF),
+                  ? context.omniPalette.surfaceSecondary
+                  : context.omniPalette.surfacePrimary,
             ),
             children: [
               for (final cell in rows[rowIndex])
@@ -1949,7 +1921,7 @@ class _OfficePreviewTable extends StatelessWidget {
                         fontWeight: rowIndex == 0
                             ? FontWeight.w600
                             : FontWeight.w400,
-                        color: const Color(0xFF334155),
+                        color: context.omniPalette.textPrimary,
                       ),
                     ),
                   ),
@@ -2139,9 +2111,8 @@ int _resolvePdfTargetWidthPx(BuildContext context, BoxConstraints constraints) {
   final logicalWidth = constraints.maxWidth.isFinite
       ? constraints.maxWidth
       : MediaQuery.sizeOf(context).width;
-  final devicePixelRatio = MediaQuery.devicePixelRatioOf(
-    context,
-  ).clamp(1.0, 3.0);
+  final devicePixelRatio = MediaQuery.devicePixelRatioOf(context)
+      .clamp(1.0, 3.0);
   return (logicalWidth * devicePixelRatio).round().clamp(240, 1800);
 }
 
