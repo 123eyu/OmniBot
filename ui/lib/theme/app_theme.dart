@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/omni_theme_palette.dart';
+import 'package:ui/widgets/omni_menu.dart';
 
 class AppTheme {
   AppTheme._();
@@ -213,8 +214,20 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         shadowColor: palette.shadowColor,
         elevation: 6,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        textStyle: TextStyle(color: palette.textPrimary, fontSize: 15),
+        shape: const RoundedRectangleBorder(
+          borderRadius: OmniMenuStyle.panelRadius,
+        ),
+        menuPadding: OmniMenuStyle.panelPadding,
+        textStyle: OmniMenuStyle.labelStyle.copyWith(
+          color: palette.textPrimary,
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => OmniMenuStyle.labelStyle.copyWith(
+            color: states.contains(WidgetState.disabled)
+                ? palette.textTertiary
+                : palette.textPrimary,
+          ),
+        ),
       ),
     );
 

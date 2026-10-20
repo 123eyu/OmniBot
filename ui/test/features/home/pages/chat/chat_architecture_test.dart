@@ -216,13 +216,18 @@ void main() {
   test('Harness switching preserves composer and captures queued input before waiting', () {
     final lifecycle = File('$chatRoot/chat_page_lifecycle.dart')
         .readAsStringSync();
+    final apply = lifecycle
+        .split('Future<void> _applyConversationThreadTarget(')
+        .last
+        .split('Future<void> _sendInitialMessageIfNeeded(')
+        .first;
     expect(
-      lifecycle,
+      apply,
       contains('effectiveTarget.isNewConversation && !preserveComposer'),
     );
     expect(
-      lifecycle.indexOf('_resetLocalConversationState(targetMode);'),
-      lessThan(lifecycle.indexOf('draftMessage = composerValue.text')),
+      apply.indexOf('_resetLocalConversationState(targetMode);'),
+      lessThan(apply.indexOf('draftMessage = composerValue.text')),
     );
     final flow = File('$chatRoot/chat_page_conversation_flow.dart')
         .readAsStringSync();

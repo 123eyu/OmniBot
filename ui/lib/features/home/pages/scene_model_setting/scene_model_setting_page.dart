@@ -3,34 +3,25 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/services/model_provider_config_service.dart';
+import 'package:ui/services/model_vendor_catalog.dart';
 import 'package:ui/services/scene_model_config_service.dart';
 import 'package:ui/services/voice_playback_coordinator.dart';
 import 'package:ui/theme/theme_context.dart';
-import 'package:ui/utils/popup_menu_anchor_position.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/agent_avatar.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/omni_menu.dart';
+import 'package:ui/widgets/provider_vendor_icon.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/widgets/settings_section_title.dart';
 import 'package:ui/widgets/settings_ui.dart';
 
-const double _kSceneSelectionPopupMaxHeight = 420;
+typedef _SceneModelChoice = ({String providerProfileId, String modelId});
 
-Widget _buildSceneModelIdTooltip({
-  required String modelId,
-  required Widget child,
-}) {
-  return Tooltip(
-    message: modelId,
-    triggerMode: TooltipTriggerMode.longPress,
-    waitDuration: Duration.zero,
-    showDuration: const Duration(seconds: 3),
-    preferBelow: false,
-    textAlign: TextAlign.start,
-    constraints: const BoxConstraints(maxWidth: 320),
-    child: child,
-  );
-}
+const _SceneModelChoice _defaultSceneModelChoice = (
+  providerProfileId: '',
+  modelId: '',
+);
 
 class SceneModelSettingPage extends StatefulWidget {
   const SceneModelSettingPage({super.key});
@@ -110,9 +101,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
     return {for (final item in _bindings) item.sceneId: item};
   }
 
-  bool get _isDarkTheme => context.isDarkTheme;
   Color get _pageBackground => context.omniPalette.pageBackground;
-  Color get _cardColor => context.omniPalette.surfacePrimary;
   Color get _primaryTextColor => context.omniPalette.textPrimary;
   Color get _secondaryTextColor => context.omniPalette.textSecondary;
   Color get _tertiaryTextColor => context.omniPalette.textTertiary;
@@ -598,51 +587,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
     }
   }
 
-  Future<void> _clearSceneBindingLocalized(SceneCatalogItem scene) async {
-    final sceneId = scene.sceneId;
-    if (!_bindingMap.containsKey(sceneId)) {
-      return;
-    }
-    setState(() {
-      _savingSceneIds = {..._savingSceneIds, sceneId};
-    });
-    try {
-      final bindings = await SceneModelConfigService.clearSceneModelBinding(
-        sceneId,
-      );
-      if (!mounted) return;
-      setState(() {
-        _bindings = bindings;
-      });
-      if (sceneId == VoicePlaybackCoordinator.sceneVoiceId) {
-        await VoicePlaybackCoordinator.instance.refreshConfiguration();
-      }
-      showToast(
-        context.l10n.sceneModelDefaultRestored(_sceneDisplayName(sceneId)),
-        type: ToastType.success,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      showToast(
-        context.l10n.sceneModelClearFailed(
-          _sceneDisplayName(sceneId),
-          e.toString(),
-        ),
-        type: ToastType.error,
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _savingSceneIds = {..._savingSceneIds}..remove(sceneId);
-        });
-      }
-    }
-  }
-
-  Future<void> _openSceneSelector(
-    SceneCatalogItem scene,
-    BuildContext anchorContext,
-  ) async {
+  Future<void> _prepareSceneSelector(SceneCatalogItem scene) async {
     final sceneId = scene.sceneId;
     if (_loadingSceneModelIds.contains(sceneId)) {
       return;
@@ -661,67 +606,6 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
           });
         }
       }
-      if (!mounted || !anchorContext.mounted) {
-        return;
-      }
-    }
-    final binding = _bindingMap[scene.sceneId];
-    final overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox?;
-    final anchorBox = anchorContext.findRenderObject() as RenderBox?;
-    if (overlay == null || anchorBox == null || !anchorBox.hasSize) {
-      return;
-    }
-    final topLeft = anchorBox.localToGlobal(Offset.zero, ancestor: overlay);
-    final bottomRight = anchorBox.localToGlobal(
-      anchorBox.size.bottomRight(Offset.zero),
-      ancestor: overlay,
-    );
-    final anchorRect = Rect.fromPoints(topLeft, bottomRight);
-    final popupWidth = anchorBox.size.width
-        .clamp(160.0, overlay.size.width - 16.0)
-        .toDouble();
-    final position = PopupMenuAnchorPosition.fromAnchorRect(
-      anchorRect: anchorRect,
-      overlaySize: overlay.size,
-      estimatedMenuHeight: _kSceneSelectionPopupMaxHeight,
-      reservedBottom: (() {
-        final viewInsetBottom = MediaQuery.of(context).viewInsets.bottom;
-        return viewInsetBottom > 0 ? viewInsetBottom : 280.0;
-      })(),
-    );
-
-    final result = await showMenu<_SceneSelectionAction>(
-      context: context,
-      color: _cardColor,
-      elevation: 8,
-      constraints: BoxConstraints(minWidth: popupWidth, maxWidth: popupWidth),
-      position: position,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      items: [
-        _SceneSelectionPopupEntry(
-          width: popupWidth,
-          estimatedHeight: _kSceneSelectionPopupMaxHeight,
-          scene: scene,
-          profiles: _profiles,
-          providerModelsByProfileId: _modelsForScene(scene),
-          currentBinding: binding,
-        ),
-      ],
-    );
-    if (result == null) {
-      return;
-    }
-    if (result.restoreDefault) {
-      await _clearSceneBindingLocalized(scene);
-      return;
-    }
-    if (result.providerProfileId.isNotEmpty && result.modelId.isNotEmpty) {
-      await _saveSceneBinding(
-        scene: scene,
-        providerProfileId: result.providerProfileId,
-        modelId: result.modelId,
-      );
     }
   }
 
@@ -779,52 +663,60 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
     SceneCatalogItem scene, {
     required bool isSaving,
   }) {
-    final palette = context.omniPalette;
-    return Builder(
-      builder: (fieldContext) {
-        return InkWell(
-          key: Key('scene-model-selector-${scene.sceneId}'),
-          onTap: isSaving
-              ? null
-              : () => _openSceneSelector(scene, fieldContext),
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
-            decoration: BoxDecoration(
-              color: palette.surfaceSecondary,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: palette.borderSubtle.withValues(
-                  alpha: _isDarkTheme ? 0.55 : 0.75,
-                ),
-                width: 0.65,
+    final binding = _bindingMap[scene.sceneId];
+    final modelsByProfile = _modelsForScene(scene);
+    return Align(
+      alignment: Alignment.centerRight,
+      child: OmniSettingsDropdown<_SceneModelChoice>(
+        dropdownKey: Key('scene-model-selector-${scene.sceneId}'),
+        value: binding == null
+            ? _defaultSceneModelChoice
+            : (
+                providerProfileId: binding.providerProfileId,
+                modelId: binding.modelId,
               ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _selectionLabel(scene),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: _primaryTextColor,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w500,
+        selectedLabel: _selectionLabel(scene),
+        maxWidth: 164,
+        menuMinWidth: 188,
+        menuMaxWidth: 360,
+        searchHint: context.trLegacy('搜索模型或服务商'),
+        onBeforeOpen: () => _prepareSceneSelector(scene),
+        options: [
+          for (final profile in _profiles)
+            if (profile.configured && !profile.needsPresetCredentials)
+              for (final model
+                  in modelsByProfile[profile.id] ??
+                      const <ProviderModelOption>[])
+                OmniSettingsOption(
+                  value: (providerProfileId: profile.id, modelId: model.id),
+                  label: model.id,
+                  leading: ProviderVendorIcon(
+                    vendor: ModelVendorCatalog.resolve(
+                      model.id,
+                      ownedBy: model.ownedBy,
+                      providerId: model.modelsDevProviderId,
                     ),
+                    size: OmniMenuStyle.iconSize,
+                    forceMonochrome: true,
+                    monochromeColor: _primaryTextColor,
                   ),
+                  trailingLabel: profile.name,
+                  searchText: model.displayName,
                 ),
-                const SizedBox(width: 6),
-                Icon(
-                  LucideIcons.chevronsUpDown,
-                  size: 15,
-                  color: _tertiaryTextColor,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+        ],
+        onChanged: isSaving
+            ? null
+            : (selection) {
+                if (selection == null || !mounted) return;
+                unawaited(
+                  _saveSceneBinding(
+                    scene: scene,
+                    providerProfileId: selection.providerProfileId,
+                    modelId: selection.modelId,
+                  ),
+                );
+              },
+      ),
     );
   }
 
@@ -953,7 +845,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          context.trLegacy('点击右侧按钮后，可按 Provider 搜索、折叠并选择模型。'),
+                          context.trLegacy('点击右侧按钮选择模型，也可按模型名称、ID 或服务商搜索。'),
                           style: TextStyle(
                             color: _secondaryTextColor,
                             fontSize: 12,
@@ -1001,467 +893,6 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
                   _buildVoiceCard(),
                 ],
               ),
-      ),
-    );
-  }
-}
-
-class _SceneSelectionAction {
-  final bool restoreDefault;
-  final String providerProfileId;
-  final String modelId;
-
-  const _SceneSelectionAction.restore()
-    : restoreDefault = true,
-      providerProfileId = '',
-      modelId = '';
-
-  const _SceneSelectionAction.select({
-    required this.providerProfileId,
-    required this.modelId,
-  }) : restoreDefault = false;
-}
-
-class _SceneSelectionPopupEntry extends PopupMenuEntry<_SceneSelectionAction> {
-  const _SceneSelectionPopupEntry({
-    required this.width,
-    required this.estimatedHeight,
-    required this.scene,
-    required this.profiles,
-    required this.providerModelsByProfileId,
-    required this.currentBinding,
-  });
-
-  final double width;
-  final double estimatedHeight;
-  final SceneCatalogItem scene;
-  final List<ModelProviderProfileSummary> profiles;
-  final Map<String, List<ProviderModelOption>> providerModelsByProfileId;
-  final SceneModelBindingEntry? currentBinding;
-
-  @override
-  double get height => estimatedHeight;
-
-  @override
-  bool represents(_SceneSelectionAction? value) => false;
-
-  @override
-  State<_SceneSelectionPopupEntry> createState() =>
-      _SceneSelectionPopupEntryState();
-}
-
-class _SceneSelectionPopupEntryState extends State<_SceneSelectionPopupEntry> {
-  final TextEditingController _searchController = TextEditingController();
-  late final Set<String> _expandedProfileIds;
-
-  bool get _hasSearchQuery => _searchController.text.trim().isNotEmpty;
-
-  @override
-  void initState() {
-    super.initState();
-    _expandedProfileIds = <String>{
-      if (widget.currentBinding != null)
-        widget.currentBinding!.providerProfileId,
-    };
-    if (_expandedProfileIds.isEmpty && widget.profiles.isNotEmpty) {
-      _expandedProfileIds.add(widget.profiles.first.id);
-    }
-    _searchController.addListener(() {
-      setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  List<ProviderModelOption> _filteredModels(String profileId) {
-    final query = _searchController.text.trim().toLowerCase();
-    final models = widget.providerModelsByProfileId[profileId] ?? const [];
-    if (query.isEmpty) {
-      return models;
-    }
-    return models
-        .where((item) => item.id.toLowerCase().contains(query))
-        .toList();
-  }
-
-  List<ModelProviderProfileSummary> get _visibleProfiles {
-    if (!_hasSearchQuery) {
-      return widget.profiles;
-    }
-    return widget.profiles.where((profile) {
-      return _filteredModels(profile.id).isNotEmpty;
-    }).toList();
-  }
-
-  bool _isExpanded(String profileId) {
-    if (_hasSearchQuery) {
-      return true;
-    }
-    return _expandedProfileIds.contains(profileId);
-  }
-
-  bool get _isDarkTheme => context.isDarkTheme;
-  Color get _selectedSurfaceColor => context.omniPalette.surfaceSecondary;
-  Color get _primaryTextColor => context.omniPalette.textPrimary;
-  Color get _secondaryTextColor => context.omniPalette.textSecondary;
-  Color get _tertiaryTextColor => context.omniPalette.textTertiary;
-
-  Widget _buildSearchRow() {
-    final palette = context.omniPalette;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8.5),
-        decoration: BoxDecoration(
-          color: palette.surfaceSecondary,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: palette.borderSubtle.withValues(
-              alpha: _isDarkTheme ? 0.55 : 0.75,
-            ),
-            width: 0.65,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(LucideIcons.search, size: 15.5, color: _tertiaryTextColor),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _searchController,
-                autofocus: false,
-                scrollPadding: EdgeInsets.zero,
-                textInputAction: TextInputAction.search,
-                onSubmitted: (_) =>
-                    FocusManager.instance.primaryFocus?.unfocus(),
-                cursorColor: palette.accentPrimary,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: _primaryTextColor,
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: InputDecoration(
-                  isDense: true,
-                  filled: false,
-                  fillColor: Colors.transparent,
-                  hintText: context.trLegacy('搜索模型 ID'),
-                  hintStyle: TextStyle(
-                    fontSize: 12.5,
-                    color: _tertiaryTextColor,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  border: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  disabledBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ),
-            if (_hasSearchQuery) ...[
-              const SizedBox(width: 6),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _searchController.clear,
-                child: Icon(LucideIcons.x, size: 14, color: _tertiaryTextColor),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRestoreDefaultTile() {
-    final selected = widget.currentBinding == null;
-    final defaultModel = widget.scene.defaultModel.trim();
-    final label = defaultModel.isEmpty
-        ? context.trLegacy('恢复默认（未绑定）')
-        : context.trLegacy('恢复默认（$defaultModel）');
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 2, 10, 4),
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).pop(const _SceneSelectionAction.restore());
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? _selectedSurfaceColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: _primaryTextColor,
-                    fontWeight: FontWeight.w500,
-                    fontFamily: 'PingFang SC',
-                  ),
-                ),
-              ),
-              if (selected)
-                Icon(
-                  LucideIcons.check,
-                  size: 15,
-                  color: context.omniPalette.accentPrimary,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(ModelProviderProfileSummary profile) {
-    final expanded = _isExpanded(profile.id);
-    final models = _filteredModels(profile.id);
-    final isCurrent = widget.currentBinding?.providerProfileId == profile.id;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
-      child: InkWell(
-        onTap: () {
-          if (_hasSearchQuery) {
-            return;
-          }
-          setState(() {
-            if (expanded) {
-              _expandedProfileIds.remove(profile.id);
-            } else {
-              _expandedProfileIds.add(profile.id);
-            }
-          });
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: isCurrent ? _selectedSurfaceColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  profile.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _secondaryTextColor,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'PingFang SC',
-                  ),
-                ),
-              ),
-              Text(
-                profile.configured ? '${models.length}' : 'Not configured',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: _tertiaryTextColor,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'PingFang SC',
-                ),
-              ),
-              if (isCurrent) ...[
-                const SizedBox(width: 6),
-                Icon(
-                  LucideIcons.circleCheck,
-                  size: 13,
-                  color: context.omniPalette.accentPrimary,
-                ),
-              ],
-              const SizedBox(width: 6),
-              Icon(
-                _hasSearchQuery
-                    ? LucideIcons.chevronsUpDown
-                    : expanded
-                    ? LucideIcons.chevronUp
-                    : LucideIcons.chevronDown,
-                size: 16,
-                color: _tertiaryTextColor,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModelRow({
-    required ModelProviderProfileSummary profile,
-    required ProviderModelOption item,
-  }) {
-    final selected =
-        widget.currentBinding?.providerProfileId == profile.id &&
-        widget.currentBinding?.modelId == item.id;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
-      child: _buildSceneModelIdTooltip(
-        modelId: item.id,
-        child: InkWell(
-          onTap: () {
-            Navigator.of(context).pop(
-              _SceneSelectionAction.select(
-                providerProfileId: profile.id,
-                modelId: item.id,
-              ),
-            );
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: selected ? _selectedSurfaceColor : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    item.id,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: _primaryTextColor,
-                      fontWeight: FontWeight.w500,
-                      fontFamily: 'PingFang SC',
-                    ),
-                  ),
-                ),
-                if (selected)
-                  Icon(
-                    LucideIcons.check,
-                    size: 15,
-                    color: context.omniPalette.accentPrimary,
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final dynamicMaxHeight =
-        (mediaQuery.size.height - mediaQuery.viewInsets.bottom - 96)
-            .clamp(220.0, _kSceneSelectionPopupMaxHeight)
-            .toDouble();
-    final visibleProfiles = _visibleProfiles;
-    return SizedBox(
-      width: widget.width,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: dynamicMaxHeight),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildSearchRow(),
-            _buildRestoreDefaultTile(),
-            if (widget.profiles.isEmpty)
-              Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'No available Providers yet. Please configure a model provider first.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _tertiaryTextColor,
-                    fontWeight: FontWeight.w500,
-                    fontFamily: 'PingFang SC',
-                  ),
-                ),
-              )
-            else if (visibleProfiles.isEmpty)
-              Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'No matching models',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _tertiaryTextColor,
-                    fontWeight: FontWeight.w500,
-                    fontFamily: 'PingFang SC',
-                  ),
-                ),
-              )
-            else
-              Flexible(
-                child: Scrollbar(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    itemCount: visibleProfiles.length,
-                    itemBuilder: (context, index) {
-                      final profile = visibleProfiles[index];
-                      final expanded = _isExpanded(profile.id);
-                      final models = _filteredModels(profile.id);
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildSectionHeader(profile),
-                          if (expanded)
-                            profile.configured
-                                ? models.isEmpty
-                                      ? Padding(
-                                          padding: EdgeInsets.fromLTRB(
-                                            12,
-                                            4,
-                                            12,
-                                            8,
-                                          ),
-                                          child: Text(
-                                            'No selectable models for this Provider',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: _tertiaryTextColor,
-                                              fontFamily: 'PingFang SC',
-                                            ),
-                                          ),
-                                        )
-                                      : Column(
-                                          children: models.map((item) {
-                                            return _buildModelRow(
-                                              profile: profile,
-                                              item: item,
-                                            );
-                                          }).toList(),
-                                        )
-                                : Padding(
-                                    padding: EdgeInsets.fromLTRB(12, 4, 12, 8),
-                                    child: Text(
-                                      'Please configure this Provider in the model provider settings first',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: _tertiaryTextColor,
-                                        fontFamily: 'PingFang SC',
-                                      ),
-                                    ),
-                                  ),
-                          if (index != visibleProfiles.length - 1)
-                            const SizedBox(height: 6),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }

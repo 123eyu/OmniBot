@@ -11,6 +11,7 @@ import 'package:ui/models/conversation_model.dart';
 import 'package:ui/models/conversation_thread_target.dart';
 import 'package:ui/services/agent_runtime_service.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/omni_menu.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/settings_section_title.dart';
@@ -327,7 +328,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
       isScrollControlled: true,
       backgroundColor: context.omniPalette.surfacePrimary,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) {
         final palette = context.omniPalette;
@@ -346,7 +347,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
             constraints: BoxConstraints(maxHeight: maxHeight),
             child: SingleChildScrollView(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                padding: OmniMenuStyle.panelPadding,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -377,21 +378,18 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                       label: _isEnglish ? 'Open session' : '打开 Session',
                       action: _AgentSessionAction.open,
                     ),
-                    const SizedBox(height: 8),
                     _buildSessionActionTile(
                       sheetContext,
                       icon: Icons.folder_open_rounded,
                       label: _isEnglish ? 'Open workspace' : '打开工作区',
                       action: _AgentSessionAction.workspace,
                     ),
-                    const SizedBox(height: 8),
                     _buildSessionActionTile(
                       sheetContext,
                       icon: Icons.drive_file_rename_outline_rounded,
                       label: _isEnglish ? 'Rename' : '重命名',
                       action: _AgentSessionAction.rename,
                     ),
-                    const SizedBox(height: 8),
                     _buildSessionActionTile(
                       sheetContext,
                       icon: session.archived
@@ -404,7 +402,6 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                           ? _AgentSessionAction.unarchive
                           : _AgentSessionAction.archive,
                     ),
-                    const SizedBox(height: 8),
                     _buildSessionActionTile(
                       sheetContext,
                       icon: Icons.copy_rounded,
@@ -412,7 +409,6 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                       action: _AgentSessionAction.copyThreadId,
                     ),
                     if (session.cwd.trim().isNotEmpty) ...[
-                      const SizedBox(height: 8),
                       _buildSessionActionTile(
                         sheetContext,
                         icon: Icons.content_copy_rounded,
@@ -423,39 +419,10 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                     const SizedBox(height: 6),
                     Divider(height: 1, color: palette.borderSubtle),
                     const SizedBox(height: 6),
-                    Material(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => Navigator.of(sheetContext).pop(),
-                        splashColor: palette.accentPrimary.withValues(
-                          alpha: 0.08,
-                        ),
-                        highlightColor: Colors.transparent,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(6, 12, 4, 12),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.close_rounded,
-                                size: 19,
-                                color: palette.textPrimary,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                _isEnglish ? 'Cancel' : '取消',
-                                style: TextStyle(
-                                  color: palette.textPrimary,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  fontFamily: 'PingFang SC',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    OmniMenuItem(
+                      onTap: () => Navigator.of(sheetContext).pop(),
+                      label: _isEnglish ? 'Cancel' : '取消',
+                      leading: const Icon(Icons.close_rounded),
                     ),
                   ],
                 ),
@@ -497,42 +464,11 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
     required _AgentSessionAction action,
     bool destructive = false,
   }) {
-    final palette = context.omniPalette;
-    final color = destructive ? const Color(0xFFE53935) : palette.textPrimary;
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => Navigator.of(sheetContext).pop(action),
-        splashColor: palette.accentPrimary.withValues(alpha: 0.08),
-        highlightColor: Colors.transparent,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(6, 12, 4, 12),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 19),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'PingFang SC',
-                  ),
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: palette.textTertiary,
-                size: 18,
-              ),
-            ],
-          ),
-        ),
-      ),
+    return OmniMenuItem(
+      onTap: () => Navigator.of(sheetContext).pop(action),
+      label: label,
+      leading: Icon(icon),
+      destructive: destructive,
     );
   }
 

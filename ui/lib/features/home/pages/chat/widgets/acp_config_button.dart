@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_menu.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/services/agent_runtime_service.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/conversation_model_selector.dart';
 import 'package:ui/services/model_provider_config_service.dart';
-import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/theme/theme_context.dart';
 
 /// Labels are presentation only; IDs, values and types remain ACP-owned.
@@ -346,17 +346,16 @@ class _AcpConfigPanelState extends State<AcpConfigPanel> {
     final label = acpConfigLabel(option, english: _english);
     final value = option['currentValue'];
     final palette = context.omniPalette;
-    final textStyle = TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w500,
+    final textStyle = OmniMenuStyle.labelStyle.copyWith(
       color: palette.textPrimary,
     );
     if (option['type'] == 'boolean') {
       return SwitchListTile.adaptive(
         key: ValueKey('acp-config-$id'),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-        dense: true,
-        visualDensity: VisualDensity.compact,
+        contentPadding: OmniMenuStyle.contentPadding,
+        shape: const RoundedRectangleBorder(
+          borderRadius: OmniMenuStyle.rowRadius,
+        ),
         activeTrackColor: palette.accentPrimary,
         title: Text(label, style: textStyle),
         value: value == true,
@@ -382,65 +381,48 @@ class _AcpConfigPanelState extends State<AcpConfigPanel> {
     final expanded = expandable && _expandedId == id;
     final isThought =
         option['category'] == 'thought_level' || id == 'reasoning_effort';
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        InkWell(
-          key: ValueKey('acp-config-$id'),
-          borderRadius: BorderRadius.circular(12),
-          onTap: !_loading && !_saving && expandable
-              ? () {
-                  if (option['category'] == 'model' &&
-                      widget.configureModel != null) {
-                    if (!widget.readOnly) unawaited(widget.configureModel!());
-                    return;
-                  }
-                  setState(() => _expandedId = expanded ? null : id);
-                  if (!expanded && option['category'] == 'model') {
-                    unawaited(_load(refresh: true));
-                  }
-                }
-              : null,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-            child: Row(
-              children: [
-                Icon(
-                  isThought
-                      ? LucideIcons.brain
-                      : option['category'] == 'model'
-                      ? LucideIcons.sparkles
-                      : LucideIcons.slidersHorizontal,
-                  size: 16,
-                  color: palette.textSecondary,
-                ),
-                const SizedBox(width: 9),
-                Expanded(child: Text(label, style: textStyle)),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    currentLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: palette.textSecondary,
-                    ),
-                  ),
-                ),
-                if (expandable) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                    LucideIcons.chevronRight,
-                    size: 14,
-                    color: palette.textTertiary,
-                  ),
-                ],
-              ],
+    return OmniMenuItem(
+      key: ValueKey('acp-config-$id'),
+      enabled: !_loading && !_saving && expandable,
+      onTap: !_loading && !_saving && expandable
+          ? () {
+              if (option['category'] == 'model' &&
+                  widget.configureModel != null) {
+                if (!widget.readOnly) unawaited(widget.configureModel!());
+                return;
+              }
+              setState(() => _expandedId = expanded ? null : id);
+              if (!expanded && option['category'] == 'model') {
+                unawaited(_load(refresh: true));
+              }
+            }
+          : null,
+      child: Row(
+        children: [
+          Icon(
+            isThought
+                ? LucideIcons.brain
+                : option['category'] == 'model'
+                ? LucideIcons.sparkles
+                : LucideIcons.slidersHorizontal,
+          ),
+          const SizedBox(width: OmniMenuStyle.iconGap),
+          Expanded(child: Text(label)),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              currentLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: palette.textSecondary),
             ),
           ),
-        ),
-      ],
+          if (expandable) ...[
+            const SizedBox(width: 4),
+            Icon(LucideIcons.chevronRight, color: palette.textTertiary),
+          ],
+        ],
+      ),
     );
   }
 
@@ -482,35 +464,11 @@ class _AcpConfigPanelState extends State<AcpConfigPanel> {
         onSelectValue: _loading || _saving || widget.readOnly
             ? null
             : (value) => _save(selected['id'].toString(), value),
-        header: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 7, 10, 3),
-          child: InkWell(
-            key: const ValueKey('acp-config-back'),
-            borderRadius: BorderRadius.circular(10),
-            onTap: () => setState(() => _expandedId = null),
-            child: SizedBox(
-              height: 34,
-              child: Row(
-                children: [
-                  const SizedBox(
-                    width: 34,
-                    child: Icon(Icons.chevron_left_rounded, size: 20),
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      acpConfigLabel(selected, english: _english),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: palette.textPrimary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        header: OmniMenuItem(
+          key: const ValueKey('acp-config-back'),
+          onTap: () => setState(() => _expandedId = null),
+          leading: const Icon(Icons.chevron_left_rounded),
+          label: acpConfigLabel(selected, english: _english),
         ),
         footer: Column(
           mainAxisSize: MainAxisSize.min,
@@ -531,9 +489,8 @@ class _AcpConfigPanelState extends State<AcpConfigPanel> {
         ),
       );
     }
-    return OmniGlassPanel(
+    return OmniMenuSurface(
       width: 280,
-      borderRadius: BorderRadius.circular(18),
       child: Material(
         color: Colors.transparent,
         child: ConstrainedBox(
@@ -545,7 +502,7 @@ class _AcpConfigPanelState extends State<AcpConfigPanel> {
                     .clamp(150, 420),
           ),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            padding: EdgeInsets.zero,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -620,28 +577,24 @@ class _AcpConfigPanelState extends State<AcpConfigPanel> {
                           option['category'] == 'thought_level' ||
                           option['id'] == 'reasoning_effort',
                     ))
-                  ListTile(
+                  OmniMenuItem(
                     key: const ValueKey('acp-reasoning-model-default'),
-                    dense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                    leading: Icon(
-                      LucideIcons.brain,
-                      size: 16,
-                      color: palette.textSecondary,
-                    ),
-                    title: Text(
-                      _english ? 'Reasoning effort' : '思考强度',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: palette.textPrimary,
-                      ),
-                    ),
-                    trailing: Text(
-                      _english ? 'Model default' : '模型默认',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: palette.textSecondary,
-                      ),
+                    onTap: null,
+                    child: Row(
+                      children: [
+                        const Icon(LucideIcons.brain),
+                        const SizedBox(width: OmniMenuStyle.iconGap),
+                        Expanded(
+                          child: Text(_english ? 'Reasoning effort' : '思考强度'),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            _english ? 'Model default' : '模型默认',
+                            style: TextStyle(color: palette.textSecondary),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 if (_error != null)
@@ -657,14 +610,17 @@ class _AcpConfigPanelState extends State<AcpConfigPanel> {
                   ),
                 if ((_error != null || _options.isEmpty) &&
                     widget.configureModel != null)
-                  TextButton(
-                    onPressed: widget.readOnly ? null : widget.configureModel,
-                    child: Text(_english ? 'Choose model' : '选择模型'),
+                  OmniMenuItem(
+                    enabled: !widget.readOnly,
+                    onTap: widget.readOnly ? null : widget.configureModel,
+                    leading: const Icon(LucideIcons.sparkles),
+                    label: _english ? 'Choose model' : '选择模型',
                   ),
                 if (_error != null && _options.isEmpty)
-                  TextButton(
-                    onPressed: _load,
-                    child: Text(_english ? 'Reload' : '重新加载'),
+                  OmniMenuItem(
+                    onTap: _load,
+                    leading: const Icon(LucideIcons.refreshCw),
+                    label: _english ? 'Reload' : '重新加载',
                   ),
               ],
             ),

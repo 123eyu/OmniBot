@@ -365,7 +365,7 @@ extension _ChatInputAgentControls on _ChatInputAreaStateBase {
       preferBelow: preferBelow ?? widget.minimalComposer,
       reverseTransitionDuration: Duration.zero,
       builder: (handle) => _AgentPermissionGlassMenuContent(
-        width: 196,
+        width: 244,
         selected: selected,
         selectedColor: selectedColor,
         inactiveColor: inactiveColor,

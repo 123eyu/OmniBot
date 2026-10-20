@@ -497,8 +497,8 @@ mixin _ChatPageModelContextMixin on _ChatPageStateBase {
           maxHeight: popupMaxHeight,
           loadLiveProviders: true,
           currentSelection: currentSelection,
-          footer: TextButton.icon(
-            onPressed: () async {
+          footer: OmniMenuItem(
+            onTap: () async {
               await handle.dismiss();
               if (!mounted) return;
               await GoRouterManager.pushForResult<void>(
@@ -506,8 +506,8 @@ mixin _ChatPageModelContextMixin on _ChatPageStateBase {
               );
               if (mounted) await _loadNormalChatModelContext();
             },
-            icon: const Icon(Icons.settings_outlined, size: 16),
-            label: Text(LegacyTextLocalizer.localize('配置模型连接')),
+            leading: const Icon(Icons.settings_outlined),
+            label: LegacyTextLocalizer.localize('配置模型连接'),
           ),
           // 软键盘"确定"提交搜索时:先打开 popup 的"一次性键盘隐藏豁免",再 unfocus
           // —— 这样 IME 塌陷不会被 DismissOverlayOnKeyboardHide 当作"用户想关 popup"

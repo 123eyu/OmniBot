@@ -181,18 +181,15 @@ extension _HomeDrawerHome on HomeDrawerState {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      TextButton(
+                      OmniCircleButton(
                         key: const ValueKey('home-close-search'),
+                        size: 40,
+                        iconSize: 20,
+                        tapTargetSize: MaterialTapTargetSize.padded,
+                        icon: LucideIcons.x,
+                        tooltip: MaterialLocalizations.of(context)
+                            .closeButtonTooltip,
                         onPressed: _closeHomeSearch,
-                        style: TextButton.styleFrom(
-                          foregroundColor: palette.textSecondary,
-                          minimumSize: const Size(48, 48),
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                        ),
-                        child: Text(
-                          MaterialLocalizations.of(context).cancelButtonLabel,
-                          style: const TextStyle(fontSize: 14),
-                        ),
                       ),
                     ],
                   ),
@@ -293,18 +290,14 @@ extension _HomeDrawerHome on HomeDrawerState {
       enabled: !_isBatchConversationActionRunning,
       tooltip: english ? 'Switch Agent' : '切换 Agent',
       position: PopupMenuPosition.over,
-      color: context.isDarkTheme
-          ? palette.surfaceSecondary
-          : palette.surfacePrimary,
+      color: palette.surfacePrimary,
       surfaceTintColor: Colors.transparent,
-      elevation: 8,
-      shadowColor: Colors.black.withValues(
-        alpha: context.isDarkTheme ? 0.4 : 0.15,
+      shape: const RoundedRectangleBorder(
+        borderRadius: OmniMenuStyle.panelRadius,
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
       clipBehavior: Clip.antiAlias,
       constraints: BoxConstraints.tightFor(width: menuWidth),
-      menuPadding: const EdgeInsets.all(12),
+      menuPadding: OmniMenuStyle.panelPadding,
       borderRadius: BorderRadius.circular(14),
       popUpAnimationStyle: MediaQuery.disableAnimationsOf(context)
           ? AnimationStyle.noAnimation
@@ -323,46 +316,31 @@ extension _HomeDrawerHome on HomeDrawerState {
       },
       itemBuilder: (menuContext) => [
         for (final filter in _homeFilters)
-          PopupMenuItem<String>(
+          OmniPopupMenuItem<String>(
             key: ValueKey('home-agent-option-${filter.id}'),
             value: filter.id,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Semantics(
-              selected: _homeFilter.id == filter.id,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Row(
-                  children: [
-                    // Reserve the same leading gutter on every row so the
-                    // Agent icons and names stay aligned with or without a tick.
-                    SizedBox.square(
-                      dimension: 18,
-                      child: _homeFilter.id == filter.id
-                          ? Icon(
-                              LucideIcons.check,
-                              size: 18,
-                              color: palette.textPrimary,
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 12),
-                    ExcludeSemantics(child: _buildHomeFilterIcon(filter, 22)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _homeFilterLabel(filter),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 17,
-                          height: 1.3,
-                          color: palette.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
+            selected: _homeFilter.id == filter.id,
+            child: Row(
+              children: [
+                SizedBox.square(
+                  dimension: 18,
+                  child: _homeFilter.id == filter.id
+                      ? const Icon(LucideIcons.check, size: 18)
+                      : null,
                 ),
-              ),
+                const SizedBox(width: 12),
+                ExcludeSemantics(
+                  child: _buildHomeFilterIcon(filter, OmniMenuStyle.iconSize),
+                ),
+                const SizedBox(width: OmniMenuStyle.iconGap),
+                Expanded(
+                  child: Text(
+                    _homeFilterLabel(filter),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ),
       ],
@@ -456,11 +434,13 @@ extension _HomeDrawerHome on HomeDrawerState {
       ),
       color: palette.surfacePrimary,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: const RoundedRectangleBorder(
+        borderRadius: OmniMenuStyle.panelRadius,
+      ),
       constraints: const BoxConstraints(minWidth: 224, maxWidth: 300),
       items: [
         for (var i = 0; i < actions.length; i++)
-          PopupMenuItem<int>(
+          OmniPopupMenuItem<int>(
             key: ValueKey('home-menu-item-$i'),
             value: i,
             child: Row(
@@ -491,7 +471,7 @@ extension _HomeDrawerHome on HomeDrawerState {
           ),
           child: ListView(
             shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+            padding: OmniMenuStyle.panelPadding,
             children: [
               for (final action in _webQuickActions)
                 _buildWebPopoverOptionTile(

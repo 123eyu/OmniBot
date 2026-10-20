@@ -12,6 +12,7 @@ import 'package:ui/services/model_provider_config_service.dart';
 import 'package:ui/services/model_vendor_catalog.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/omni_menu.dart';
 import 'package:ui/utils/popup_menu_anchor_position.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
@@ -24,7 +25,6 @@ import 'chatgpt_account_section.dart';
 const double _kProviderSwitchPopupMaxHeight = 320;
 const double _kProviderTypePopupMinWidth = 200;
 const double _kProviderTypePopupHorizontalMargin = 16;
-const double _kProviderTypePopupTextFontSize = 15;
 
 enum _ProviderModelSource { manual, remote }
 
@@ -239,7 +239,6 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
             entry.nameFocusNode.hasFocus || entry.valueFocusNode.hasFocus,
       );
 
-  bool get _isDarkTheme => context.isDarkTheme;
   Color get _pageBackground => context.omniPalette.pageBackground;
   Color get _cardColor => context.omniPalette.surfacePrimary;
   Color get _primaryTextColor => context.omniPalette.textPrimary;
@@ -286,8 +285,8 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     double maxWidth,
   ) {
     final style = TextStyle(
-      fontSize: _kProviderTypePopupTextFontSize,
-      fontWeight: FontWeight.w500,
+      fontSize: OmniMenuStyle.labelStyle.fontSize,
+      fontWeight: OmniMenuStyle.labelStyle.fontWeight,
       fontFamily: 'PingFang SC',
     );
     final textDirection = Directionality.of(context);
@@ -300,7 +299,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
       )..layout();
       longestLabelWidth = math.max(longestLabelWidth, painter.width);
     }
-    const popupHorizontalPadding = 20.0;
+    const popupHorizontalPadding = 24.0;
     const tileHorizontalPadding = 24.0;
     const selectedCheckWidth = 20.0;
     const popupSafetyPadding = 12.0;
@@ -1707,14 +1706,10 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     final selected = await showMenu<String>(
       context: context,
       color: _cardColor,
-      elevation: 3,
-      shadowColor: context.omniPalette.shadowColor,
+      menuPadding: EdgeInsets.zero,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: _isDarkTheme
-            ? BorderSide(color: context.omniPalette.borderSubtle)
-            : BorderSide.none,
+      shape: const RoundedRectangleBorder(
+        borderRadius: OmniMenuStyle.panelRadius,
       ),
       constraints: BoxConstraints(minWidth: popupWidth, maxWidth: popupWidth),
       position: position,
@@ -1794,14 +1789,10 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     return showMenu<String>(
       context: context,
       color: _cardColor,
-      elevation: 3,
-      shadowColor: context.omniPalette.shadowColor,
+      menuPadding: EdgeInsets.zero,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: _isDarkTheme
-            ? BorderSide(color: context.omniPalette.borderSubtle)
-            : BorderSide.none,
+      shape: const RoundedRectangleBorder(
+        borderRadius: OmniMenuStyle.panelRadius,
       ),
       constraints: BoxConstraints(minWidth: popupWidth, maxWidth: popupWidth),
       position: position,
@@ -2714,14 +2705,10 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     final selected = await showMenu<String>(
       context: context,
       color: _cardColor,
-      elevation: 3,
-      shadowColor: context.omniPalette.shadowColor,
+      menuPadding: EdgeInsets.zero,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: _isDarkTheme
-            ? BorderSide(color: context.omniPalette.borderSubtle)
-            : BorderSide.none,
+      shape: const RoundedRectangleBorder(
+        borderRadius: OmniMenuStyle.panelRadius,
       ),
       constraints: BoxConstraints(minWidth: popupWidth, maxWidth: popupWidth),
       position: position,
@@ -2775,14 +2762,10 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     await showMenu<String>(
       context: context,
       color: _cardColor,
-      elevation: 3,
-      shadowColor: context.omniPalette.shadowColor,
+      menuPadding: EdgeInsets.zero,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: _isDarkTheme
-            ? BorderSide(color: context.omniPalette.borderSubtle)
-            : BorderSide.none,
+      shape: const RoundedRectangleBorder(
+        borderRadius: OmniMenuStyle.panelRadius,
       ),
       constraints: BoxConstraints(minWidth: popupWidth, maxWidth: popupWidth),
       position: position,
@@ -3353,42 +3336,12 @@ class _ProviderSwitchPopupEntry extends PopupMenuEntry<String> {
 
 class _ProviderSwitchPopupEntryState extends State<_ProviderSwitchPopupEntry> {
   Widget _buildProviderTile(ModelProviderProfileSummary profile) {
-    final palette = context.omniPalette;
     final selected = profile.id == widget.selectedProfileId;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).pop(profile.id);
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-          decoration: BoxDecoration(
-            color: selected ? palette.surfaceSecondary : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  profile.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: palette.textPrimary,
-                    fontWeight: FontWeight.w500,
-                    fontFamily: 'PingFang SC',
-                  ),
-                ),
-              ),
-              if (selected)
-                Icon(LucideIcons.check, size: 16, color: palette.accentPrimary),
-            ],
-          ),
-        ),
-      ),
+    return OmniMenuItem(
+      onTap: () => Navigator.of(context).pop(profile.id),
+      label: profile.name,
+      selected: selected,
+      trailing: selected ? const Icon(LucideIcons.check) : null,
     );
   }
 
@@ -3420,7 +3373,7 @@ class _ProviderSwitchPopupEntryState extends State<_ProviderSwitchPopupEntry> {
               )
             : Scrollbar(
                 child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: OmniMenuStyle.panelPadding,
                   itemCount: widget.profiles.length,
                   itemBuilder: (context, index) {
                     return _buildProviderTile(widget.profiles[index]);
@@ -3548,91 +3501,38 @@ class _ChatModelVisibilityPopupEntryState
   }
 
   Widget _buildModelTile(ProviderModelOption model) {
-    final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     final visible = !_hiddenModelIds.contains(model.id);
     final pending = _removingAll || _pendingModelIds.contains(model.id);
-    final accentColor = palette.accentPrimary;
-    final removeColor = isDark ? const Color(0xFFFCA5A5) : AppColors.alertRed;
-    final actionColor = visible ? removeColor : accentColor;
     final tooltip = visible ? widget.removeTooltip : widget.addTooltip;
     final vendor = ModelVendorCatalog.resolve(
       model.id,
       ownedBy: model.ownedBy,
       providerId: model.modelsDevProviderId,
     );
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
-      child: Container(
+    return Tooltip(
+      message: tooltip,
+      child: OmniMenuItem(
         key: Key('provider-chat-model-visibility-row-${model.id}'),
-        constraints: const BoxConstraints(minHeight: 44),
-        padding: const EdgeInsets.fromLTRB(12, 7, 6, 7),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
-        child: Row(
-          children: [
-            ProviderVendorIcon(vendor: vendor, size: 15),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                model.id,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: palette.textPrimary,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'PingFang SC',
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Tooltip(
-              message: tooltip,
-              child: Semantics(
-                button: true,
-                label: '$tooltip ${model.id}',
-                enabled: !pending,
-                child: Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(9),
-                  child: InkWell(
-                    key: Key(
-                      'provider-chat-model-visibility-toggle-${model.id}',
-                    ),
-                    onTap: pending
-                        ? null
-                        : () => unawaited(_toggleModel(model)),
-                    borderRadius: BorderRadius.circular(9),
-                    splashColor: actionColor.withValues(alpha: 0.08),
-                    highlightColor: actionColor.withValues(alpha: 0.04),
-                    child: SizedBox(
-                      width: 34,
-                      height: 34,
-                      child: Center(
-                        child: pending
-                            ? SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    actionColor,
-                                  ),
-                                ),
-                              )
-                            : Icon(
-                                visible ? LucideIcons.minus : LucideIcons.plus,
-                                size: 17,
-                                color: actionColor,
-                              ),
-                      ),
-                    ),
+        onTap: () => unawaited(_toggleModel(model)),
+        enabled: !pending,
+        selected: visible,
+        label: model.id,
+        leading: ProviderVendorIcon(
+          vendor: vendor,
+          size: OmniMenuStyle.iconSize,
+        ),
+        trailing: Semantics(
+          label: '$tooltip ${model.id}',
+          child: SizedBox.square(
+            key: Key('provider-chat-model-visibility-toggle-${model.id}'),
+            dimension: OmniMenuStyle.iconSize,
+            child: pending
+                ? const CircularProgressIndicator(strokeWidth: 2)
+                : Icon(
+                    visible ? LucideIcons.minus : LucideIcons.plus,
+                    color: visible ? Theme.of(context).colorScheme.error : null,
                   ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -3697,7 +3597,7 @@ class _ChatModelVisibilityPopupEntryState
                       enabled: canRemoveAll,
                       child: Material(
                         color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(9),
+                        borderRadius: OmniMenuStyle.rowRadius,
                         child: InkWell(
                           key: const Key(
                             'provider-chat-model-visibility-remove-all',
@@ -3705,7 +3605,7 @@ class _ChatModelVisibilityPopupEntryState
                           onTap: canRemoveAll
                               ? () => unawaited(_removeAllModels())
                               : null,
-                          borderRadius: BorderRadius.circular(9),
+                          borderRadius: OmniMenuStyle.rowRadius,
                           splashColor: removeColor.withValues(alpha: 0.08),
                           highlightColor: removeColor.withValues(alpha: 0.04),
                           child: SizedBox(
@@ -3758,7 +3658,7 @@ class _ChatModelVisibilityPopupEntryState
               Flexible(
                 child: Scrollbar(
                   child: ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 8),
+                    padding: OmniMenuStyle.panelPadding,
                     itemCount: widget.models.length,
                     itemBuilder: (context, index) {
                       return _buildModelTile(widget.models[index]);
@@ -3824,40 +3724,12 @@ class _SelectionPopupEntry extends PopupMenuEntry<String> {
 
 class _SelectionPopupEntryState extends State<_SelectionPopupEntry> {
   Widget _buildTile(_SelectionOption option) {
-    final palette = context.omniPalette;
     final selected = option.value == widget.selectedValue;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
-      child: InkWell(
-        onTap: () => Navigator.of(context).pop(option.value),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-          decoration: BoxDecoration(
-            color: selected ? palette.surfaceSecondary : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  option.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: palette.textPrimary,
-                    fontWeight: FontWeight.w500,
-                    fontFamily: 'PingFang SC',
-                  ),
-                ),
-              ),
-              if (selected)
-                Icon(LucideIcons.check, size: 16, color: palette.accentPrimary),
-            ],
-          ),
-        ),
-      ),
+    return OmniMenuItem(
+      onTap: () => Navigator.of(context).pop(option.value),
+      label: option.label,
+      selected: selected,
+      trailing: selected ? const Icon(LucideIcons.check) : null,
     );
   }
 
@@ -3875,7 +3747,7 @@ class _SelectionPopupEntryState extends State<_SelectionPopupEntry> {
         constraints: BoxConstraints(maxHeight: dynamicMaxHeight),
         child: Scrollbar(
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: OmniMenuStyle.panelPadding,
             itemCount: widget.options.length,
             itemBuilder: (context, index) {
               return _buildTile(widget.options[index]);
@@ -3889,40 +3761,12 @@ class _SelectionPopupEntryState extends State<_SelectionPopupEntry> {
 
 class _ProviderTypePopupEntryState extends State<_ProviderTypePopupEntry> {
   Widget _buildProtocolTile(_ProviderTypeOption option) {
-    final palette = context.omniPalette;
     final selected = option.value == widget.selectedValue;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
-      child: InkWell(
-        onTap: () => Navigator.of(context).pop(option.value),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-          decoration: BoxDecoration(
-            color: selected ? palette.surfaceSecondary : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  option.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: palette.textPrimary,
-                    fontWeight: FontWeight.w500,
-                    fontFamily: 'PingFang SC',
-                  ),
-                ),
-              ),
-              if (selected)
-                Icon(LucideIcons.check, size: 16, color: palette.accentPrimary),
-            ],
-          ),
-        ),
-      ),
+    return OmniMenuItem(
+      onTap: () => Navigator.of(context).pop(option.value),
+      label: option.label,
+      selected: selected,
+      trailing: selected ? const Icon(LucideIcons.check) : null,
     );
   }
 
@@ -3940,7 +3784,7 @@ class _ProviderTypePopupEntryState extends State<_ProviderTypePopupEntry> {
         constraints: BoxConstraints(maxHeight: dynamicMaxHeight),
         child: Scrollbar(
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: OmniMenuStyle.panelPadding,
             itemCount: widget.options.length,
             itemBuilder: (context, index) {
               return _buildProtocolTile(widget.options[index]);

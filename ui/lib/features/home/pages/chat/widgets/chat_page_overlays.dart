@@ -21,89 +21,37 @@ class _UserMessageQuickMenuContent extends StatelessWidget {
     required String label,
     required VoidCallback onTap,
   }) {
-    final palette = context.omniPalette;
-    final foregroundColor = palette.textPrimary;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: foregroundColor),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                color: foregroundColor,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return OmniMenuItem(onTap: onTap, label: label, leading: Icon(icon));
   }
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.omniPalette;
-    final dividerColor = palette.borderSubtle;
-    return SizedBox(
+    return OmniMenuSurface(
       width: width,
-      child: OmniGlassPanel(
-        borderRadius: BorderRadius.circular(18),
-        child: Material(
-          color: Colors.transparent,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildAction(
-                context,
-                icon: Icons.content_copy_rounded,
-                label: LegacyTextLocalizer.isEnglish ? 'Copy' : '复制',
-                onTap: () => _select(context, _UserMessageQuickAction.copy),
-              ),
-              if (showEditAction) ...[
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  // 横线不占满宽度——两侧缩进到与菜单项内容 (icon/文字,
-                  // 水平 padding 14) 对齐,像原生"全选｜复制｜发送"那样只占
-                  // 中间一段,而不是贴着面板左右边。
-                  indent: 14,
-                  endIndent: 14,
-                  color: dividerColor,
-                ),
-                _buildAction(
-                  context,
-                  icon: Icons.edit_outlined,
-                  label: LegacyTextLocalizer.isEnglish ? 'Edit' : '编辑',
-                  onTap: () => _select(context, _UserMessageQuickAction.edit),
-                ),
-              ],
-              if (showRetryAction) ...[
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  // 横线不占满宽度——两侧缩进到与菜单项内容 (icon/文字,
-                  // 水平 padding 14) 对齐,像原生"全选｜复制｜发送"那样只占
-                  // 中间一段,而不是贴着面板左右边。
-                  indent: 14,
-                  endIndent: 14,
-                  color: dividerColor,
-                ),
-                _buildAction(
-                  context,
-                  icon: Icons.refresh_rounded,
-                  label: LegacyTextLocalizer.isEnglish ? 'Retry' : '重试这条消息',
-                  onTap: () => _select(context, _UserMessageQuickAction.retry),
-                ),
-              ],
-            ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildAction(
+            context,
+            icon: LucideIcons.copy,
+            label: LegacyTextLocalizer.isEnglish ? 'Copy' : '复制',
+            onTap: () => _select(context, _UserMessageQuickAction.copy),
           ),
-        ),
+          if (showEditAction)
+            _buildAction(
+              context,
+              icon: LucideIcons.pencil,
+              label: LegacyTextLocalizer.isEnglish ? 'Edit' : '编辑',
+              onTap: () => _select(context, _UserMessageQuickAction.edit),
+            ),
+          if (showRetryAction)
+            _buildAction(
+              context,
+              icon: LucideIcons.rotateCw,
+              label: LegacyTextLocalizer.isEnglish ? 'Retry' : '重试这条消息',
+              onTap: () => _select(context, _UserMessageQuickAction.retry),
+            ),
+        ],
       ),
     );
   }

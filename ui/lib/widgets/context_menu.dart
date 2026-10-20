@@ -3,13 +3,14 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/popup_menu_anchor_position.dart';
+import 'package:ui/widgets/omni_menu.dart';
 
 enum RecordMenuAction { edit, delete }
 
 Future<RecordMenuAction?> showRecordContextMenu({
   required BuildContext context,
   required Offset position,
-  double maxWidth = 144,
+  double maxWidth = 224,
   String? editLabel,
   String? deleteLabel,
   String editIconAsset = 'assets/common/edit.svg',
@@ -26,21 +27,27 @@ Future<RecordMenuAction?> showRecordContextMenu({
     required String asset,
     required IconData fallback,
     required Color color,
-  }) => PopupMenuItem<RecordMenuAction>(
+  }) => OmniPopupMenuItem<RecordMenuAction>(
     value: action,
-    padding: const EdgeInsets.symmetric(horizontal: 16),
+    destructive: action == RecordMenuAction.delete,
     child: Row(
       children: [
         SvgPicture.asset(
           asset,
-          width: 18,
-          height: 18,
+          width: OmniMenuStyle.iconSize,
+          height: OmniMenuStyle.iconSize,
           colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-          errorBuilder: (_, _, _) => Icon(fallback, size: 18, color: color),
+          errorBuilder: (_, _, _) =>
+              Icon(fallback, size: OmniMenuStyle.iconSize, color: color),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: OmniMenuStyle.iconGap),
         Expanded(
-          child: Text(label, style: TextStyle(color: color, fontSize: 14)),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color),
+          ),
         ),
       ],
     ),
@@ -50,13 +57,11 @@ Future<RecordMenuAction?> showRecordContextMenu({
     position: PopupMenuAnchorPosition.fromGlobalOffset(
       context: context,
       globalOffset: position,
-      estimatedMenuHeight: showEdit && showDelete ? 112 : 64,
+      estimatedMenuHeight:
+          ((showEdit ? 1 : 0) + (showDelete ? 1 : 0)) *
+              OmniMenuStyle.minHeight +
+          OmniMenuStyle.panelPadding.vertical,
     ),
-    color: palette.surfacePrimary,
-    surfaceTintColor: Colors.transparent,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-    elevation: 6,
-    shadowColor: palette.shadowColor,
     constraints: BoxConstraints(maxWidth: maxWidth),
     items: [
       if (showEdit)
@@ -67,8 +72,6 @@ Future<RecordMenuAction?> showRecordContextMenu({
           fallback: Icons.edit_outlined,
           color: palette.textPrimary,
         ),
-      if (showEdit && showDelete)
-        PopupMenuDivider(height: 1, color: palette.borderSubtle),
       if (showDelete)
         item(
           action: RecordMenuAction.delete,

@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/utils/popup_menu_anchor_position.dart';
+import 'package:ui/widgets/omni_menu.dart';
 
 import '../features/home/pages/edit_profile/edit_profile_page.dart';
 import '../features/memory/pages/memory_center/memory_center_page.dart';
@@ -330,47 +331,51 @@ class _SidebarDrawerState extends State<SidebarDrawer> {
           position: PopupMenuAnchorPosition.fromGlobalOffset(
             context: context,
             globalOffset: details.globalPosition,
-            estimatedMenuHeight: 120,
+            estimatedMenuHeight:
+                OmniMenuStyle.minHeight * 4 +
+                OmniMenuStyle.panelPadding.vertical,
           ),
-          color: Colors.white,
           items: [
-            PopupMenuItem(
+            OmniPopupMenuItem(
               value: 'rename',
               child: Row(
                 children: [
-                  Icon(Icons.edit, size: 18, color: Colors.grey[600]),
-                  SizedBox(width: 8),
-                  Text(isEnglish ? 'Rename' : '重命名'),
+                  const Icon(Icons.edit_outlined),
+                  const SizedBox(width: OmniMenuStyle.iconGap),
+                  Expanded(child: Text(isEnglish ? 'Rename' : '重命名')),
                 ],
               ),
             ),
-            PopupMenuItem(
+            OmniPopupMenuItem(
               value: 'copy',
               child: Row(
                 children: [
-                  Icon(Icons.content_copy, size: 18, color: Colors.grey[600]),
-                  SizedBox(width: 8),
-                  Text(isEnglish ? 'Copy conversation' : '复制对话'),
+                  const Icon(Icons.content_copy),
+                  const SizedBox(width: OmniMenuStyle.iconGap),
+                  Expanded(
+                    child: Text(isEnglish ? 'Copy conversation' : '复制对话'),
+                  ),
                 ],
               ),
             ),
-            PopupMenuItem(
+            OmniPopupMenuItem(
               value: 'export',
               child: Row(
                 children: [
-                  Icon(Icons.ios_share, size: 18, color: Colors.grey[600]),
-                  SizedBox(width: 8),
-                  Text(isEnglish ? 'Export' : '导出'),
+                  const Icon(Icons.ios_share),
+                  const SizedBox(width: OmniMenuStyle.iconGap),
+                  Expanded(child: Text(isEnglish ? 'Export' : '导出')),
                 ],
               ),
             ),
-            PopupMenuItem(
+            OmniPopupMenuItem(
               value: 'delete',
+              destructive: true,
               child: Row(
                 children: [
-                  Icon(Icons.delete, size: 18, color: Colors.grey[600]),
-                  SizedBox(width: 8),
-                  Text(isEnglish ? 'Delete' : '删除'),
+                  const Icon(Icons.delete_outline),
+                  const SizedBox(width: OmniMenuStyle.iconGap),
+                  Expanded(child: Text(isEnglish ? 'Delete' : '删除')),
                 ],
               ),
             ),

@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_menu.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/services/model_provider_config_service.dart';
 import 'package:ui/services/agent_runtime_service.dart';
 import 'package:ui/services/model_vendor_catalog.dart';
 import 'package:ui/theme/theme_context.dart';
-import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
 
 class ConversationModelSelection {
@@ -377,79 +377,54 @@ class _ConversationModelSelectorContentState
     final isSelectedProvider =
         widget.currentSelection?.providerProfileId == profile.id;
     final palette = context.omniPalette;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
-      child: InkWell(
-        onTap: !widget.allowProfileCollapse || _hasSearchQuery
-            ? null
-            : () {
-                setState(() {
-                  if (expanded) {
-                    _expandedProfileIds.remove(profile.id);
-                  } else {
-                    _expandedProfileIds.add(profile.id);
-                  }
-                });
-              },
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelectedProvider
-                ? palette.surfaceSecondary
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
+    return OmniMenuItem(
+      onTap: !widget.allowProfileCollapse || _hasSearchQuery
+          ? null
+          : () {
+              setState(() {
+                if (expanded) {
+                  _expandedProfileIds.remove(profile.id);
+                } else {
+                  _expandedProfileIds.add(profile.id);
+                }
+              });
+            },
+      selected: isSelectedProvider,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              profile.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: palette.textSecondary),
+            ),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  profile.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: palette.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Text(
-                widget.loadLiveProviders &&
-                        (profile.needsPresetCredentials ||
-                            _failedProviders.contains(profile.id) ||
-                            _loadingProviders.contains(profile.id))
-                    ? '—'
-                    : '${models.length}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: palette.textTertiary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (isSelectedProvider) ...[
-                const SizedBox(width: 6),
-                Icon(
-                  Icons.check_circle_rounded,
-                  size: 13,
-                  color: palette.accentPrimary,
-                ),
-              ],
-              if (widget.allowProfileCollapse) ...[
-                const SizedBox(width: 6),
-                Icon(
-                  _hasSearchQuery
-                      ? Icons.unfold_more_rounded
-                      : expanded
-                      ? Icons.expand_less_rounded
-                      : Icons.expand_more_rounded,
-                  size: 16,
-                  color: palette.textTertiary,
-                ),
-              ],
-            ],
+          Text(
+            widget.loadLiveProviders &&
+                    (profile.needsPresetCredentials ||
+                        _failedProviders.contains(profile.id) ||
+                        _loadingProviders.contains(profile.id))
+                ? '—'
+                : '${models.length}',
+            style: TextStyle(fontSize: 13, color: palette.textTertiary),
           ),
-        ),
+          if (isSelectedProvider) ...[
+            const SizedBox(width: 8),
+            Icon(Icons.check_circle_rounded, color: palette.accentPrimary),
+          ],
+          if (widget.allowProfileCollapse) ...[
+            const SizedBox(width: 8),
+            Icon(
+              _hasSearchQuery
+                  ? Icons.unfold_more_rounded
+                  : expanded
+                  ? Icons.expand_less_rounded
+                  : Icons.expand_more_rounded,
+              color: palette.textTertiary,
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -463,81 +438,52 @@ class _ConversationModelSelectorContentState
         ? widget.selectedValue == model.id
         : widget.currentSelection?.providerProfileId == profile?.id &&
               widget.currentSelection?.modelId == model.id;
-    final palette = context.omniPalette;
     final rowKeyPrefix = widget.modelRowKeyPrefix;
-    return Padding(
+    return KeyedSubtree(
       key: selected ? _selectedModelRowKey : null,
-      padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
-      child: Semantics(
-        container: true,
-        button: true,
-        selected: selected,
-        child: buildConversationModelIdTooltip(
-          modelId: model.id,
-          child: InkWell(
-            key: rowKeyPrefix == null
-                ? null
-                : ValueKey('$rowKeyPrefix-${model.id}'),
-            onTap: widget.options != null && widget.onSelectValue == null
-                ? null
-                : () {
-                    if (widget.options != null) {
-                      widget.onSelectValue?.call(model.id);
-                      return;
-                    }
-                    final selection = ConversationModelSelection(
-                      providerProfileId: profile!.id,
-                      modelId: model.id,
-                    );
-                    final onSelect = widget.onSelect;
-                    if (onSelect != null) {
-                      onSelect(selection);
-                    } else {
-                      Navigator.of(context).pop(selection);
-                    }
-                  },
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: selected ? palette.surfaceSecondary : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  if (widget.showVendorIcons) ...[
-                    ProviderVendorIcon(
-                      vendor: ModelVendorCatalog.resolve(
-                        model.id,
-                        ownedBy: model.ownedBy,
-                        providerId: model.modelsDevProviderId,
-                      ),
-                      size: 14,
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                  Expanded(
-                    child: Text(
-                      displayName.isEmpty ? model.id : displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: palette.textPrimary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+      child: buildConversationModelIdTooltip(
+        modelId: model.id,
+        child: OmniMenuItem(
+          key: rowKeyPrefix == null
+              ? null
+              : ValueKey('$rowKeyPrefix-${model.id}'),
+          selected: selected,
+          enabled: widget.options == null || widget.onSelectValue != null,
+          onTap: widget.options != null && widget.onSelectValue == null
+              ? null
+              : () {
+                  if (widget.options != null) {
+                    widget.onSelectValue?.call(model.id);
+                    return;
+                  }
+                  final selection = ConversationModelSelection(
+                    providerProfileId: profile!.id,
+                    modelId: model.id,
+                  );
+                  final onSelect = widget.onSelect;
+                  if (onSelect != null) {
+                    onSelect(selection);
+                  } else {
+                    Navigator.of(context).pop(selection);
+                  }
+                },
+          label: displayName.isEmpty ? model.id : displayName,
+          leading: widget.showVendorIcons
+              ? ProviderVendorIcon(
+                  vendor: ModelVendorCatalog.resolve(
+                    model.id,
+                    ownedBy: model.ownedBy,
+                    providerId: model.modelsDevProviderId,
                   ),
-                  if (selected)
-                    Icon(
-                      Icons.check_rounded,
-                      size: 15,
-                      color: palette.accentPrimary,
-                    ),
-                ],
-              ),
-            ),
-          ),
+                  size: OmniMenuStyle.iconSize,
+                )
+              : null,
+          trailing: selected
+              ? Icon(
+                  Icons.check_rounded,
+                  color: context.omniPalette.accentPrimary,
+                )
+              : null,
         ),
       ),
     );
@@ -579,9 +525,8 @@ class _ConversationModelSelectorContentState
         .toList();
     return SizedBox(
       width: widget.width,
-      child: OmniGlassPanel(
+      child: OmniMenuSurface(
         width: widget.width,
-        borderRadius: BorderRadius.circular(18),
         child: Material(
           color: Colors.transparent,
           child: ConstrainedBox(
@@ -598,16 +543,17 @@ class _ConversationModelSelectorContentState
                 if (widget.showSearchField) _buildSearchRow(),
                 if (_loadingProfiles) const LinearProgressIndicator(),
                 if (_profilesFailed)
-                  TextButton(
-                    onPressed: _loadProfiles,
-                    child: const Text('服务商加载失败，重试'),
+                  OmniMenuItem(
+                    onTap: _loadProfiles,
+                    leading: const Icon(Icons.refresh_rounded),
+                    label: '服务商加载失败，重试',
                   ),
                 if (choices != null)
                   Flexible(
                     child: ListView(
                       shrinkWrap: true,
                       controller: _listScrollController,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: EdgeInsets.zero,
                       children: [
                         if (choices.isEmpty)
                           _buildMutedMessage(
@@ -654,10 +600,7 @@ class _ConversationModelSelectorContentState
                       controller: _listScrollController,
                       child: ListView.builder(
                         controller: _listScrollController,
-                        padding: EdgeInsets.only(
-                          top: widget.showSearchField ? 0 : 8,
-                          bottom: 8,
-                        ),
+                        padding: EdgeInsets.zero,
                         itemCount: visibleProfiles.length,
                         itemBuilder: (context, index) {
                           final profile = visibleProfiles[index];
@@ -671,9 +614,10 @@ class _ConversationModelSelectorContentState
                               if (_loadingProviders.contains(profile.id))
                                 const LinearProgressIndicator(),
                               if (_failedProviders.contains(profile.id))
-                                TextButton(
-                                  onPressed: () => _loadProvider(profile),
-                                  child: const Text('模型加载失败，重试'),
+                                OmniMenuItem(
+                                  onTap: () => _loadProvider(profile),
+                                  leading: const Icon(Icons.refresh_rounded),
+                                  label: '模型加载失败，重试',
                                 ),
                               if (_failedProviders.contains(profile.id))
                                 _buildMutedMessage(_providerErrors[profile.id]),

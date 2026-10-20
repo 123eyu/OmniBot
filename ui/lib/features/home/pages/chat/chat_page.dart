@@ -10,6 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/utils/picked_attachment_metadata.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_menu.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -88,6 +89,7 @@ import 'widgets/chat_message_anchor_bar.dart';
 import 'widgets/pet_overlay_permission_sheet.dart';
 import 'widgets/chat_tool_activity_strip.dart';
 import 'widgets/chat_spotlight_tour.dart';
+import 'widgets/new_conversation_mode_selector.dart';
 
 import 'package:ui/widgets/app_update_dialog.dart';
 import 'package:ui/widgets/app_background_widgets.dart';
@@ -97,6 +99,7 @@ import 'package:ui/widgets/omni_glass.dart';
 
 part 'chat_page_browser.dart';
 part 'chat_page_lifecycle.dart';
+part 'chat_page_new_conversation.dart';
 part 'chat_page_model_context.dart';
 part 'chat_page_openclaw.dart';
 part 'chat_page_terminal_env.dart';
@@ -488,7 +491,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
           id: profile.id,
           name: profile.name,
           enabled: profile.enabled,
-          // The top-right switcher is an installed-Agent surface, not the
+          // The draft selector is an installed-Agent surface, not the
           // profile/configuration catalog. The native ACP catalog reports
           // `installed` from its health probe; null and false must remain
           // unavailable until that fact is established.
@@ -1954,6 +1957,14 @@ abstract class _ChatPageStateBase extends State<ChatPage>
 
   Future<void> _sendMessage({String? text, bool waitForBootstrap = true});
 
+  bool get _showNewConversationModeSelector;
+
+  bool get _canSwitchNewConversationMode;
+
+  String get _newConversationModeId;
+
+  Future<void> _selectNewConversationMode(String modeId);
+
   Future<void> _retryUserMessageText(
     String text, {
     List<Map<String, dynamic>> attachments,
@@ -2010,6 +2021,7 @@ class _ChatPageState extends _ChatPageStateBase
         _ChatPageBrowserMixin,
         _ChatPageAgentMixin,
         _ChatPageLifecycleMixin,
+        _ChatPageNewConversationMixin,
         _ChatPageModelContextMixin,
         _ChatPageOpenClawMixin,
         _ChatPageTerminalEnvMixin,

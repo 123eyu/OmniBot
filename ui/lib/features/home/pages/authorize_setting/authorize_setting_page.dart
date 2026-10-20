@@ -6,6 +6,7 @@ import 'package:ui/services/special_permission.dart';
 import 'package:ui/services/personal_context_service.dart';
 import 'package:ui/features/home/pages/authorize_setting/personal_context_labels.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/omni_menu.dart';
 import 'package:ui/utils/cache_util.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
@@ -390,28 +391,36 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
     if (id == 'documents') {
       final action = await showModalBottomSheet<String>(
         context: context,
+        backgroundColor: context.omniPalette.surfacePrimary,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
         builder: (sheetContext) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text(_localeText(zh: '选择文件', en: 'Select files')),
-                onTap: () => Navigator.pop(sheetContext, 'files'),
-              ),
-              ListTile(
-                title: Text(_localeText(zh: '选择文件夹', en: 'Select a folder')),
-                onTap: () => Navigator.pop(sheetContext, 'directory'),
-              ),
-              ListTile(
-                title: Text(
-                  _localeText(
-                    zh: '取消已选文件与文件夹的授权',
-                    en: 'Remove selected file and folder access',
-                  ),
+          child: Padding(
+            padding: OmniMenuStyle.panelPadding,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                OmniMenuItem(
+                  label: _localeText(zh: '选择文件', en: 'Select files'),
+                  onTap: () => Navigator.pop(sheetContext, 'files'),
                 ),
-                onTap: () => Navigator.pop(sheetContext, 'revoke'),
-              ),
-            ],
+                OmniMenuItem(
+                  label: _localeText(zh: '选择文件夹', en: 'Select a folder'),
+                  onTap: () => Navigator.pop(sheetContext, 'directory'),
+                ),
+                OmniMenuItem(
+                  child: Text(
+                    _localeText(
+                      zh: '取消已选文件与文件夹的授权',
+                      en: 'Remove selected file and folder access',
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(sheetContext, 'revoke'),
+                ),
+              ],
+            ),
           ),
         ),
       );

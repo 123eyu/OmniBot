@@ -5,6 +5,7 @@ import 'package:ui/services/quick_log_service.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/omni_menu.dart';
 
 class QuickLogsPage extends StatefulWidget {
   const QuickLogsPage({super.key});
@@ -221,9 +222,8 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
   }
 
   String _formatTime(int millis) {
-    return DateFormat(
-      'yyyy-MM-dd HH:mm',
-    ).format(DateTime.fromMillisecondsSinceEpoch(millis));
+    return DateFormat('yyyy-MM-dd HH:mm')
+        .format(DateTime.fromMillisecondsSinceEpoch(millis));
   }
 
   String _sourceLabel(String source) {
@@ -277,9 +277,8 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: const Color(
-                            0xFF0EA5E9,
-                          ).withValues(alpha: 0.12),
+                          color: const Color(0xFF0EA5E9)
+                              .withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: const Icon(
@@ -519,12 +518,13 @@ class _QuickLogCard extends StatelessWidget {
                   }
                 },
                 itemBuilder: (context) => [
-                  PopupMenuItem<String>(
+                  OmniPopupMenuItem<String>(
                     value: 'edit',
                     child: Text(resolve('\u7f16\u8f91', 'Edit')),
                   ),
-                  PopupMenuItem<String>(
+                  OmniPopupMenuItem<String>(
                     value: 'delete',
+                    destructive: true,
                     child: Text(resolve('\u5220\u9664', 'Delete')),
                   ),
                 ],
@@ -551,9 +551,8 @@ class _QuickLogCard extends StatelessWidget {
             children: [
               _QuickLogTag(
                 label: sourceLabel,
-                backgroundColor: const Color(
-                  0xFF0EA5E9,
-                ).withValues(alpha: 0.12),
+                backgroundColor: const Color(0xFF0EA5E9)
+                    .withValues(alpha: 0.12),
                 textColor: const Color(0xFF0284C7),
               ),
               _QuickLogTag(

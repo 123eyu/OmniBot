@@ -1246,7 +1246,10 @@ void main() {
       expect(find.text('设置'), findsNothing);
       await tester.tap(find.byKey(const ValueKey('home-menu-button')));
       await tester.pumpAndSettle();
-      expect(find.byType(PopupMenuItem<int>), findsNWidgets(7));
+      expect(
+        find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
+        findsNWidgets(7),
+      );
       expect(find.text('设置'), findsOneWidget);
       expect(find.text('轨迹'), findsOneWidget);
       expect(find.text('搜索对话'), findsNothing);
@@ -1258,12 +1261,24 @@ void main() {
           tester.getCenter(find.byKey(const ValueKey('home-menu-button'))).dx,
         ),
       );
+      final menuCenter = tester.getCenter(
+        find.byKey(const ValueKey('home-menu-button')),
+      );
       await tester.tap(find.byKey(const ValueKey('home-search-button')));
       await tester.pumpAndSettle();
       await tester.pumpAndSettle();
       expect(find.byType(TextField), findsOneWidget);
       expect(find.byKey(const ValueKey('home-agent-name')), findsNothing);
       expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+      expect(find.text('取消'), findsNothing);
+      expect(
+        tester.getCenter(find.byKey(const ValueKey('home-close-search'))),
+        menuCenter,
+      );
+      await tester.tap(find.byKey(const ValueKey('home-close-search')));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      expect(find.byKey(const ValueKey('home-menu-button')), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -1548,19 +1563,31 @@ void main() {
     await tester.tap(menuButton);
     await tester.pump();
     expect(registryReads, initialRegistryReads + 1);
-    expect(find.byType(PopupMenuItem<int>), findsNothing);
+    expect(
+      find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
+      findsNothing,
+    );
 
     registryResponse.complete(<Object?>[]);
     await tester.pumpAndSettle();
-    expect(find.byType(PopupMenuItem<int>), findsNWidgets(7));
+    expect(
+      find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
+      findsNWidgets(7),
+    );
     await tester.tapAt(const Offset(4, 4));
     await tester.pumpAndSettle();
-    expect(find.byType(PopupMenuItem<int>), findsNothing);
+    expect(
+      find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
+      findsNothing,
+    );
 
     delayRegistry = false;
     await tester.tap(menuButton);
     await tester.pumpAndSettle();
-    expect(find.byType(PopupMenuItem<int>), findsNWidgets(7));
+    expect(
+      find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
+      findsNWidgets(7),
+    );
     expect(registryReads, initialRegistryReads + 2);
     expect(tester.takeException(), isNull);
   });

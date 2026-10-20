@@ -212,21 +212,20 @@ class ChatAppBar extends StatelessWidget {
       context: anchorContext,
       position: _menuPosition(anchorContext),
       color: anchorContext.omniPalette.surfacePrimary,
-      elevation: 8,
-      shadowColor: anchorContext.omniPalette.shadowColor.withValues(
-        alpha: 0.12,
+      shape: const RoundedRectangleBorder(
+        borderRadius: OmniMenuStyle.panelRadius,
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      menuPadding: OmniMenuStyle.panelPadding,
       constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
       requestFocus: false,
       items: [
         for (var index = 0; index < items.length; index++)
-          PopupMenuItem<int>(
+          OmniPopupMenuItem<int>(
             value: index,
             child: Row(
               children: [
                 Icon(items[index].icon, size: 20),
-                const SizedBox(width: 12),
+                const SizedBox(width: OmniMenuStyle.iconGap),
                 Expanded(child: Text(items[index].label)),
               ],
             ),

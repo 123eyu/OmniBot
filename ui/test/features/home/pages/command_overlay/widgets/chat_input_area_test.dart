@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_menu.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,7 +12,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/chat_input_area.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/features/home/pages/chat/widgets/chat_widgets.dart';
-import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
 
 void main() {
@@ -477,39 +477,8 @@ void main() {
     final selectedPermissionRow = find.byKey(
       const ValueKey('chat-input-agent-permission-option-fullAccess'),
     );
-    final selectedPermissionContainer = tester.widget<AnimatedContainer>(
-      find.descendant(
-        of: selectedPermissionRow,
-        matching: find.byType(AnimatedContainer),
-      ),
-    );
-    final selectedPermissionDecoration =
-        selectedPermissionContainer.decoration! as BoxDecoration;
-    expect(
-      selectedPermissionContainer.padding,
-      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    );
-    expect(
-      selectedPermissionDecoration.color,
-      tester
-          .element(selectedPermissionRow)
-          .omniPalette
-          .accentPrimary
-          .withValues(alpha: 0.08),
-    );
-    expect(selectedPermissionDecoration.border, isNull);
-    expect(
-      tester
-          .widget<Text>(
-            find.descendant(
-              of: selectedPermissionRow,
-              matching: find.byType(Text),
-            ),
-          )
-          .style
-          ?.fontWeight,
-      FontWeight.w500,
-    );
+    expect(tester.widget<OmniMenuItem>(selectedPermissionRow).selected, isTrue);
+    expect(tester.widget<OmniMenuItem>(selectedPermissionRow).enabled, isTrue);
     expect(
       find.descendant(
         of: selectedPermissionRow,

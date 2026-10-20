@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:ui/features/home/pages/agent/codex_remote_file_preview_page.dart';
 import 'package:ui/services/agent_runtime_service.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/omni_menu.dart';
 import 'package:ui/utils/ui.dart';
 
 class _RemoteWorkspaceBreadcrumbSegment {
@@ -233,13 +234,13 @@ class CodexRemoteWorkspaceBrowserState
       context: context,
       backgroundColor: _surfaceColor(),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) {
         return SafeArea(
           child: SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              padding: OmniMenuStyle.panelPadding,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -271,14 +272,12 @@ class CodexRemoteWorkspaceBrowserState
                       label: _isEnglish ? 'Open' : '打开',
                       action: _RemoteWorkspaceEntryAction.open,
                     ),
-                    const SizedBox(height: 8),
                     _buildActionTile(
                       context: sheetContext,
                       icon: Icons.edit_outlined,
                       label: _isEnglish ? 'Edit' : '编辑',
                       action: _RemoteWorkspaceEntryAction.edit,
                     ),
-                    const SizedBox(height: 8),
                   ],
                   if (widget.allowFileMutations &&
                       !(widget.agentId == 'na-cloud' && isDirectory))
@@ -288,14 +287,12 @@ class CodexRemoteWorkspaceBrowserState
                       label: _isEnglish ? 'Rename' : '重命名',
                       action: _RemoteWorkspaceEntryAction.rename,
                     ),
-                  const SizedBox(height: 8),
                   _buildActionTile(
                     context: sheetContext,
                     icon: Icons.copy_rounded,
                     label: _isEnglish ? 'Copy path' : '复制路径',
                     action: _RemoteWorkspaceEntryAction.copyPath,
                   ),
-                  const SizedBox(height: 8),
                   if (widget.allowFileMutations &&
                       !(widget.agentId == 'na-cloud' && isDirectory))
                     _buildActionTile(
@@ -305,25 +302,10 @@ class CodexRemoteWorkspaceBrowserState
                       action: _RemoteWorkspaceEntryAction.delete,
                       destructive: true,
                     ),
-                  const SizedBox(height: 8),
-                  ListTile(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    tileColor: _secondarySurfaceColor(),
-                    leading: Icon(
-                      Icons.close_rounded,
-                      color: palette.textPrimary,
-                    ),
-                    title: Text(
-                      _isEnglish ? 'Cancel' : '取消',
-                      style: TextStyle(
-                        color: palette.textPrimary,
-                        fontWeight: FontWeight.w500,
-                        fontFamily: 'PingFang SC',
-                      ),
-                    ),
+                  OmniMenuItem(
                     onTap: () => Navigator.of(sheetContext).pop(),
+                    label: _isEnglish ? 'Cancel' : '取消',
+                    leading: const Icon(Icons.close_rounded),
                   ),
                 ],
               ),
@@ -347,8 +329,6 @@ class CodexRemoteWorkspaceBrowserState
     }
   }
 
-  Color _secondarySurfaceColor() => context.omniPalette.surfaceSecondary;
-
   Widget _buildActionTile({
     required BuildContext context,
     required IconData icon,
@@ -356,21 +336,11 @@ class CodexRemoteWorkspaceBrowserState
     required _RemoteWorkspaceEntryAction action,
     bool destructive = false,
   }) {
-    final palette = this.context.omniPalette;
-    final color = destructive ? const Color(0xFFE53935) : palette.textPrimary;
-    return ListTile(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      tileColor: _secondarySurfaceColor(),
-      leading: Icon(icon, color: color),
-      title: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontFamily: 'PingFang SC',
-        ),
-      ),
+    return OmniMenuItem(
       onTap: () => Navigator.of(context).pop(action),
+      label: label,
+      leading: Icon(icon),
+      destructive: destructive,
     );
   }
 

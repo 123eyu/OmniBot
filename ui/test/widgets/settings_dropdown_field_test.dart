@@ -1,0 +1,255 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:ui/widgets/omni_menu.dart';
+import 'package:ui/widgets/settings_ui.dart';
+
+void main() {
+  testWidgets(
+    'refresh waits for rebuilt options and suppresses repeated opens',
+    (tester) async {
+      final gate = Completer<void>();
+      var refreshCount = 0;
+      var loading = false;
+      String? selected;
+      List<OmniSettingsOption<String?>> options = const [];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) => Align(
+                alignment: Alignment.centerRight,
+                child: OmniSettingsDropdown<String?>(
+                  value: selected,
+                  selectedLabel: 'Current choice',
+                  options: options,
+                  onBeforeOpen: () async {
+                    refreshCount += 1;
+                    setState(() => loading = true);
+                    await gate.future;
+                    setState(() {
+                      loading = false;
+                      options = const [
+                        OmniSettingsOption(
+                          value: 'refreshed',
+                          label: 'New choice',
+                        ),
+                      ];
+                    });
+                  },
+                  onChanged: loading
+                      ? null
+                      : (value) => setState(() => selected = value),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Current choice'));
+      await tester.tap(find.text('Current choice'));
+      await tester.pump();
+      expect(refreshCount, 1);
+      expect(find.text('New choice'), findsNothing);
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('New choice'), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
+      await tester.tap(find.text('New choice'));
+      await tester.pumpAndSettle();
+      expect(selected, 'refreshed');
+      expect(find.text('Current choice'), findsOneWidget);
+      expect(find.text('New choice'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('disposing a selector during preparation never opens a route', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: OmniSettingsDropdown<String>(
+            value: 'first',
+            options: const [
+              OmniSettingsOption(value: 'first', label: 'First'),
+              OmniSettingsOption(value: 'second', label: 'Second'),
+            ],
+            onBeforeOpen: () => gate.future,
+            onChanged: (_) => fail('Disposed selector changed value'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('First'));
+    await tester.pump();
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Second'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'search matches labels, providers and IDs above the live keyboard',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetViewInsets);
+      String? selected;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.bottomLeft,
+              child: OmniSettingsDropdown<String?>(
+                value: null,
+                selectedLabel: 'Choose',
+                searchHint: 'Find a model',
+                options: [
+                  for (var index = 1; index <= 12; index += 1)
+                    OmniSettingsOption(
+                      value: 'engine-$index',
+                      label: 'Friendly ${index.toString().padLeft(2, '0')}',
+                      subtitle: index.isEven ? 'Provider A' : 'Provider B',
+                      searchText: 'engine-$index',
+                    ),
+                ],
+                onChanged: (value) => selected = value,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Choose'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(TextField));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 220);
+      await tester.pumpAndSettle();
+      final panel = tester.getRect(find.byType(OmniMenuSurface));
+      expect(panel.left, greaterThanOrEqualTo(16));
+      expect(panel.right, lessThanOrEqualTo(304));
+      expect(panel.bottom, lessThanOrEqualTo(348));
+
+      await tester.enterText(find.byType(TextField), 'Friendly 02');
+      await tester.pump();
+      expect(find.widgetWithText(OmniMenuItem, 'Friendly 02'), findsOneWidget);
+      expect(find.text('Friendly 01'), findsNothing);
+      await tester.enterText(find.byType(TextField), 'Provider B');
+      await tester.pump();
+      expect(find.text('Friendly 01'), findsOneWidget);
+      expect(find.text('Friendly 02'), findsNothing);
+      await tester.enterText(find.byType(TextField), 'engine-11');
+      await tester.pump();
+      expect(find.text('Friendly 11'), findsOneWidget);
+      expect(find.text('Friendly 01'), findsNothing);
+      expect(selected, isNull);
+      await tester.tap(find.text('Friendly 11'));
+      await tester.pumpAndSettle();
+      expect(selected, 'engine-11');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('nullable field opens by keyboard and only commits a choice', (
+    tester,
+  ) async {
+    String? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) => Padding(
+              padding: const EdgeInsets.all(24),
+              child: OmniSettingsDropdown<String?>(
+                value: selected,
+                decoration: const InputDecoration(
+                  labelText: 'Model',
+                  hintText: 'Choose a model',
+                  helperText: 'Used for this scene',
+                ),
+                options: const [
+                  OmniSettingsOption(value: 'first', label: 'First model'),
+                  OmniSettingsOption(value: 'second', label: 'Second model'),
+                ],
+                onChanged: (value) => setState(() => selected = value),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(selected, isNull);
+    expect(find.text('Choose a model'), findsOneWidget);
+    expect(find.text('First model'), findsNothing);
+    expect(find.text('Used for this scene'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(find.text('First model'), findsOneWidget);
+    expect(selected, isNull);
+
+    await tester.tap(find.text('Second model'));
+    await tester.pumpAndSettle();
+    expect(selected, 'second');
+    expect(find.text('Second model'), findsOneWidget);
+    expect(find.text('Choose a model'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a field disabled while its picker is open cannot change value', (
+    tester,
+  ) async {
+    var enabled = true;
+    var changeCount = 0;
+    late StateSetter update;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return Padding(
+                padding: const EdgeInsets.all(24),
+                child: OmniSettingsDropdown<String?>(
+                  value: null,
+                  decoration: const InputDecoration(
+                    labelText: 'Model',
+                    hintText: 'Choose a model',
+                  ),
+                  options: const [
+                    OmniSettingsOption(value: 'first', label: 'First model'),
+                  ],
+                  onChanged: enabled ? (_) => changeCount += 1 : null,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Choose a model'));
+    await tester.pumpAndSettle();
+    update(() => enabled = false);
+    await tester.pump();
+    await tester.tap(find.text('First model'));
+    await tester.pumpAndSettle();
+    expect(changeCount, 0);
+    expect(find.text('Choose a model'), findsOneWidget);
+    await tester.tap(find.text('Choose a model'));
+    await tester.pumpAndSettle();
+    expect(find.text('First model'), findsNothing);
+    expect(changeCount, 0);
+    expect(tester.takeException(), isNull);
+  });
+}

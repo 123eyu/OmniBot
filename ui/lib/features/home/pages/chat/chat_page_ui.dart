@@ -230,6 +230,9 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         ? _inputAreaHeight + _kChatInputWrapperTopPadding
         : _kChatInputFallbackHeight;
     return measuredComposerHeight +
+        (_showNewConversationModeSelector
+            ? NewConversationModeSelector.height + 8
+            : 0) +
         inputBottomPadding +
         keyboardSpacer +
         _kChatMessageBottomSafeSpacing;
@@ -1415,6 +1418,22 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                       onSendMessage: this._handleComposerSendMessage,
                       onCancelTask: _onCancelTask,
                       onPopupVisibilityChanged: _onPopupVisibilityChanged,
+                      topBanner: _showNewConversationModeSelector
+                          ? NewConversationModeSelector(
+                              selectedId: _newConversationModeId,
+                              agentModes: _chatAcpAgentModeOptions,
+                              enabled: _canSwitchNewConversationMode,
+                              onSelected: (modeId) {
+                                unawaited(_selectNewConversationMode(modeId));
+                              },
+                              onPopupVisibilityChanged: (visible) {
+                                if (!mounted) return;
+                                _chatInputAreaKey.currentState
+                                    ?.setAuxiliaryPopupVisible(visible);
+                                _onPopupVisibilityChanged(visible);
+                              },
+                            )
+                          : null,
                       onTerminalTap: _showLocalTerminalActions
                           ? _handleTerminalToolTap
                           : null,

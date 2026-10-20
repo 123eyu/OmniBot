@@ -48,7 +48,6 @@ extension _CompactComposerActions on _ChatInputAreaStateBase {
       _composerStateMachine.popupClosed(ChatComposerPopup.compactActions);
       return;
     }
-    final palette = context.omniPalette;
     final english = Localizations.localeOf(context).languageCode == 'en';
     final handle = showOverlayGlassPopup<_CompactComposerAction>(
       context: context,
@@ -57,48 +56,35 @@ extension _CompactComposerActions on _ChatInputAreaStateBase {
       transitionDuration: _compactAnimationDuration,
       reverseTransitionDuration: Duration.zero,
       builder: (handle) => TextFieldTapRegion(
-        child: Material(
-          color: palette.surfacePrimary,
-          elevation: 8,
-          shadowColor: palette.shadowColor.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(18),
-          clipBehavior: Clip.antiAlias,
-          child: SizedBox(
-            width: 224,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (widget.onPickImages != null)
-                    _CompactComposerMenuRow(
-                      action: _CompactComposerAction.images,
-                      icon: LucideIcons.image,
-                      title: english ? 'Photos' : '图片',
-                      onTap: () =>
-                          handle.dismiss(_CompactComposerAction.images),
-                    ),
-                  if (widget.onPickAttachment != null)
-                    _CompactComposerMenuRow(
-                      action: _CompactComposerAction.files,
-                      icon: LucideIcons.paperclip,
-                      title: english ? 'Files' : '文件',
-                      onTap: () => handle.dismiss(_CompactComposerAction.files),
-                    ),
-                  if (_shouldShowAgentPermissionSelector)
-                    _CompactComposerMenuRow(
-                      action: _CompactComposerAction.permissions,
-                      icon: LucideIcons.shield,
-                      title: english ? 'Permissions' : '权限模式',
-                      subtitle: _agentPermissionLabel(
-                        widget.agentPermissionMode!,
-                      ),
-                      onTap: () =>
-                          handle.dismiss(_CompactComposerAction.permissions),
-                    ),
-                ],
-              ),
-            ),
+        child: OmniMenuSurface(
+          width: 224,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.onPickImages != null)
+                _CompactComposerMenuRow(
+                  action: _CompactComposerAction.images,
+                  icon: LucideIcons.image,
+                  title: english ? 'Photos' : '图片',
+                  onTap: () => handle.dismiss(_CompactComposerAction.images),
+                ),
+              if (widget.onPickAttachment != null)
+                _CompactComposerMenuRow(
+                  action: _CompactComposerAction.files,
+                  icon: LucideIcons.paperclip,
+                  title: english ? 'Files' : '文件',
+                  onTap: () => handle.dismiss(_CompactComposerAction.files),
+                ),
+              if (_shouldShowAgentPermissionSelector)
+                _CompactComposerMenuRow(
+                  action: _CompactComposerAction.permissions,
+                  icon: LucideIcons.shield,
+                  title: english ? 'Permissions' : '权限模式',
+                  subtitle: _agentPermissionLabel(widget.agentPermissionMode!),
+                  onTap: () =>
+                      handle.dismiss(_CompactComposerAction.permissions),
+                ),
+            ],
           ),
         ),
       ),
@@ -148,50 +134,15 @@ class _CompactComposerMenuRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.omniPalette;
-    return InkWell(
+    return OmniMenuItem(
       key: ValueKey('chat-input-add-${action.name}'),
       onTap: onTap,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: palette.textPrimary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: palette.textPrimary,
-                      ),
-                    ),
-                    if (subtitle != null)
-                      Text(
-                        subtitle!,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: palette.textSecondary,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              if (action == _CompactComposerAction.permissions)
-                Icon(
-                  LucideIcons.chevronRight,
-                  size: 16,
-                  color: palette.textTertiary,
-                ),
-            ],
-          ),
-        ),
-      ),
+      label: title,
+      subtitle: subtitle,
+      leading: Icon(icon),
+      trailing: action == _CompactComposerAction.permissions
+          ? const Icon(LucideIcons.chevronRight)
+          : null,
     );
   }
 }

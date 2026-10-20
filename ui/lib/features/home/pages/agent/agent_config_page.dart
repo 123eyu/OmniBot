@@ -709,45 +709,61 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
           ),
         ),
         const SizedBox(height: 14),
-        DropdownButtonFormField<String>(
-          key: ValueKey('deepseek-harness-reasoning-$_reasoningEffort'),
-          initialValue: _reasoningEffort,
+        InputDecorator(
           decoration: InputDecoration(
             labelText: _text('推理强度', 'Reasoning effort'),
           ),
-          items: const [
-            DropdownMenuItem(value: 'off', child: Text('Off')),
-            DropdownMenuItem(value: 'high', child: Text('High')),
-            DropdownMenuItem(value: 'max', child: Text('Max')),
-          ],
-          onChanged: (value) {
-            if (value != null) setState(() => _reasoningEffort = value);
-          },
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: OmniSettingsDropdown<String?>(
+              hint: _text('选择', 'Select'),
+              dropdownKey: ValueKey(
+                'deepseek-harness-reasoning-$_reasoningEffort',
+              ),
+              value: _reasoningEffort,
+              options: const [
+                OmniSettingsOption(value: 'off', label: 'Off'),
+                OmniSettingsOption(value: 'high', label: 'High'),
+                OmniSettingsOption(value: 'max', label: 'Max'),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _reasoningEffort = value);
+              },
+            ),
+          ),
         ),
         const SizedBox(height: 14),
-        DropdownButtonFormField<String>(
-          key: ValueKey('deepseek-harness-permission-$_permissionMode'),
-          initialValue: _permissionMode,
+        InputDecorator(
           decoration: InputDecoration(
             labelText: _text('权限模式', 'Permission mode'),
           ),
-          items: [
-            DropdownMenuItem(
-              value: 'read-only',
-              child: Text(_text('只读', 'Read-only')),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: OmniSettingsDropdown<String?>(
+              hint: _text('选择', 'Select'),
+              dropdownKey: ValueKey(
+                'deepseek-harness-permission-$_permissionMode',
+              ),
+              value: _permissionMode,
+              options: [
+                OmniSettingsOption(
+                  value: 'read-only',
+                  label: _text('只读', 'Read-only'),
+                ),
+                OmniSettingsOption(
+                  value: 'workspace-write',
+                  label: _text('工作区可写', 'Workspace write'),
+                ),
+                OmniSettingsOption(
+                  value: 'danger-full-access',
+                  label: _text('完全访问', 'Full access'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _permissionMode = value);
+              },
             ),
-            DropdownMenuItem(
-              value: 'workspace-write',
-              child: Text(_text('工作区可写', 'Workspace write')),
-            ),
-            DropdownMenuItem(
-              value: 'danger-full-access',
-              child: Text(_text('完全访问', 'Full access')),
-            ),
-          ],
-          onChanged: (value) {
-            if (value != null) setState(() => _permissionMode = value);
-          },
+          ),
         ),
       ],
     );

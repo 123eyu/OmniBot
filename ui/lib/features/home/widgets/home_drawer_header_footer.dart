@@ -106,19 +106,15 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
     await showGeneralDialog<void>(
       context: anchorContext,
       barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(
-        anchorContext,
-      ).modalBarrierDismissLabel,
+      barrierLabel: MaterialLocalizations.of(anchorContext)
+          .modalBarrierDismissLabel,
       barrierColor: Colors.transparent,
       transitionDuration: const Duration(milliseconds: 170),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         final palette = dialogContext.omniPalette;
-        final isDark = dialogContext.isDarkTheme;
         final english =
             Localizations.localeOf(dialogContext).languageCode == 'en';
-        final surface = isDark
-            ? palette.surfaceElevated
-            : palette.surfacePrimary;
+        final surface = palette.surfacePrimary;
 
         return Stack(
           children: [
@@ -128,35 +124,7 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
               bottom: bottomOffset,
               child: Material(
                 color: Colors.transparent,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: palette.borderSubtle.withValues(
-                        alpha: isDark ? 0.8 : 0.9,
-                      ),
-                      width: 0.75,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: palette.shadowColor.withValues(
-                          alpha: isDark ? 0.36 : 0.09,
-                        ),
-                        blurRadius: 22,
-                        spreadRadius: -2,
-                        offset: const Offset(0, 8),
-                      ),
-                      BoxShadow(
-                        color: palette.shadowColor.withValues(
-                          alpha: isDark ? 0.18 : 0.04,
-                        ),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
+                child: OmniMenuSurface(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -233,116 +201,105 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
       fallback: action.displayName,
     );
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        key: ValueKey('home-drawer-web-$agentId'),
-        borderRadius: BorderRadius.circular(10),
-        onTap: disabled
-            ? null
-            : () {
-                Navigator.of(dialogContext).pop();
-                unawaited(_invokeWebQuickAction(action));
-              },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-          child: Row(
-            children: [
-              if (busy)
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: palette.accentPrimary,
-                  ),
-                )
-              else
-                _buildWebQuickBrandIcon(
-                  agentId,
-                  status: status,
-                  surface: surface,
-                ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      shortLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: palette.textPrimary,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                        height: 1.25,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      status.active
-                          ? '$fullLabel · ${english ? 'Running' : '运行中'}'
-                          : fullLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: status.active
-                            ? const Color(0xFF2EAF67)
-                            : palette.textSecondary,
-                        fontSize: 11.5,
-                        height: 1.25,
-                      ),
-                    ),
-                  ],
-                ),
+    return OmniMenuItem(
+      key: ValueKey('home-drawer-web-$agentId'),
+      enabled: !disabled,
+      onTap: disabled
+          ? null
+          : () {
+              Navigator.of(dialogContext).pop();
+              unawaited(_invokeWebQuickAction(action));
+            },
+      child: Row(
+        children: [
+          if (busy)
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: palette.accentPrimary,
               ),
-              if (stoppable) ...[
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  key: ValueKey('home-drawer-web-stop-$agentId'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFE05252),
-                    backgroundColor: const Color(
-                      0xFFE05252,
-                    ).withValues(alpha: 0.08),
-                    minimumSize: const Size(0, 30),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: disabled
-                      ? null
-                      : () {
-                          Navigator.of(dialogContext).pop();
-                          unawaited(_stopWebQuickAction(action));
-                        },
-                  icon: const Icon(LucideIcons.circleStop, size: 13),
-                  label: Text(
-                    english ? 'Stop' : '停止',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
+            )
+          else
+            _buildWebQuickBrandIcon(agentId, status: status, surface: surface),
+          const SizedBox(width: OmniMenuStyle.iconGap),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  shortLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w400,
+                    height: 1.25,
                   ),
                 ),
-              ] else ...[
-                const SizedBox(width: 8),
-                Icon(
-                  LucideIcons.arrowUpRight,
-                  size: 15,
-                  color: palette.textTertiary,
+                const SizedBox(height: 2),
+                Text(
+                  status.active
+                      ? '$fullLabel · ${english ? 'Running' : '运行中'}'
+                      : fullLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: status.active
+                        ? const Color(0xFF2EAF67)
+                        : palette.textSecondary,
+                    fontSize: 13,
+                    height: 1.25,
+                  ),
                 ),
               ],
-            ],
+            ),
           ),
-        ),
+          if (stoppable) ...[
+            const SizedBox(width: 8),
+            TextButton.icon(
+              key: ValueKey('home-drawer-web-stop-$agentId'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFE05252),
+                backgroundColor: const Color(0xFFE05252)
+                    .withValues(alpha: 0.08),
+                minimumSize: const Size(0, 30),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: disabled
+                  ? null
+                  : () {
+                      Navigator.of(dialogContext).pop();
+                      unawaited(_stopWebQuickAction(action));
+                    },
+              icon: const Icon(LucideIcons.circleStop, size: 13),
+              label: Text(
+                english ? 'Stop' : '停止',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(width: 8),
+            Icon(
+              LucideIcons.arrowUpRight,
+              size: 15,
+              color: palette.textTertiary,
+            ),
+          ],
+        ],
       ),
     );
   }

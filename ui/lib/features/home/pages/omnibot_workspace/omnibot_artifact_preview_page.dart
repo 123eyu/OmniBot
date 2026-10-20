@@ -10,6 +10,7 @@ import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/image_preview_overlay.dart';
 import 'package:ui/widgets/omni_glass.dart';
+import 'package:ui/widgets/omni_menu.dart';
 import 'package:ui/widgets/omnibot_markdown_body.dart';
 import 'package:ui/widgets/omnibot_resource_widgets.dart';
 
@@ -628,7 +629,7 @@ class _OmnibotArtifactPreviewPageState
           onSelected: _handleToolbarAction,
           itemBuilder: (context) => [
             if (widget.previewKind == 'html')
-              PopupMenuItem<_ArtifactPreviewAction>(
+              OmniPopupMenuItem<_ArtifactPreviewAction>(
                 value: _ArtifactPreviewAction.openInBrowser,
                 child: Text(
                   Localizations.localeOf(context).languageCode == 'en'
@@ -636,7 +637,7 @@ class _OmnibotArtifactPreviewPageState
                       : '在浏览器打开',
                 ),
               ),
-            PopupMenuItem<_ArtifactPreviewAction>(
+            OmniPopupMenuItem<_ArtifactPreviewAction>(
               value: _ArtifactPreviewAction.saveFile,
               child: Text(
                 Localizations.localeOf(context).languageCode == 'en'
@@ -644,7 +645,7 @@ class _OmnibotArtifactPreviewPageState
                     : '保存到设备',
               ),
             ),
-            PopupMenuItem<_ArtifactPreviewAction>(
+            OmniPopupMenuItem<_ArtifactPreviewAction>(
               value: _ArtifactPreviewAction.openWithSystem,
               child: Text(
                 Localizations.localeOf(context).languageCode == 'en'
@@ -652,7 +653,7 @@ class _OmnibotArtifactPreviewPageState
                     : '系统打开',
               ),
             ),
-            PopupMenuItem<_ArtifactPreviewAction>(
+            OmniPopupMenuItem<_ArtifactPreviewAction>(
               value: _ArtifactPreviewAction.shareFile,
               child: Text(
                 Localizations.localeOf(context).languageCode == 'en'

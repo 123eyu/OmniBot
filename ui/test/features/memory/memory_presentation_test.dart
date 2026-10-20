@@ -22,6 +22,73 @@ void main() {
 
   for (final dark in [false, true]) {
     testWidgets(
+      'memory action menu dismisses safely and returns delete in ${dark ? 'dark' : 'light'}',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(320, 568);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final deletedIds = <int>[];
+        final memory = MemoryCardModel(
+          id: 7,
+          title: '一条记忆',
+          description: '需要保留原有删除回调的内容',
+          appName: '来源应用',
+          createdAt: 1,
+          updatedAt: 1,
+        );
+        await tester.pumpWidget(
+          app(
+            Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => MemoryDetailPage(
+                        memory: memory,
+                        onDelete: (id) async {
+                          deletedIds.add(id);
+                          return true;
+                        },
+                      ),
+                    ),
+                  ),
+                  child: const Text('打开记忆'),
+                ),
+              ),
+            ),
+            dark: dark,
+          ),
+        );
+        await tester.tap(find.text('打开记忆'));
+        await tester.pumpAndSettle();
+        final menuTooltip = MaterialLocalizations.of(
+          tester.element(find.byType(MemoryDetailPage)),
+        ).showMenuTooltip;
+
+        await tester.tap(find.byTooltip(menuTooltip));
+        await tester.pumpAndSettle();
+        expect(find.text('删除'), findsOneWidget);
+        expect(find.text('编辑'), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.tapAt(const Offset(12, 540));
+        await tester.pumpAndSettle();
+        expect(deletedIds, isEmpty);
+        expect(find.byType(MemoryDetailPage), findsOneWidget);
+        expect(find.text('删除'), findsNothing);
+
+        await tester.tap(find.byTooltip(menuTooltip));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('删除'));
+        await tester.pumpAndSettle();
+        expect(deletedIds, [7]);
+        expect(find.byType(MemoryDetailPage), findsNothing);
+        expect(find.text('打开记忆'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
       'memory detail scrolls on a narrow ${dark ? 'dark' : 'light'} page',
       (tester) async {
         tester.view.devicePixelRatio = 1;
