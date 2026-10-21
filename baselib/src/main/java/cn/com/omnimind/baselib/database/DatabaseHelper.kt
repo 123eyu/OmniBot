@@ -480,6 +480,12 @@ object DatabaseHelper {
         return getDatabase().tokenUsageRecordDao().getRecordsSince(since)
     }
 
+    suspend fun getTokenUsageWeeklyBuckets(since: Long, until: Long): List<TokenUsageBucket> =
+        getDatabase().tokenUsageRecordDao().getWeeklyBuckets(since, until)
+
+    suspend fun getConversationActivityRows(since: Long, until: Long): List<ConversationActivityRow> =
+        getDatabase().conversationDao().getActivityRows(since, until)
+
     // Conversation相关方法
     suspend fun insertConversation(conversation: Conversation): Long {
         return getDatabase().conversationDao().insert(conversation)

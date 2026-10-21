@@ -1,29 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:ui/services/conversation_service.dart';
-import 'package:ui/services/token_usage_service.dart';
+import 'package:ui/services/usage_statistics_service.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/omni_theme_palette.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
-
-// ---------------------------------------------------------------------------
-//  Weekly token bucket
-// ---------------------------------------------------------------------------
-
-class _WeeklyTokenData {
-  final DateTime weekStart;
-  final Map<String, int> modelTokens = {};
-  int cachedTokens = 0;
-  int get totalTokens =>
-      modelTokens.values.fold(0, (sum, tokens) => sum + tokens);
-
-  _WeeklyTokenData({required this.weekStart});
-
-  void addModelTokens(String modelId, int tokens) {
-    if (tokens <= 0) return;
-    modelTokens[modelId] = (modelTokens[modelId] ?? 0) + tokens;
-  }
-}
 
 // ---------------------------------------------------------------------------
 //  Month label helper (heatmap)
@@ -62,7 +42,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   int _currentStreak = 0;
 
   // -- token data --
-  List<_WeeklyTokenData> _weeklyData = [];
+  List<WeeklyTokenData> _weeklyData = [];
   bool _isTokenLoading = true;
   int _totalCached = 0;
   Map<String, int> _modelTotals = {};
@@ -99,43 +79,22 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
 
   Future<void> _loadConversationData() async {
     try {
-      final conversations = await ConversationService.getAllConversations(
-        includeArchived: true,
-      );
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final startDate = today.subtract(
         Duration(days: widget.weeksToShow * 7 - 1),
       );
 
-      final Map<String, int> activityMap = {};
-      int totalInRange = 0;
-
-      for (final conv in conversations) {
-        final date = DateTime.fromMillisecondsSinceEpoch(conv.createdAt);
-        final dateOnly = DateTime(date.year, date.month, date.day);
-        if (dateOnly.isBefore(startDate) || dateOnly.isAfter(today)) continue;
-        final key = _dateKey(dateOnly);
-        activityMap[key] = (activityMap[key] ?? 0) + 1;
-        totalInRange++;
-      }
-
-      int streak = 0;
-      var checkDate = today;
-      while (true) {
-        if ((activityMap[_dateKey(checkDate)] ?? 0) > 0) {
-          streak++;
-          checkDate = checkDate.subtract(const Duration(days: 1));
-        } else {
-          break;
-        }
-      }
+      final summary = await UsageStatisticsService.getConversationActivity(
+        startDate: startDate,
+        today: today,
+      );
 
       if (mounted) {
         setState(() {
-          _activityMap = activityMap;
-          _totalConversations = totalInRange;
-          _currentStreak = streak;
+          _activityMap = summary.activityMap;
+          _totalConversations = summary.totalConversations;
+          _currentStreak = summary.currentStreak;
           _isConvLoading = false;
         });
         _tryStartFade();
@@ -164,52 +123,23 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
         alignedStart = alignedStart.subtract(const Duration(days: 1));
       }
 
-      final records = await TokenUsageService.getRecordsSince(
-        alignedStart.millisecondsSinceEpoch,
-      );
-
       final totalDays = today.difference(alignedStart).inDays + 1;
       final totalWeeks = (totalDays / 7).ceil();
-      final weeklyData = List.generate(
+      final weekStarts = List.generate(
         totalWeeks,
-        (i) => _WeeklyTokenData(
-          weekStart: alignedStart.add(Duration(days: i * 7)),
-        ),
+        (i) => alignedStart.add(Duration(days: i * 7)),
       );
-
-      int totalCached = 0;
-      final modelTotals = <String, int>{};
-
-      for (final record in records) {
-        final daysSinceStart = DateTime.fromMillisecondsSinceEpoch(
-          record.createdAt,
-        ).difference(alignedStart).inDays;
-        if (daysSinceStart < 0) continue;
-        final weekIndex = daysSinceStart ~/ 7;
-        if (weekIndex >= totalWeeks) continue;
-        final tokens = record.totalTokens;
-        final modelId = record.modelId;
-
-        weeklyData[weekIndex].cachedTokens += record.cachedTokens;
-        totalCached += record.cachedTokens;
-        weeklyData[weekIndex].addModelTokens(modelId, tokens);
-        if (tokens > 0) {
-          modelTotals[modelId] = (modelTotals[modelId] ?? 0) + tokens;
-        }
-      }
-
-      final modelOrder = modelTotals.keys.toList()
-        ..sort((a, b) {
-          final byTokens = (modelTotals[b] ?? 0).compareTo(modelTotals[a] ?? 0);
-          return byTokens != 0 ? byTokens : a.compareTo(b);
-        });
+      final summary = await UsageStatisticsService.getTokenUsage(
+        alignedStart: alignedStart,
+        weekStarts: weekStarts,
+      );
 
       if (mounted) {
         setState(() {
-          _weeklyData = weeklyData;
-          _totalCached = totalCached;
-          _modelTotals = modelTotals;
-          _modelOrder = modelOrder;
+          _weeklyData = summary.weeklyData;
+          _totalCached = summary.totalCached;
+          _modelTotals = summary.modelTotals;
+          _modelOrder = summary.modelOrder;
           _isTokenLoading = false;
         });
         _tryStartFade();
@@ -1056,7 +986,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
     );
   }
 
-  List<String> _orderedModelsForWeek(_WeeklyTokenData week) {
+  List<String> _orderedModelsForWeek(WeeklyTokenData week) {
     final ordered = _modelOrder
         .where((modelId) => (week.modelTokens[modelId] ?? 0) > 0)
         .toList();
@@ -1068,7 +998,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
     return ordered;
   }
 
-  String _buildWeekTooltip(_WeeklyTokenData week, List<String> modelIds) {
+  String _buildWeekTooltip(WeeklyTokenData week, List<String> modelIds) {
     final range = _formatWeekRange(week.weekStart);
     final lines = <String>[
       '$range · ${_formatTokenCount(week.totalTokens)} tokens',

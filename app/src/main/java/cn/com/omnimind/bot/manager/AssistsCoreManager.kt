@@ -76,6 +76,7 @@ import cn.com.omnimind.bot.mcp.RemoteMcpConfigStore
 import cn.com.omnimind.bot.quicklog.QuickLogService
 import cn.com.omnimind.bot.util.TaskCompletionNavigator
 import cn.com.omnimind.bot.webchat.ConversationDomainService
+import cn.com.omnimind.bot.statistics.UsageStatisticsService
 import cn.com.omnimind.bot.webchat.FlutterChatSyncBridge
 import cn.com.omnimind.bot.workspace.PublicStorageAccess
 import cn.com.omnimind.bot.workspace.WorkspaceStorageAccess
@@ -333,6 +334,7 @@ class AssistsCoreManager(private val context: Context) {
     private var mainJob: CoroutineScope = CoroutineScope(Dispatchers.Main)
     private var workJob: CoroutineScope = CoroutineScope(Dispatchers.Default)
     private val conversationDomainService by lazy { ConversationDomainService(context) }
+    private val usageStatisticsService by lazy { UsageStatisticsService(conversationDomainService) }
 
     // 当前活跃的对话ID
     private var currentConversationId: Long? = null
@@ -2957,6 +2959,29 @@ class AssistsCoreManager(private val context: Context) {
                         null
                     )
                 }
+            }
+        }
+    }
+
+    fun getUsageStatistics(call: MethodCall, result: MethodChannel.Result) {
+        workJob.launch {
+            try {
+                val summary = withContext(Dispatchers.IO) {
+                    when (call.method) {
+                        "getConversationActivitySummary" -> usageStatisticsService.conversationSummary(
+                            requireNotNull(call.argument<Number>("startDateMs")).toLong(),
+                            requireNotNull(call.argument<Number>("todayMs")).toLong(),
+                        )
+                        "getTokenUsageSummary" -> usageStatisticsService.tokenSummary(
+                            requireNotNull(call.argument<Number>("alignedStartMs")).toLong(),
+                            requireNotNull(call.argument<List<Number>>("weekStartsMs")).map(Number::toLong),
+                        )
+                        else -> error("Unknown usage statistics operation")
+                    }
+                }
+                withContext(Dispatchers.Main) { result.success(summary) }
+            } catch (error: Exception) {
+                withContext(Dispatchers.Main) { result.error("USAGE_STATISTICS_ERROR", error.message, null) }
             }
         }
     }

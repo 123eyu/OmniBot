@@ -1,8 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/services/omnibot_resource_service.dart';
@@ -13,17 +12,28 @@ import 'package:webview_flutter_platform_interface/webview_flutter_platform_inte
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  const fileChannel = MethodChannel('cn.com.omnimind.bot/file_save');
   late Directory directory;
   setUp(() async {
     LegacyTextLocalizer.setResolvedLocale(const Locale('zh', 'CN'));
     directory = await Directory.systemTemp.createTemp('oob-office-layout-');
-    final xml =
-        '<document><body>${List.generate(35, (i) => '<p><r><t>脱敏测试段落 $i</t></r></p>').join()}</body></document>';
-    final bytes = utf8.encode(xml);
-    final archive = Archive()
-      ..addFile(ArchiveFile('word/document.xml', bytes.length, bytes));
-    await File('${directory.path}/report.docx')
-        .writeAsBytes(ZipEncoder().encode(archive));
+    await File('${directory.path}/report.docx').writeAsBytes(const [0]);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(fileChannel, (call) async {
+          expect(call.method, 'loadOfficePreview');
+          expect(call.arguments, {
+            'path': '${directory.path}/report.docx',
+            'previewKind': 'office_word',
+          });
+          return {
+            'sections': [
+              {
+                'lines': List.generate(35, (index) => '脱敏测试段落 $index'),
+                'tableRows': [],
+              },
+            ],
+          };
+        });
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           spePermission,
@@ -36,6 +46,8 @@ void main() {
     await OmnibotResourceService.ensureWorkspacePathsLoaded(forceRefresh: true);
   });
   tearDown(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(fileChannel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(spePermission, null);
     await directory.delete(recursive: true);
@@ -166,8 +178,7 @@ void main() {
           }
 
           expectNoOverlap();
-          // File.readAsBytes has several asynchronous I/O phases. Alternate
-          // real I/O and fake-frame pumps instead of settling an active spinner.
+          // Wait for the native content response without settling an active spinner.
           for (
             var frame = 0;
             frame < 40 && find.text('共提取 35 段正文').evaluate().isEmpty;

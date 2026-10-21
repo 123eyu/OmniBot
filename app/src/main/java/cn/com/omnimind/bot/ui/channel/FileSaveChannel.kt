@@ -14,14 +14,26 @@ import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import cn.com.omnimind.baselib.i18n.AppLocaleManager
 import cn.com.omnimind.baselib.util.OmniLog
+import cn.com.omnimind.bot.resource.OfficeDocumentPreviewRepository
 import cn.com.omnimind.bot.util.AssistsUtil
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
-class FileSaveChannel {
+class FileSaveChannel(
+    private val previewLoader: (String, String) -> Map<String, Any?> =
+        OfficeDocumentPreviewRepository::loadPreview,
+) {
     companion object {
         private const val TAG = "FileSaveChannel"
         private const val CHANNEL = "cn.com.omnimind.bot/file_save"
@@ -101,6 +113,8 @@ class FileSaveChannel {
 
     private var channel: MethodChannel? = null
     private var context: Context? = null
+    private val previewScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val previewPermit = Semaphore(1)
 
     private fun chooserTitle(zh: String, en: String): String {
         val safeContext = context
@@ -120,10 +134,35 @@ class FileSaveChannel {
                 "openInBrowser" -> openInBrowser(call, result)
                 "shareFile" -> shareFile(call, result)
                 "shareText" -> shareText(call, result)
+                "loadOfficePreview" -> loadOfficePreview(call, result)
                 else -> result.notImplemented()
             }
         }
     }
+
+    private fun loadOfficePreview(call: MethodCall, result: MethodChannel.Result) {
+        val path = call.argument<String>("path").orEmpty()
+        val kind = call.argument<String>("previewKind").orEmpty()
+        previewScope.launch {
+            try {
+                val payload = readOfficePreview(path, kind)
+                result.success(payload)
+            } catch (error: OfficeDocumentPreviewRepository.PreviewException) {
+                result.error(error.code, error.message, null)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                result.error("OFFICE_PREVIEW_FAILED", error.message, null)
+            }
+        }
+    }
+
+    internal suspend fun readOfficePreview(path: String, kind: String): Map<String, Any?> =
+        withContext(Dispatchers.IO) {
+            // Parsing used to be serial in each UI isolate. Preserve that
+            // memory bound when several inline document cards load together.
+            previewPermit.withPermit { previewLoader(path, kind) }
+        }
 
     private fun openFile(call: MethodCall, result: MethodChannel.Result) {
         val activity = context as? Activity
@@ -516,6 +555,7 @@ class FileSaveChannel {
     }
 
     fun clear() {
+        previewScope.coroutineContext.cancelChildren()
         channel?.setMethodCallHandler(null)
         channel = null
     }
