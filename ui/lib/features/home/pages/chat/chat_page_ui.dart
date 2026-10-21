@@ -93,7 +93,12 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     return [
       if (_isInputAreaVisible) ...[
         if (_activeMode == ChatPageMode.agent &&
-            _activeAcpAgentId == 'na-cloud')
+            _activeAcpAgentId == 'na-cloud' &&
+            _agentCatalog?.agents.any(
+                  (agent) =>
+                      agent.id == 'na-cloud' && agent.configurationAvailable,
+                ) ==
+                true)
           ChatAppBarAction(
             label: english ? 'Cloud connection' : '云端连接',
             icon: LucideIcons.cloud,

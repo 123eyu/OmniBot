@@ -61,7 +61,7 @@ internal class NaCloudRuntime(
     private val activeRuns = ConcurrentHashMap<String, String>()
     private val cancelPending = ConcurrentHashMap.newKeySet<String>()
     private var cachedStatus: Map<String, Any?> = emptyMap()
-    private val development get() = BuildConfig.DEBUG && preferences.getBoolean("development", false)
+    private val development get() = NaCloudEnvironment.developmentAvailable && preferences.getBoolean("development", false)
     private val baseUrl get() = if (development) preferences.getString("baseUrl", "http://127.0.0.1:8787")!! else BuildConfig.CLOUD_URL
 
     init {
@@ -86,14 +86,14 @@ internal class NaCloudRuntime(
 
     private suspend fun <T> withConnection(operation: suspend () -> T): T {
         val connection = if (development) NaCloudConnection(baseUrl, developmentToken = token)
-            else NaCloudConnection.managed(BuildConfig.CLOUD_URL, BuildConfig.DEBUG, OmniAccount.repository())
+            else NaCloudConnection.managed(BuildConfig.CLOUD_URL, NaCloudEnvironment.developmentAvailable, OmniAccount.repository())
         return withContext(connection) { connection.prepareWorkspace(client); operation() }
     }
 
     fun config(): Map<String, Any?> = mapOf(
         "kind" to "na-cloud", "baseUrl" to baseUrl, "apiKey" to if (development) token else "",
         "connectionMode" to if (development) "development" else "managed",
-        "developmentAvailable" to BuildConfig.DEBUG,
+        "developmentAvailable" to NaCloudEnvironment.developmentAvailable,
         "signedIn" to (OmniAccount.isConfigured() && runCatching { OmniAccount.repository().isSignedIn() }.getOrDefault(false)),
         "cloudModelManaged" to true,
     )
@@ -101,7 +101,7 @@ internal class NaCloudRuntime(
     fun configure(args: Map<String, Any?>): Map<String, Any?> {
         check(prompts.values.none { !it.isCompleted }) { "请等待当前 Na 任务结束后修改连接。" }
         val mode = args["connectionMode"]?.toString() ?: if (development) "development" else "managed"
-        require(mode == "managed" || (mode == "development" && BuildConfig.DEBUG)) { "不支持此连接方式。" }
+        require(mode == "managed" || (mode == "development" && NaCloudEnvironment.developmentAvailable)) { "不支持此连接方式。" }
         if (mode == "managed") {
             preferences.edit().putBoolean("development", false).apply()
             token = ""

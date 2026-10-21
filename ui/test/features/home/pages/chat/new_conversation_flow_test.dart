@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/features/home/pages/chat/chat_page.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
 import 'package:ui/features/home/pages/chat/widgets/acp_config_button.dart';
+import 'package:ui/features/home/pages/chat/widgets/chat_widgets.dart';
 import 'package:ui/features/home/pages/chat/widgets/new_conversation_mode_selector.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/chat_input_area.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
@@ -60,6 +61,7 @@ void main() {
   late List<MethodCall> assistCalls;
   late List<MethodCall> agentCalls;
   late List<Map<String, Object?>> conversations;
+  late List<Map<String, Object?>> agents;
   late _DraftFilePicker picker;
   late FilePickerPlatform originalPicker;
   Completer<void>? initializeGate;
@@ -94,7 +96,7 @@ void main() {
     ],
   };
 
-  const agents = [
+  const defaultAgents = [
     {
       'id': 'xiaowan-acp',
       'name': '小万',
@@ -137,6 +139,9 @@ void main() {
     assistCalls = [];
     agentCalls = [];
     conversations = [];
+    agents = [
+      for (final agent in defaultAgents) {...agent},
+    ];
     for (final channel in otherChannels) {
       messenger.setMockMethodCallHandler(MethodChannel(channel), (_) async {
         return null;
@@ -422,6 +427,37 @@ void main() {
       await tester.pumpAndSettle();
       expect(composer(tester).focusNode.hasFocus, isFalse);
       expect(selector(tester).selectedId, agentId);
+      await disposeChat(tester);
+    });
+  }
+
+  for (final status in ['unchecked', 'offline']) {
+    testWidgets('production Na remains selectable before connection: $status', (
+      tester,
+    ) async {
+      agents.firstWhere((agent) => agent['id'] == 'na-cloud').addAll({
+        'status': status,
+        'configurationAvailable': false,
+      });
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.newConversation(agentId: 'xiaowan-acp'),
+      );
+      final na = selector(tester).agentModes
+          .firstWhere((agent) => agent.id == 'na-cloud');
+      expect(na.installed, isTrue);
+      expect(na.status, status);
+      expect(na.isAvailable, isTrue);
+      await chooseMode(tester, 'na-cloud');
+      expect(selector(tester).selectedId, 'na-cloud');
+      expect(
+        tester
+            .widget<ChatAppBar>(find.byType(ChatAppBar))
+            .actions
+            .any((action) => action.label == '云端连接'),
+        isFalse,
+      );
+      expectNoSessionAdmission();
       await disposeChat(tester);
     });
   }

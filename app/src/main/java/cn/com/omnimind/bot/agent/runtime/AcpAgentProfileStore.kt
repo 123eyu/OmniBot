@@ -30,6 +30,7 @@ internal data class AcpAgentProfile(
         health: AcpAgentHealth = AcpAgentHealth()
     ): Map<String, Any?> {
         val runtime = officialRuntime
+        val agentHealth = health.forAgent(id)
         return linkedMapOf(
             "id" to id,
             "name" to name,
@@ -41,18 +42,19 @@ internal data class AcpAgentProfile(
             "builtIn" to builtIn,
             "source" to if (builtIn) "official" else "custom",
             "selected" to selected,
-            "installed" to if (id == NA_AGENT_ID) true else health.installed,
-            "status" to health.status,
-            "lastCheckError" to health.error,
-            "lastCheckLatencyMs" to health.latencyMs,
-            "lastCheckAt" to health.checkedAt,
+            "configurationAvailable" to (id != NA_AGENT_ID || NaCloudEnvironment.developmentAvailable),
+            "installed" to agentHealth.installed,
+            "status" to agentHealth.status,
+            "lastCheckError" to agentHealth.error,
+            "lastCheckLatencyMs" to agentHealth.latencyMs,
+            "lastCheckAt" to agentHealth.checkedAt,
             // Keep the read-only health result useful before a live ACP
             // handshake. Negotiated values always win; declared values are
             // only the official Harness composition contract and are shown
             // under the same generic capabilities map for all profiles.
             "capabilities" to mergeCapabilities(
                 declared = runtime?.declaredCapabilities.orEmpty(),
-                negotiated = health.capabilities,
+                negotiated = agentHealth.capabilities,
             ),
             "discoveryCommand" to runtime?.discoveryCommand,
             "managedAdapter" to (runtime?.managedAdapterPackage != null)
@@ -94,6 +96,25 @@ internal data class AcpAgentHealth(
     val capabilities: Map<String, Any?> = emptyMap(),
     val preparationRevision: String? = null,
 ) {
+    /** Na is bundled in the app, so command discovery cannot describe its health. */
+    fun forAgent(agentId: String): AcpAgentHealth {
+        if (agentId != NA_AGENT_ID) return this
+        return if (status == STATUS_MISSING) {
+            // Older versions probed Na as an external executable. Discard that
+            // invalid result without claiming that its cloud service is online.
+            copy(
+                status = STATUS_UNCHECKED,
+                installed = true,
+                error = null,
+                latencyMs = null,
+                checkedAt = null,
+                preparationRevision = null,
+            )
+        } else {
+            copy(installed = true)
+        }
+    }
+
     companion object {
         const val STATUS_ONLINE = "online"
         const val STATUS_OFFLINE = "offline"
@@ -376,14 +397,20 @@ internal class AcpAgentProfileStore(context: Context) {
         }
     }
 
+    @Synchronized
     fun health(agentId: String): AcpAgentHealth {
-        return readHealth()[agentId] ?: AcpAgentHealth()
+        val stored = readHealth()[agentId]
+        val health = (stored ?: AcpAgentHealth()).forAgent(agentId)
+        if (stored != null && stored != health) {
+            saveHealth(agentId, health)
+        }
+        return health
     }
 
     @Synchronized
     fun saveHealth(agentId: String, health: AcpAgentHealth) {
         val current = readHealth().toMutableMap()
-        current[agentId] = health
+        current[agentId] = health.forAgent(agentId)
         preferences.edit().putString(KEY_HEALTH, gson.toJson(current)).apply()
     }
 

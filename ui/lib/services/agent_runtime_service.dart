@@ -581,7 +581,8 @@ class AcpAgentProfile {
     this.capabilities = const <String, dynamic>{},
     this.discoveryCommand,
     this.managedAdapter = false,
-  });
+    bool? configurationAvailable,
+  }) : configurationAvailable = configurationAvailable ?? id != 'na-cloud';
 
   final String id;
   final String name;
@@ -601,6 +602,10 @@ class AcpAgentProfile {
   final Map<String, dynamic> capabilities;
   final String? discoveryCommand;
   final bool managedAdapter;
+
+  /// Native build policy owns whether this Agent exposes a configuration page.
+  /// Na is account managed unless the native develop flavor opts in.
+  final bool configurationAvailable;
 
   factory AcpAgentProfile.fromMap(Map<dynamic, dynamic> map) {
     final rawArguments = map['arguments'];
@@ -634,6 +639,9 @@ class AcpAgentProfile {
           _normalizeMap(map['capabilities']) ?? const <String, dynamic>{},
       discoveryCommand: _stringOrNull(map['discoveryCommand']),
       managedAdapter: map['managedAdapter'] == true,
+      configurationAvailable: map['configurationAvailable'] is bool
+          ? map['configurationAvailable'] as bool
+          : null,
     );
   }
 

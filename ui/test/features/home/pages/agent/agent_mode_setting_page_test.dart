@@ -67,6 +67,74 @@ void main() {
         .setMockMethodCallHandler(pluginPlatformChannel, null);
   });
 
+  for (final configurationAvailable in [false, true]) {
+    testWidgets(
+      'Na configuration visibility follows native development policy: $configurationAvailable',
+      (tester) async {
+        final calls = <MethodCall>[];
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
+              calls.add(call);
+              if (call.method == 'agent/list') {
+                return {
+                  'selectedAgentId': 'na-cloud',
+                  'agents': [
+                    {
+                      ..._agent('na-cloud', 'Na', 'na-cloud', 'offline'),
+                      'configurationAvailable': configurationAvailable,
+                    },
+                    _agent('codex-acp', 'Codex', 'codex-acp', 'online'),
+                  ],
+                };
+              }
+              if (call.method == 'agent/test') {
+                return {'ok': true, 'connected': true};
+              }
+              return null;
+            });
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.lightTheme,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('zh'),
+            home: const AgentModeSettingPage(),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final row = find.byKey(const Key('agent-config-na-cloud'));
+        await tester.ensureVisible(row);
+        expect(find.text('Na'), findsOneWidget);
+        expect(
+          find.byKey(const Key('agent-navigation-na-cloud')),
+          configurationAvailable ? findsOneWidget : findsNothing,
+        );
+        expect(
+          tester.widget<InkWell>(row).onTap,
+          configurationAvailable ? isNotNull : isNull,
+        );
+        expect(
+          find.byKey(const Key('agent-navigation-codex-acp')),
+          findsOneWidget,
+        );
+        await tester.tap(find.byKey(const Key('agent-check-na-cloud')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.text('助手检查通过'), findsOneWidget);
+        expect(
+          calls.where((call) => call.method == 'agent/test'),
+          hasLength(1),
+        );
+        expect(
+          calls.where((call) => call.method.startsWith('agent/config/')),
+          isEmpty,
+        );
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+      },
+    );
+  }
+
   testWidgets('installer exceptions remain in a readable result sheet', (
     tester,
   ) async {

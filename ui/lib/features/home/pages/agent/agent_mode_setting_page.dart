@@ -349,6 +349,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   }
 
   Future<void> _openAgentConfig(AcpAgentProfile agent) async {
+    if (!agent.configurationAvailable) return;
     final changed = await GoRouterManager.pushForResult<bool>(
       '/home/agent_config/${Uri.encodeComponent(agent.id)}',
     );
@@ -718,10 +719,14 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
       actionLabel: canTest ? testLabel : null,
       actionKey: Key('agent-check-${agent.id}'),
       onAction: canTest ? () => action(agent) : null,
-      navigationLabel: _text('配置', 'Configure'),
+      navigationLabel: agent.configurationAvailable
+          ? _text('配置', 'Configure')
+          : null,
       navigationKey: Key('agent-navigation-${agent.id}'),
       busy: busy,
-      onTap: preparing ? () {} : () => _openAgentConfig(agent),
+      onTap: !agent.configurationAvailable || preparing
+          ? null
+          : () => _openAgentConfig(agent),
     );
   }
 
@@ -1145,7 +1150,7 @@ class _FlatTile extends StatelessWidget {
                           ),
                         ),
                       )
-                    else if (!busy && actionLabel == null)
+                    else if (!busy && actionLabel == null && onTap != null)
                       Icon(
                         LucideIcons.chevronRight,
                         size: 18,

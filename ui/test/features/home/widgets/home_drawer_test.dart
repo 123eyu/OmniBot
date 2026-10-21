@@ -900,6 +900,30 @@ void main() {
     },
   );
 
+  for (final status in ['unchecked', 'offline']) {
+    testWidgets('production Na remains selectable on home: $status', (
+      tester,
+    ) async {
+      nativeAgents.firstWhere((agent) => agent['id'] == 'na-cloud').addAll({
+        'status': status,
+        'configurationAvailable': false,
+      });
+      ConversationThreadTarget? created;
+      await pumpSelectionHome(tester, onOpen: (target) => created = target);
+      await selectHomeCategory(tester, 'na-cloud');
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('home-agent-name'))).data,
+        'Na',
+      );
+      await tester.tap(find.byKey(const ValueKey('home-new-conversation')));
+      expect(created?.agentId, 'na-cloud');
+      expect(created?.mode, ConversationMode.agent);
+      expect(created?.conversationId, isNull);
+      expect(agentMethods, isNot(contains('agent/select')));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'home Agent switcher shows current identity and only available catalog entries',
     (tester) async {

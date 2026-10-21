@@ -100,7 +100,7 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
         throw StateError('Unknown ACP Agent: ${widget.agentId}');
       }
       Map<String, dynamic> payload = const {};
-      if (agent.builtIn) {
+      if (agent.builtIn && agent.configurationAvailable) {
         payload = await AgentRuntimeService.readAgentConfig(agent.id);
       }
       if (!mounted) return;
@@ -108,11 +108,17 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
       _syncPayload(payload);
       setState(() {
         _agent = agent;
-        _kind = agent.builtIn ? (payload['kind']?.toString() ?? '') : 'profile';
+        _kind = !agent.configurationAvailable
+            ? ''
+            : agent.builtIn
+            ? (payload['kind']?.toString() ?? '')
+            : 'profile';
         _loading = false;
         _error = null;
       });
-      if (agent.builtIn && _kind != 'na-cloud') {
+      if (agent.builtIn &&
+          agent.configurationAvailable &&
+          _kind != 'na-cloud') {
         unawaited(_loadSharedModelSelection());
       }
     } catch (error) {
@@ -137,8 +143,9 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
   }
 
   void _syncPayload(Map<String, dynamic> payload) {
-    _naDevelopment = payload['connectionMode'] == 'development';
     _naDevelopmentAvailable = payload['developmentAvailable'] == true;
+    _naDevelopment =
+        _naDevelopmentAvailable && payload['connectionMode'] == 'development';
     _naSignedIn = payload['signedIn'] == true;
     _configRevision = switch (payload['revision']) {
       int value => value,
@@ -270,7 +277,7 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
   }
 
   Future<void> _save() async {
-    if (_saving || _agent == null) return;
+    if (_saving || _agent == null || !_agent!.configurationAvailable) return;
     setState(() {
       _saving = true;
       _error = null;
@@ -481,6 +488,8 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
               ? const Center(child: CircularProgressIndicator())
               : _error != null && _agent == null
               ? _ErrorState(error: _error!, onRetry: _load)
+              : _agent?.configurationAvailable == false
+              ? _buildManagedAccountNotice()
               : ListView(
                   padding: edgeToEdgeScrollPadding(
                     context,
@@ -534,6 +543,32 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
                     ],
                   ],
                 ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildManagedAccountNotice() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _text(
+                'Na 自动使用当前登录账号，无需配置。',
+                'Na uses your signed-in account automatically. No configuration is needed.',
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              key: const Key('na-account'),
+              onPressed: () => GoRouterManager.push('/my/account'),
+              child: Text(_text('管理账号', 'Manage account')),
+            ),
+          ],
         ),
       ),
     );

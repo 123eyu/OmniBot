@@ -70,6 +70,7 @@ void main() {
                 'baseUrl': saved!['baseUrl'],
                 'apiKey': saved!['apiKey'],
                 'connectionMode': 'development',
+                'developmentAvailable': true,
               };
             }
             return null;
@@ -147,6 +148,63 @@ void main() {
       expect(calls.where((call) => call.method == 'agent/test'), hasLength(1));
     },
   );
+
+  testWidgets('production Na direct links cannot load or edit configuration', (
+    tester,
+  ) async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
+          calls.add(call);
+          if (call.method == 'agent/list') {
+            return _catalog({
+              ..._agent('na-cloud', 'Na'),
+              'configurationAvailable': false,
+            });
+          }
+          throw StateError('Production Na must not access configuration');
+        });
+    await _pumpPage(tester, 'na-cloud');
+    expect(find.text('Na 自动使用当前登录账号，无需配置。'), findsOneWidget);
+    expect(find.byKey(const Key('na-account')), findsOneWidget);
+    expect(find.byKey(const Key('agent-config-save')), findsNothing);
+    expect(find.byKey(const Key('na-development-connection')), findsNothing);
+    expect(find.byKey(const Key('na-service-address')), findsNothing);
+    expect(find.byKey(const Key('na-access-token')), findsNothing);
+    expect(calls.map((call) => call.method), ['agent/list']);
+  });
+
+  testWidgets('unavailable Na development support ignores stale test mode', (
+    tester,
+  ) async {
+    final writes = <Map<String, dynamic>>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
+          if (call.method == 'agent/list') {
+            return _catalog(_agent('na-cloud', 'Na'));
+          }
+          if (call.method == 'agent/config/write') {
+            writes.add(Map<String, dynamic>.from(call.arguments as Map));
+          }
+          if (call.method == 'agent/test') return {'connected': true};
+          return {
+            'kind': 'na-cloud',
+            'connectionMode': 'development',
+            'developmentAvailable': false,
+            'signedIn': true,
+            'baseUrl': 'https://stale-test.example',
+          };
+        });
+    await _pumpPage(tester, 'na-cloud');
+    expect(find.byKey(const Key('na-development-connection')), findsNothing);
+    expect(find.byKey(const Key('na-service-address')), findsNothing);
+    expect(find.byKey(const Key('na-access-token')), findsNothing);
+    await tester.tap(find.byKey(const Key('agent-config-save')));
+    await tester.pumpAndSettle();
+    expect(writes, [
+      {'agentId': 'na-cloud', 'connectionMode': 'managed'},
+    ]);
+  });
 
   testWidgets('managed Na shows a useful entitlement error', (tester) async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -662,6 +720,7 @@ Map<String, dynamic> _agent(String id, String name) {
     'builtIn': true,
     'source': 'official',
     'status': 'online',
+    'configurationAvailable': true,
   };
 }
 
