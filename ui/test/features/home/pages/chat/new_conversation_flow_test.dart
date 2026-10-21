@@ -1001,6 +1001,7 @@ void main() {
     await tester.pumpAndSettle();
     expectNoSessionAdmission();
 
+    composer(tester).controller.text = '发送后继续编辑的下一条草稿';
     initializeGate!.complete();
     await tester.pumpAndSettle();
     final creations = assistCalls
@@ -1014,6 +1015,7 @@ void main() {
     expect(prompts, hasLength(1));
     expect((prompts.single.arguments as Map)['agentId'], 'codex-acp');
     expect((prompts.single.arguments as Map)['text'], '切换后发送给 Codex');
+    expect(composer(tester).controller.text, '发送后继续编辑的下一条草稿');
     expect(agentCalls.where((call) => call.method == 'agent/select'), isEmpty);
     expect(find.byType(NewConversationModeSelector), findsNothing);
     await disposeChat(tester);

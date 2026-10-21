@@ -231,12 +231,26 @@ void main() {
     );
     final flow = File('$chatRoot/chat_page_conversation_flow.dart')
         .readAsStringSync();
+    final send = flow
+        .split('Future<void> _sendMessage(')
+        .last
+        .split('Future<void> _startManualRecordingCommand')
+        .first;
+    final wait = send.indexOf('await _harnessSwitchSendBarrier.waitUntilIdle()');
+    expect(wait, greaterThanOrEqualTo(0));
     expect(
-      flow.indexOf('final submittedText ='),
-      lessThan(flow.indexOf('await _harnessSwitchSendBarrier.waitUntilIdle()')),
+      send,
+      contains('final submittedText = text ?? _messageController.text;'),
     );
-    expect(flow, contains('if (!mounted || !switched) return;'));
-    expect(flow, contains('submittedText ?? text ?? _messageController.text'));
+    for (final capture in [
+      'final submittedText =',
+      'final submittedAttachments =',
+    ]) {
+      expect(send.indexOf(capture), inInclusiveRange(0, wait - 1));
+    }
+    expect(send, contains('if (!mounted || !switched) return;'));
+    expect(send, contains('final messageText = submittedText.trim();'));
+    expect(send, contains('final inputAttachments = submittedAttachments;'));
   });
 
   test('only the prompt response completes the shared reducer', () {
@@ -308,7 +322,12 @@ void main() {
   test('chat page keeps per-mode values in ChatPageModeState', () {
     final source = File('$chatRoot/chat_page.dart').readAsStringSync();
 
-    expect(source, isNot(contains('Map<ChatPageMode,')));
+    // Unbound ACP configuration sessions are resources awaiting a first
+    // prompt, not a second store for per-mode presentation state.
+    final modeMaps = RegExp(
+      r'\bMap<ChatPageMode,\s*[^;=]+>\s+(_\w+)\s*=',
+    ).allMatches(source).map((match) => match.group(1));
+    expect(modeMaps, ['_unboundConfigurationSessions']);
     expect(source, contains('List<ChatPageModeState> _modeStates'));
   });
 
