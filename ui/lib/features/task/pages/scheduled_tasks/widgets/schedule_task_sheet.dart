@@ -80,7 +80,7 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
     return Container(
       decoration: BoxDecoration(
         color: palette.surfacePrimary,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
       ),
       child: SafeArea(
         top: false,
@@ -109,7 +109,7 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
                           ? 'Set scheduled task'
                           : '设置定时任务',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 17,
                         fontWeight: FontWeight.w600,
                         color: palette.textPrimary,
                       ),
@@ -143,7 +143,7 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
                     child: Text(
                       widget.existingTask.title,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 15,
                         color: palette.textPrimary,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -183,7 +183,7 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
                     Text(
                       LegacyTextLocalizer.isEnglish ? 'Repeat daily' : '每日重复执行',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 15,
                         color: palette.textPrimary,
                       ),
                     ),
@@ -296,21 +296,12 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
         decoration: BoxDecoration(
           color: isSelected ? palette.segmentThumb : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: palette.shadowColor,
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
         ),
         child: Center(
           child: Text(
             title,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
               color: isSelected ? palette.accentPrimary : palette.textSecondary,
             ),
@@ -400,7 +391,7 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
                   Text(
                     LegacyTextLocalizer.isEnglish ? 'Execute after' : '后执行',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 15,
                       color: palette.textSecondary,
                     ),
                   ),

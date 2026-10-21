@@ -88,7 +88,6 @@ class _ChatBotSheetState extends State<ChatBotSheet>
   bool _isPopupVisible = false;
 
   final Map<String, String> _currentAiMessages = {};
-  final Set<String> _expandedAgentRunTaskIds = <String>{};
   bool _autoStickMessageListToLatest = true;
   bool _messageStickToLatestScheduled = false;
   bool _messageListScrollWasUserDriven = false;
@@ -101,7 +100,7 @@ class _ChatBotSheetState extends State<ChatBotSheet>
   bool _closeRequested = false;
   bool _cancelRequested = false;
   bool _acpCloseStarted = false;
-  StreamSubscription<Map<String, dynamic>>? _acpRuntimeSubscription;
+  ChatAgentEventProjection? _lastAgentEventProjection;
   final ChatConversationRuntimeCoordinator _runtimeCoordinator =
       ChatConversationRuntimeCoordinator.instance;
   static const String _runtimeMode = 'command_overlay';
@@ -176,10 +175,11 @@ class _ChatBotSheetState extends State<ChatBotSheet>
     // 页面关闭回调
     ScreenDialogService.setOnBeforeCloseChatBotDialog(_onDialogClose);
 
-    _acpRuntimeSubscription = AgentRuntimeService.events.listen(
-      _handleIncomingAcpRuntimeEvent,
-    );
     _runtimeCoordinator.ensureInitialized();
+    // The shared coordinator is the only native ACP event consumer. Attaching
+    // a sheet observes fresh presentation metadata without replaying an event.
+    _lastAgentEventProjection = _runtimeCoordinator.latestAgentEventProjection;
+    _runtimeCoordinator.addListener(_handleRuntimeCoordinatorChanged);
     unawaited(_loadActiveAcpAgentIdentity());
   }
 
@@ -725,8 +725,7 @@ class _ChatBotSheetState extends State<ChatBotSheet>
     _openClawBaseUrlController.dispose();
     _openClawTokenController.dispose();
     _openClawUserIdController.dispose();
-    _acpRuntimeSubscription?.cancel();
-    _acpRuntimeSubscription = null;
+    _runtimeCoordinator.removeListener(_handleRuntimeCoordinatorChanged);
     ScreenDialogService.setOnBeforeCloseChatBotDialog(null);
     final conversationId = _currentConversationId;
     if (conversationId != null) {
@@ -922,23 +921,6 @@ class _ChatBotSheetState extends State<ChatBotSheet>
   void _handleStreamingTextLayoutChanged() {
     if (_autoStickMessageListToLatest || _isMessageListNearLatest()) {
       _autoStickMessageListToLatest = true;
-      _scheduleMessageStickToLatest();
-    }
-  }
-
-  void _toggleAgentRunGroup(String taskId) {
-    final normalizedTaskId = taskId.trim();
-    if (normalizedTaskId.isEmpty) {
-      return;
-    }
-    setState(() {
-      if (_expandedAgentRunTaskIds.contains(normalizedTaskId)) {
-        _expandedAgentRunTaskIds.remove(normalizedTaskId);
-      } else {
-        _expandedAgentRunTaskIds.add(normalizedTaskId);
-      }
-    });
-    if (_autoStickMessageListToLatest) {
       _scheduleMessageStickToLatest();
     }
   }
@@ -1396,6 +1378,13 @@ class _ChatBotSheetState extends State<ChatBotSheet>
         return false;
       }
 
+      _runtimeCoordinator.bindAcpSession(
+        taskId: aiMessageId,
+        conversationId: conversationId,
+        mode: _runtimeMode,
+        sessionId: _acpSessionId!,
+      );
+
       final response = await AgentRuntimeService.promptSession(
         sessionId: _acpSessionId,
         conversationId: conversationId,
@@ -1413,24 +1402,22 @@ class _ChatBotSheetState extends State<ChatBotSheet>
       final responsePromptId = (response['promptId'] ?? response['turnId'])
           ?.toString()
           .trim();
-      if (conversationId != null) {
-        final result = _runtimeCoordinator.applyAcpPromptResponse(
-          taskId: aiMessageId,
-          conversationId: conversationId,
-          mode: _runtimeMode,
-          sessionId: responseSessionId,
-          turnId: responsePromptId,
-          stopReason:
-              response['stopReason']?.toString() ??
-              response['status']?.toString(),
-          error: response['error']?.toString(),
-          conversation: _currentConversation,
-        );
-        if (result.handled) {
-          _acpSessionId = responseSessionId;
-          _acpPromptId = responsePromptId;
-          _syncAcpRuntimePresentation(conversationId);
-        }
+      final result = _runtimeCoordinator.applyAcpPromptResponse(
+        taskId: aiMessageId,
+        conversationId: conversationId,
+        mode: _runtimeMode,
+        sessionId: responseSessionId,
+        turnId: responsePromptId,
+        stopReason:
+            response['stopReason']?.toString() ??
+            response['status']?.toString(),
+        error: response['error']?.toString(),
+        conversation: _currentConversation,
+      );
+      if (result.handled) {
+        _acpSessionId = responseSessionId;
+        _acpPromptId = responsePromptId;
+        _syncAcpRuntimePresentation(conversationId);
       }
       return true;
     } catch (e) {
@@ -1481,24 +1468,23 @@ class _ChatBotSheetState extends State<ChatBotSheet>
       !_cancelRequested &&
       _currentDispatchTurnId == taskId;
 
-  void _handleIncomingAcpRuntimeEvent(Map<String, dynamic> event) {
-    final conversationId = _asInt(event['conversationId']);
+  void _handleRuntimeCoordinatorChanged() {
+    final projection = _runtimeCoordinator.latestAgentEventProjection;
+    if (identical(projection, _lastAgentEventProjection)) return;
+    _lastAgentEventProjection = projection;
+    final conversationId = projection?.conversationId;
     if (!mounted ||
+        projection == null ||
+        projection.mode != _runtimeMode ||
         _currentDispatchTurnId == null ||
         conversationId == null ||
-        conversationId != _currentConversationId) {
+        conversationId != _currentConversationId ||
+        !projection.result.handled) {
       return;
     }
-    final result = _runtimeCoordinator.applyAgentEvent(
-      conversationId: conversationId,
-      mode: _runtimeMode,
-      event: event,
-      conversation: _currentConversation,
-    );
-    if (!result.handled) {
-      return;
-    }
-    final eventTurnId = result.turnId ?? event['turnId']?.toString().trim();
+    final eventTurnId =
+        projection.result.turnId ??
+        projection.event['turnId']?.toString().trim();
     if (eventTurnId != null && eventTurnId.isNotEmpty) {
       _acpPromptId = eventTurnId;
     }
@@ -1531,12 +1517,6 @@ class _ChatBotSheetState extends State<ChatBotSheet>
     if (!runtime.isAiResponding) {
       unawaited(_saveConversationToDb());
     }
-  }
-
-  static int? _asInt(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '');
   }
 
   String _latestUserUtterance() {
@@ -2073,8 +2053,6 @@ class _ChatBotSheetState extends State<ChatBotSheet>
               key: ValueKey('overlay-agent-run-${group.taskId}'),
               group: group,
               useAcpPresentation: true,
-              expanded: _expandedAgentRunTaskIds.contains(group.taskId),
-              onToggleExpanded: () => _toggleAgentRunGroup(group.taskId),
               onBeforeTaskExecute: _handleBeforeTaskExecute,
               onCancelTask: _onCancelTaskFromCard,
               parentScrollController: _messageScrollController,

@@ -4,11 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:ui/features/home/pages/authorize/widgets/permission_section.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/services/permission_service.dart';
-import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/omni_glass.dart';
 
-/// Shared glass permission card used by contextual actions in chat.
+/// Shared permission card used by contextual actions in chat.
 class PermissionPromptSheet extends StatefulWidget {
   const PermissionPromptSheet({
     super.key,
@@ -34,7 +33,7 @@ class PermissionPromptSheet extends StatefulWidget {
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
-          barrierColor: Colors.black.withValues(alpha: 0.18),
+          barrierColor: context.omniPalette.overlayScrim,
           builder: (context) => PermissionPromptSheet(
             permissions: permissions,
             actionLabel: actionLabel,
@@ -82,7 +81,6 @@ class _PermissionPromptSheetState extends State<PermissionPromptSheet>
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -109,8 +107,8 @@ class _PermissionPromptSheetState extends State<PermissionPromptSheet>
                         ? 'Please check the permission below'
                         : '请检查下列权限'),
                 style: TextStyle(
-                  color: isDark ? palette.textPrimary : AppColors.text,
-                  fontSize: 20,
+                  color: palette.textPrimary,
+                  fontSize: 17,
                   fontWeight: FontWeight.w600,
                   height: 1.5,
                 ),
@@ -147,44 +145,17 @@ class _PermissionPromptSheetState extends State<PermissionPromptSheet>
                             constraints: const BoxConstraints(maxWidth: 288),
                             height: 48,
                             decoration: BoxDecoration(
-                              gradient: isDark
-                                  ? LinearGradient(
-                                      begin: const Alignment(0.14, -1.09),
-                                      end: const Alignment(1.10, 1.26),
-                                      colors: [
-                                        Color.lerp(
-                                          palette.surfaceElevated,
-                                          palette.accentPrimary,
-                                          0.18,
-                                        )!,
-                                        Color.lerp(
-                                          palette.surfaceSecondary,
-                                          palette.accentPrimary,
-                                          0.34,
-                                        )!,
-                                      ],
-                                    )
-                                  : const LinearGradient(
-                                      begin: Alignment(0.14, -1.09),
-                                      end: Alignment(1.10, 1.26),
-                                      colors: [
-                                        Color(0xFF1930D9),
-                                        Color(0xFF2CA5F0),
-                                      ],
-                                    ),
+                              color: palette.accentPrimary,
                               borderRadius: BorderRadius.circular(12),
-                              border: isDark
-                                  ? Border.all(color: palette.borderSubtle)
-                                  : null,
                             ),
                             child: Center(
                               child: Text(
                                 widget.actionLabel,
                                 style: TextStyle(
-                                  color: isDark
-                                      ? palette.textPrimary
-                                      : Colors.white,
-                                  fontSize: 16,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onPrimary,
+                                  fontSize: 15,
                                   fontFamily: 'PingFang SC',
                                   fontWeight: FontWeight.w600,
                                   height: 1.5,

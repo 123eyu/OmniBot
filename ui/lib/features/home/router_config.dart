@@ -1,8 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ui/core/router/go_router_manager.dart';
-import 'package:ui/models/conversation_model.dart';
-import 'package:ui/models/conversation_thread_target.dart';
+import 'package:ui/core/router/conversation_route_target.dart';
+import 'package:ui/features/home/pages/conversation_home_page.dart';
 import 'package:ui/features/home/pages/alarm_setting/alarm_setting_page.dart';
 import 'package:ui/features/home/pages/authorize_setting/authorize_setting_page.dart';
 import 'package:ui/features/home/pages/agent/remote_codex_setting_page.dart';
@@ -42,108 +42,19 @@ import 'pages/model_provider_setting/model_provider_setting_page.dart';
 
 import 'package:ui/features/welcome/pages/onboarding/onboarding_choice_page.dart';
 
-/// Home模块路由配置
-const String kNativeRouteFlag = '__from_native__';
-
-ConversationMode _parseConversationMode(String? rawValue) {
-  return ConversationMode.fromStorageValue(rawValue);
-}
-
-ConversationThreadTarget? _parseChatThreadTarget(GoRouterState state) {
-  final queryConversationId =
-      state.uri.queryParameters['conversationId']?.trim() ?? '';
-  final queryMode = _parseConversationMode(state.uri.queryParameters['mode']);
-  final queryRequestKey = state.uri.queryParameters['requestKey']?.trim();
-  final queryAgentId = state.uri.queryParameters['agentId']?.trim();
-  if (queryConversationId.isNotEmpty) {
-    if (queryConversationId == 'new' || queryConversationId == '__new__') {
-      return ConversationThreadTarget.newConversation(
-        mode: queryMode,
-        agentId: queryAgentId?.isEmpty == true ? null : queryAgentId,
-        fromNativeRoute: true,
-        requestKey: queryRequestKey?.isEmpty == true ? null : queryRequestKey,
-      );
-    }
-    final conversationId = int.tryParse(queryConversationId);
-    if (conversationId != null) {
-      return ConversationThreadTarget.existing(
-        conversationId: conversationId,
-        mode: queryMode,
-        agentId: queryAgentId?.isEmpty == true ? null : queryAgentId,
-        fromNativeRoute: true,
-        requestKey: queryRequestKey?.isEmpty == true ? null : queryRequestKey,
-      );
-    }
-  }
-
-  final extra = state.extra;
-  if (extra is ConversationThreadTarget) {
-    return extra;
-  }
-
-  final argsFromExtra = extra as List<String>? ?? const <String>[];
-  if (argsFromExtra.isEmpty) {
-    return null;
-  }
-
-  final first = argsFromExtra.first.trim();
-  final requestKey = argsFromExtra
-      .skip(1)
-      .map((item) => item.trim())
-      .firstWhere(
-        (item) =>
-            item.isNotEmpty &&
-            item != kNativeRouteFlag &&
-            !item.startsWith('mode=') &&
-            ConversationMode.values.every(
-              (mode) => mode.storageValue != item.toLowerCase(),
-            ),
-        orElse: () => '',
-      );
-  final modeRaw = argsFromExtra
-      .skip(1)
-      .map((item) => item.trim())
-      .firstWhere(
-        (item) =>
-            item.startsWith('mode=') ||
-            ConversationMode.values.any(
-              (mode) => mode.storageValue == item.toLowerCase(),
-            ),
-        orElse: () => '',
-      );
-  final mode = modeRaw.startsWith('mode=')
-      ? _parseConversationMode(modeRaw.substring(5))
-      : _parseConversationMode(modeRaw);
-  final fromNativeRoute = argsFromExtra.contains(kNativeRouteFlag);
-
-  if (first == 'new' || first == '__new__') {
-    return ConversationThreadTarget.newConversation(
-      mode: mode,
-      fromNativeRoute: fromNativeRoute,
-      requestKey: requestKey.isEmpty ? null : requestKey,
-    );
-  }
-
-  final conversationId = int.tryParse(first);
-  if (conversationId == null) {
-    return null;
-  }
-  return ConversationThreadTarget.existing(
-    conversationId: conversationId,
-    mode: mode,
-    fromNativeRoute: fromNativeRoute,
-    requestKey: requestKey.isEmpty ? null : requestKey,
-  );
-}
-
 List<GoRoute> homeRoutes = [
-  // 兼容旧首页路由，统一落到聊天页
+  // The home is the conversation list. Legacy thread targets still open chat.
   GoRoute(
     path: '/home/home',
     name: 'home/home',
-    builder: (context, state) {
-      return ChatPage(threadTarget: _parseChatThreadTarget(state));
+    redirect: (context, state) {
+      final destination = GoRouterManager.resolveHomeRoute(
+        state.uri.toString(),
+        extra: state.extra,
+      );
+      return destination == state.uri.toString() ? null : destination;
     },
+    builder: (context, state) => const ConversationHomePage(),
   ),
   GoRoute(
     path: '/home/blank_page',
@@ -156,7 +67,9 @@ List<GoRoute> homeRoutes = [
     path: '/home/chat',
     name: 'home/chat',
     builder: (context, state) {
-      return ChatPage(threadTarget: _parseChatThreadTarget(state));
+      return ChatPage(
+        threadTarget: parseConversationRouteTarget(state.uri, state.extra),
+      );
     },
   ),
 

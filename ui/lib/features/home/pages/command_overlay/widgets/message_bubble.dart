@@ -123,9 +123,7 @@ class MessageBubble extends StatelessWidget {
     if (!_usesThemeDrivenText()) {
       return visualProfile.userBubbleColor;
     }
-    return context.isDarkTheme
-        ? context.omniPalette.surfaceSecondary
-        : visualProfile.userBubbleColor;
+    return context.omniPalette.surfaceElevated;
   }
 
   Color _resolvedAttachmentSurfaceColor(BuildContext context) {
@@ -237,11 +235,11 @@ class MessageBubble extends StatelessWidget {
             child: Container(
               key: ValueKey('user-message-bubble-${message.id}'),
               constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: ShapeDecoration(
                 color: _resolvedUserBubbleColor(context),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(16),
                 ),
               ),
               child: Column(
@@ -992,7 +990,6 @@ class MessageBubble extends StatelessWidget {
       style: TextStyle(
         color: _resolvedUserPrimaryTextColor(context),
         fontSize: _chatTextSize,
-        fontFamily: 'PingFang SC',
         fontWeight: FontWeight.w400,
         height: 1.43,
         letterSpacing: 0.33,

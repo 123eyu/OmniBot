@@ -136,7 +136,7 @@ class _CodexRemoteDirectoryPickerSheetState
                       _isEnglish ? 'Remote Workspace' : '远程工作目录',
                       style: TextStyle(
                         color: palette.textPrimary,
-                        fontSize: 16,
+                        fontSize: 17,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

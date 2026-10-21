@@ -261,10 +261,10 @@ class _SettingsPageState extends State<SettingsPage> {
         child: ListView.separated(
           padding: edgeToEdgeScrollPadding(
             context,
-            const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            const EdgeInsets.fromLTRB(22, 10, 22, 32),
           ),
           itemCount: sections.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 22),
+          separatorBuilder: (_, _) => const SizedBox(height: 26),
           itemBuilder: (context, index) {
             return _buildSettingsSection(sections[index]);
           },
@@ -278,6 +278,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return [
       _SettingSection(
         label: isEnglish ? 'Account' : '账号',
+        isAccount: true,
         items: [
           _SettingItem(
             icon: LucideIcons.userRoundCog,
@@ -314,6 +315,9 @@ class _SettingsPageState extends State<SettingsPage> {
             icon: LucideIcons.database,
             title: context.l10n.settingsWorkspaceMemoryTitle,
             subtitle: workspaceMemorySubtitle,
+            trailingText: _workspaceMemoryConfigured
+                ? (isEnglish ? 'Configured' : '已配置')
+                : null,
             onTap: () async {
               await GoRouterManager.pushForResult(
                 '/home/workspace_memory_setting',
@@ -427,15 +431,24 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildSettingsSection(_SettingSection section) {
     return OmniSettingsGroup(
-      title: section.label,
+      title: section.isAccount ? null : section.label,
+      translateTitle: false,
       children: [
         for (final item in section.items)
-          OmniSettingsTile(
-            icon: item.icon,
-            title: item.title,
-            subtitle: item.subtitle,
-            trailing: item.trailing,
-            onTap: item.onTap,
+          Semantics(
+            hint: item.subtitle,
+            child: OmniSettingsTile(
+              icon: item.icon,
+              title: item.title,
+              trailingText: item.trailingText,
+              trailing: item.trailing,
+              onTap: item.onTap,
+              translateText: false,
+              padding: EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: section.isAccount ? 22 : 16,
+              ),
+            ),
           ),
       ],
     );
@@ -445,14 +458,20 @@ class _SettingsPageState extends State<SettingsPage> {
 class _SettingSection {
   final String label;
   final List<_SettingItem> items;
+  final bool isAccount;
 
-  const _SettingSection({required this.label, required this.items});
+  const _SettingSection({
+    required this.label,
+    required this.items,
+    this.isAccount = false,
+  });
 }
 
 class _SettingItem {
   final IconData? icon;
   final String title;
   final String? subtitle;
+  final String? trailingText;
   final Widget? trailing;
   final VoidCallback? onTap;
 
@@ -460,6 +479,7 @@ class _SettingItem {
     this.icon,
     required this.title,
     this.subtitle,
+    this.trailingText,
     this.trailing,
     this.onTap,
   });

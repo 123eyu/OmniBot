@@ -909,11 +909,20 @@ class _AccountPageState extends State<AccountPage> {
       case 'too_many_requests':
         return _text('操作太频繁，请稍后再试', 'Too many attempts. Try again later.');
       case 'verification_unavailable':
-        return _text('验证码服务暂时不可用，请稍后重试', 'Verification service is temporarily unavailable.');
+        return _text(
+          '验证码服务暂时不可用，请稍后重试',
+          'Verification service is temporarily unavailable.',
+        );
       case 'account_service_unavailable':
-        return _text('账号服务暂时不可用，请稍后重试', 'Account service is temporarily unavailable.');
+        return _text(
+          '账号服务暂时不可用，请稍后重试',
+          'Account service is temporarily unavailable.',
+        );
       case 'ACCOUNT_FEATURE_UNAVAILABLE':
-        return _text('当前账号服务版本不支持注册，请稍后重试', 'This account service does not support registration yet.');
+        return _text(
+          '当前账号服务版本不支持注册，请稍后重试',
+          'This account service does not support registration yet.',
+        );
       case 'current_password_invalid':
         return _text('当前密码不正确', 'The current password is incorrect');
       case 'password_reuse':
@@ -1093,9 +1102,8 @@ class _AccountPageState extends State<AccountPage> {
                 const SizedBox(height: 14),
                 Text(
                   _text('账号服务尚未配置', 'Account service is not configured'),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -1143,9 +1151,8 @@ class _AccountPageState extends State<AccountPage> {
                     '登录凭证暂时无法读取',
                     'Sign-in credentials are temporarily unavailable',
                   ),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -1942,15 +1949,22 @@ class _AccountPageState extends State<AccountPage> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.08),
+        color: Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
-          const Icon(LucideIcons.circleAlert, color: Colors.red, size: 20),
+          Icon(
+            LucideIcons.circleAlert,
+            color: Theme.of(context).colorScheme.error,
+            size: 20,
+          ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(message, style: const TextStyle(color: Colors.red)),
+            child: Text(
+              message,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           ),
         ],
       ),

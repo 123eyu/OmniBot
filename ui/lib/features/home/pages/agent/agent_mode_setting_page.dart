@@ -391,8 +391,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    final dark = context.isDarkTheme;
-    final card = dark ? palette.surfacePrimary : Colors.white;
+    final card = palette.surfacePrimary;
     final agents = _visibleAgents;
     final managed = agents.where((agent) => agent.builtIn).toList();
     final custom = agents.where((agent) => !agent.builtIn).toList();
@@ -445,7 +444,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
             : ListView(
                 padding: edgeToEdgeScrollPadding(
                   context,
-                  const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                  const EdgeInsets.fromLTRB(22, 12, 22, 32),
                 ),
                 children: [
                   SettingsSectionTitle(
@@ -567,7 +566,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                         title: _text('远程 PC Bridge', 'Remote PC Bridge'),
                         statusColor: _remoteBridgeEnabled
                             ? const Color(0xFF2EAF67)
-                            : const Color(0xFF98A2B3),
+                            : palette.textTertiary,
                         statusLabel: _remoteBridgeEnabled
                             ? _text('已启用', 'Enabled')
                             : _text('未启用', 'Not enabled'),
@@ -668,8 +667,12 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
 
   Widget _buildAgentTile(AcpAgentProfile agent) {
     final palette = context.omniPalette;
-    final status = _statusPresentation(agent.status, _english);
-    final statusColor = agent.enabled ? status.color : const Color(0xFF98A2B3);
+    final status = _statusPresentation(
+      agent.status,
+      _english,
+      palette.textTertiary,
+    );
+    final statusColor = agent.enabled ? status.color : palette.textTertiary;
     final hasError =
         (agent.lastCheckError ?? '').isNotEmpty && agent.status != 'online';
     final canTest =
@@ -718,9 +721,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
       navigationLabel: _text('配置', 'Configure'),
       navigationKey: Key('agent-navigation-${agent.id}'),
       busy: busy,
-      onTap: preparing
-          ? () {}
-          : () => _openAgentConfig(agent),
+      onTap: preparing ? () {} : () => _openAgentConfig(agent),
     );
   }
 
@@ -765,7 +766,9 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
       ),
       onAction: disabled
           ? null
-          : () => active ? _stopPluginAction(action) : _invokePluginAction(action),
+          : () => active
+                ? _stopPluginAction(action)
+                : _invokePluginAction(action),
       busy: busy,
       onTap: disabled ? null : () => _invokePluginAction(action),
     );
@@ -897,7 +900,7 @@ class _AddCustomAgentDialogState extends State<_AddCustomAgentDialog> {
                     child: Text(
                       _text('启用 Agent', 'Enable Agent'),
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 15,
                         fontWeight: FontWeight.w500,
                         color: context.omniPalette.textPrimary,
                       ),
@@ -990,7 +993,7 @@ class _FlatTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 14.5,
+                        fontSize: 15,
                         fontWeight: FontWeight.w500,
                         color: palette.textPrimary,
                         height: 1.38,
@@ -1179,7 +1182,11 @@ Map<String, String> _parseEnvironment(String source) {
   return environment;
 }
 
-({String label, Color color}) _statusPresentation(String status, bool english) {
+({String label, Color color}) _statusPresentation(
+  String status,
+  bool english,
+  Color inactiveColor,
+) {
   return switch (status) {
     'online' => (
       label: english ? 'Available' : '可用',
@@ -1187,7 +1194,7 @@ Map<String, String> _parseEnvironment(String source) {
     ),
     'missing' => (
       label: english ? 'Not installed' : '未安装',
-      color: const Color(0xFF98A2B3),
+      color: inactiveColor,
     ),
     'offline' => (
       label: english ? 'Could not start' : '启动失败',

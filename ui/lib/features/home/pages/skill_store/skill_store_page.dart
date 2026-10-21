@@ -335,9 +335,7 @@ class _SkillStorePageState extends State<SkillStorePage> {
       children: [
         OmniSettingsGroup(
           dividerIndent: 16,
-          children: [
-            for (final skill in visibleSkills) _buildSkillTile(skill),
-          ],
+          children: [for (final skill in visibleSkills) _buildSkillTile(skill)],
         ),
       ],
     );
@@ -360,18 +358,11 @@ class _SkillStorePageState extends State<SkillStorePage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.extension_outlined,
-            size: 40,
-            color: palette.textTertiary,
-          ),
+          Icon(Icons.extension_outlined, size: 40, color: palette.textTertiary),
           const SizedBox(height: 12),
           Text(
             context.l10n.skillEmpty,
-            style: TextStyle(
-              fontSize: 15,
-              color: palette.textSecondary,
-            ),
+            style: TextStyle(fontSize: 15, color: palette.textSecondary),
           ),
         ],
       ),
@@ -486,7 +477,7 @@ class _SkillStorePageState extends State<SkillStorePage> {
   Widget _buildSkillTitle(AgentSkillItem item) {
     final palette = context.omniPalette;
     final titleStyle = TextStyle(
-      fontSize: 14.5,
+      fontSize: 15,
       fontWeight: FontWeight.w500,
       color: palette.textPrimary,
       height: 1.38,

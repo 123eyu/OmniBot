@@ -46,8 +46,6 @@ class ChatMessageList extends StatefulWidget {
   final Set<String> activeAgentTurnIds;
   final bool useAcpPresentation;
   final String? activeAcpAgentId;
-  final Set<String>? expandedAgentRunTaskIds;
-  final ValueChanged<Set<String>>? onExpandedAgentRunTaskIdsChanged;
   final AppBackgroundVisualProfile visualProfile;
   final AppBackgroundConfig appearanceConfig;
   final bool showEmptyGreeting;
@@ -77,8 +75,6 @@ class ChatMessageList extends StatefulWidget {
     this.activeAgentTurnIds = const <String>{},
     this.useAcpPresentation = false,
     this.activeAcpAgentId,
-    this.expandedAgentRunTaskIds,
-    this.onExpandedAgentRunTaskIdsChanged,
     this.visualProfile = AppBackgroundVisualProfile.defaultProfile,
     this.appearanceConfig = AppBackgroundConfig.defaults,
     this.showEmptyGreeting = true,
@@ -135,19 +131,14 @@ class _ChatLatestEdgeScrollPhysics extends ClampingScrollPhysics {
 }
 
 class _ChatMessageListState extends State<ChatMessageList> {
-  static const Duration _kAgentRunToggleAutoStickSuppression = Duration(
-    milliseconds: 420,
-  );
   bool _stickToBottomScheduled = false;
   bool _autoStickToLatest = true;
   bool _outerScrollWasUserDriven = false;
   bool _isAutoLoadingHistory = false;
-  final Set<String> _localExpandedAgentRunTaskIds = <String>{};
   static const double _latestEdgeTolerance = 48.0;
   static const double _manualLatestAttachTolerance = 2.0;
   static const double _historyLoadTriggerExtent = 180.0;
   ObservableChatMessageList? _observableMessages;
-  DateTime? _autoStickSuppressedUntil;
   List<AgentRunTimelineEntry>? _timelineEntriesCache;
   ObservableChatMessageList? _timelineCacheSource;
   int _timelineCacheStructureRevision = -1;
@@ -159,21 +150,6 @@ class _ChatMessageListState extends State<ChatMessageList> {
   static const String _kListEntryKeyPrefix = 'chat-timeline-entry:';
   static const _forwardSliverKey = ValueKey('chat-timeline-forward');
   String? _historyAnchorEntryKey;
-
-  Set<String> get _expandedAgentRunTaskIds =>
-      widget.expandedAgentRunTaskIds ?? _localExpandedAgentRunTaskIds;
-
-  bool get _isAutoStickTemporarilySuppressed {
-    final suppressedUntil = _autoStickSuppressedUntil;
-    if (suppressedUntil == null) {
-      return false;
-    }
-    if (DateTime.now().isBefore(suppressedUntil)) {
-      return true;
-    }
-    _autoStickSuppressedUntil = null;
-    return false;
-  }
 
   @override
   void initState() {
@@ -198,14 +174,10 @@ class _ChatMessageListState extends State<ChatMessageList> {
       _navigatorJumpSerial++;
       _autoStickToLatest = true;
       _outerScrollWasUserDriven = false;
-      _autoStickSuppressedUntil = null;
       _scheduleStickToLatest();
       return;
     }
     if (_autoStickToLatest) {
-      return;
-    }
-    if (_isAutoStickTemporarilySuppressed) {
       return;
     }
     if (_isNearLatest(null, _manualLatestAttachTolerance)) {
@@ -259,7 +231,7 @@ class _ChatMessageListState extends State<ChatMessageList> {
   void _scheduleStickToBottom() => _scheduleStickToLatest();
 
   void _scheduleStickToLatest() {
-    if (!_autoStickToLatest || _isAutoStickTemporarilySuppressed) {
+    if (!_autoStickToLatest) {
       return;
     }
     if (_stickToBottomScheduled) {
@@ -305,7 +277,6 @@ class _ChatMessageListState extends State<ChatMessageList> {
     if (!mounted) {
       return;
     }
-    _collapseCancelledAgentRuns();
     // 流式追加文本这类 content 级变更由每行的 ValueListenableBuilder 精确
     // 刷新，这里不再整表 setState（否则每个 chunk 都会重跑时间线分组和
     // 全部可见行的 itemBuilder）。结构变化仍走完整重建。
@@ -317,7 +288,6 @@ class _ChatMessageListState extends State<ChatMessageList> {
       // was already visible: a list that is exactly back at the latest edge
       // must reattach before the new layout pushes that footer out of view.
       if (!_autoStickToLatest &&
-          !_isAutoStickTemporarilySuppressed &&
           _isNearLatest(null, _manualLatestAttachTolerance)) {
         _autoStickToLatest = true;
       }
@@ -327,107 +297,9 @@ class _ChatMessageListState extends State<ChatMessageList> {
     setState(() {});
   }
 
-  void _collapseCancelledAgentRuns() {
-    final collapsedTaskIds = _cancelledAgentRunTaskIds(
-      _expandedAgentRunTaskIds,
-    );
-    if (collapsedTaskIds.isEmpty) {
-      return;
-    }
-    final nextExpandedTaskIds = Set<String>.from(_expandedAgentRunTaskIds)
-      ..removeAll(collapsedTaskIds);
-    if (widget.expandedAgentRunTaskIds != null) {
-      widget.onExpandedAgentRunTaskIdsChanged?.call(nextExpandedTaskIds);
-      return;
-    }
-    _localExpandedAgentRunTaskIds
-      ..clear()
-      ..addAll(nextExpandedTaskIds);
-    widget.onExpandedAgentRunTaskIdsChanged?.call(nextExpandedTaskIds);
-  }
-
-  Set<String> _cancelledAgentRunTaskIds(Set<String> expandedTaskIds) {
-    if (expandedTaskIds.isEmpty) {
-      return const <String>{};
-    }
-    final normalizedExpandedTaskIds = expandedTaskIds
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toSet();
-    if (normalizedExpandedTaskIds.isEmpty) {
-      return const <String>{};
-    }
-    final collapsedTaskIds = <String>{};
-    final messages = _observableMessages ?? widget.messages;
-    for (final message in messages) {
-      final taskId = agentRunParentTaskId(message);
-      if (taskId == null || !normalizedExpandedTaskIds.contains(taskId)) {
-        continue;
-      }
-      if (_isCancelledAgentRunMessage(message)) {
-        collapsedTaskIds.add(taskId);
-      }
-    }
-    return collapsedTaskIds;
-  }
-
-  bool _isCancelledAgentRunMessage(ChatMessageModel message) {
-    return message.type == 1 &&
-        message.user == 2 &&
-        isCancelledTaskText(message);
-  }
-
   void _handleParentScrollHandoff() {
     _autoStickToLatest = false;
     _outerScrollWasUserDriven = false;
-  }
-
-  void _suspendAutoStickForAgentRunToggle() {
-    _autoStickToLatest = false;
-    _outerScrollWasUserDriven = false;
-    _autoStickSuppressedUntil = DateTime.now().add(
-      _kAgentRunToggleAutoStickSuppression,
-    );
-  }
-
-  void _toggleAgentRunGroup(String taskId) {
-    final normalizedTaskId = taskId.trim();
-    if (normalizedTaskId.isEmpty) {
-      return;
-    }
-    _suspendAutoStickForAgentRunToggle();
-    final nextExpandedTaskIds = Set<String>.from(_expandedAgentRunTaskIds);
-    final wasExpanded = nextExpandedTaskIds.contains(normalizedTaskId);
-    if (wasExpanded) {
-      nextExpandedTaskIds.remove(normalizedTaskId);
-    } else {
-      nextExpandedTaskIds.add(normalizedTaskId);
-    }
-    if (widget.expandedAgentRunTaskIds != null) {
-      widget.onExpandedAgentRunTaskIdsChanged?.call(nextExpandedTaskIds);
-    } else {
-      setState(() {
-        _localExpandedAgentRunTaskIds
-          ..clear()
-          ..addAll(nextExpandedTaskIds);
-      });
-      widget.onExpandedAgentRunTaskIdsChanged?.call(nextExpandedTaskIds);
-    }
-    if (!wasExpanded) {
-      // Expanding a run increases its height below the header. When the run
-      // is near the latest edge, the newly revealed reasoning can otherwise
-      // land underneath the composer and look like it was not restored at
-      // all. Scroll the whole run into view after the expansion animation has
-      // laid out, without changing the user's position when they are reading
-      // an older part of the conversation.
-      final wasNearLatest = _isNearLatest(null);
-      if (wasNearLatest) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          unawaited(_animateToEntryKey('agent-run-$normalizedTaskId'));
-        });
-      }
-    }
   }
 
   double _distanceToOldest(ScrollMetrics metrics) {
@@ -745,8 +617,6 @@ class _ChatMessageListState extends State<ChatMessageList> {
         onRequestAuthorize: widget.onRequestAuthorize,
         onUserMessageLongPressStart: widget.onUserMessageLongPressStart,
         onStreamingTextLayoutChanged: null,
-        onToggleAgentRunGroup: _toggleAgentRunGroup,
-        expandedAgentRunTaskIds: _expandedAgentRunTaskIds,
         useAcpPresentation: widget.useAcpPresentation,
         visualProfile: widget.visualProfile,
         appearanceConfig: widget.appearanceConfig,
@@ -929,7 +799,7 @@ class _ChatMessageListState extends State<ChatMessageList> {
       semanticChildCount: timelineEntries.length,
       physics: _ChatLatestEdgeScrollPhysics(
         shouldStickToLatest: () =>
-            _autoStickToLatest && !_isAutoStickTemporarilySuppressed,
+            _autoStickToLatest,
       ),
       clipBehavior: Clip.hardEdge,
       slivers: [
@@ -993,8 +863,6 @@ class _ChatTimelineListRow extends StatelessWidget {
     this.onRequestAuthorize,
     this.onUserMessageLongPressStart,
     this.onStreamingTextLayoutChanged,
-    required this.onToggleAgentRunGroup,
-    required this.expandedAgentRunTaskIds,
     required this.useAcpPresentation,
     required this.visualProfile,
     required this.appearanceConfig,
@@ -1013,8 +881,6 @@ class _ChatTimelineListRow extends StatelessWidget {
   final void Function(ChatMessageModel message, LongPressStartDetails details)?
   onUserMessageLongPressStart;
   final VoidCallback? onStreamingTextLayoutChanged;
-  final void Function(String taskId) onToggleAgentRunGroup;
-  final Set<String> expandedAgentRunTaskIds;
   final bool useAcpPresentation;
   final AppBackgroundVisualProfile visualProfile;
   final AppBackgroundConfig appearanceConfig;
@@ -1030,8 +896,6 @@ class _ChatTimelineListRow extends StatelessWidget {
       child: AgentRunGroupMessage(
         group: group,
         useAcpPresentation: useAcpPresentation,
-        expanded: expandedAgentRunTaskIds.contains(group.taskId),
-        onToggleExpanded: () => onToggleAgentRunGroup(group.taskId),
         onBeforeTaskExecute: onBeforeTaskExecute,
         onCancelTask: onCancelTask,
         onRetryAgentMessage: onRetryAgentMessage,

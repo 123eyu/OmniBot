@@ -156,7 +156,7 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
         child: ListView(
           padding: edgeToEdgeScrollPadding(
             context,
-            const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            const EdgeInsets.fromLTRB(22, 12, 22, 32),
           ),
           children: [
             OmniSettingsGroup(
@@ -451,7 +451,7 @@ class _PromptEditorSheet extends StatelessWidget {
                 context.trLegacy(editing ? '编辑快捷指令' : '新增快捷指令'),
                 style: TextStyle(
                   color: palette.textPrimary,
-                  fontSize: 16.5,
+                  fontSize: 17,
                   fontWeight: FontWeight.w600,
                 ),
               ),

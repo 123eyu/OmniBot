@@ -58,7 +58,7 @@ class RunLogOverviewPanel extends StatelessWidget {
                       status.title,
                       style: TextStyle(
                         color: palette.textPrimary,
-                        fontSize: 14,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -288,7 +288,7 @@ class RunLogTimelineStepCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: palette.textPrimary,
-                            fontSize: 14,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                             height: 1.25,
                           ),

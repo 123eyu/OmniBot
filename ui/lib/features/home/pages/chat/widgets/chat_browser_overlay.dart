@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_menu.dart';
 import 'package:flutter/services.dart';
 import 'package:ui/features/home/pages/chat/chat_page_models.dart';
 import 'package:ui/l10n/l10n.dart';
@@ -899,10 +900,13 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: OmniMenuStyle.panelRadius,
+      ),
       builder: (context) {
         return SafeArea(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: OmniMenuStyle.panelPadding,
             children: [
               Text(
                 _text('标签页', 'Tabs'),
@@ -910,27 +914,15 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
               ),
               const SizedBox(height: 12),
               ...snapshot.tabs.map((tab) {
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
+                return OmniMenuItem(
+                  selected: tab.isActive,
                   leading: Icon(
                     tab.isActive
                         ? Icons.radio_button_checked_rounded
                         : Icons.radio_button_unchecked_rounded,
-                    size: 18,
-                    color: tab.isActive
-                        ? const Color(0xFF2563EB)
-                        : const Color(0xFF94A3B8),
                   ),
-                  title: Text(
-                    tab.title.trim().isEmpty ? tab.url : tab.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    tab.url,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  label: tab.title.trim().isEmpty ? tab.url : tab.title,
+                  subtitle: tab.url,
                   trailing: IconButton(
                     onPressed: () async {
                       Navigator.of(context).pop();
@@ -969,10 +961,13 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: OmniMenuStyle.panelRadius,
+      ),
       builder: (context) {
         return SafeArea(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: OmniMenuStyle.panelPadding,
             children: [
               Text(
                 _text('浏览器菜单', 'Browser menu'),
@@ -1062,12 +1057,7 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
     required String label,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon, color: const Color(0xFF334155)),
-      title: Text(label),
-      onTap: onTap,
-    );
+    return OmniMenuItem(leading: Icon(icon), label: label, onTap: onTap);
   }
 
   Future<void> _showHistorySheet() async {
@@ -1537,8 +1527,7 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 }

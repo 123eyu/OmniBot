@@ -43,6 +43,60 @@ class _TourHarnessState extends State<_TourHarness> {
 }
 
 void main() {
+  testWidgets(
+    'model tour ignores a hidden anchor and measures it when visible',
+    (tester) async {
+      final anchor = GlobalKey();
+      final size = ValueNotifier<Size>(Size.zero);
+      addTearDown(size.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: ValueListenableBuilder<Size>(
+            valueListenable: size,
+            builder: (context, value, _) => Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned(
+                  left: 100,
+                  top: 300,
+                  child: SizedBox(
+                    key: anchor,
+                    width: value.width,
+                    height: value.height,
+                  ),
+                ),
+                ChatSpotlightTour(
+                  step: 4,
+                  anchorKey: anchor,
+                  onNext: () {},
+                  onFinish: () {},
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      Rect spotlight() {
+        final painter =
+            tester
+                    .widget<CustomPaint>(
+                      find.byKey(const ValueKey('chat-spotlight-hole-4')),
+                    )
+                    .painter
+                as dynamic;
+        return painter.spotlight as Rect;
+      }
+
+      expect(spotlight().width, 40);
+      size.value = const Size(112, 36);
+      await tester.pumpAndSettle();
+      expect(spotlight(), const Rect.fromLTWH(96, 296, 120, 44));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('spotlight tour advances from blank areas without bottom bar', (
     tester,
   ) async {

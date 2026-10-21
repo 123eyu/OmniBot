@@ -405,7 +405,7 @@ class _ExperienceMiscSettingPageState
         child: ListView.separated(
           padding: edgeToEdgeScrollPadding(
             context,
-            const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            const EdgeInsets.fromLTRB(22, 12, 22, 32),
           ),
           itemCount: sections.length,
           separatorBuilder: (_, __) => const SizedBox(height: 22),

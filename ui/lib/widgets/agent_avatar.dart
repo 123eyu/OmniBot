@@ -214,7 +214,7 @@ class _AvatarImage extends StatelessWidget {
     final presetAsset = AgentAvatarService.assetForIndex(presetIndex);
 
     Widget fallback() {
-      return Image.asset(
+      final image = Image.asset(
         presetAsset,
         width: size,
         height: size,
@@ -230,6 +230,12 @@ class _AvatarImage extends StatelessWidget {
           );
         },
       );
+      if (presetAsset == AgentAvatarService.defaultAvatarAsset) {
+        // The adaptive launcher foreground includes an 82px transparent inset
+        // on its 432px canvas. Fill the existing avatar clip with its 268px mark.
+        return Transform.scale(scale: 432 / 268, child: image);
+      }
+      return image;
     }
 
     if (customImagePath.trim().isEmpty) {
@@ -436,9 +442,7 @@ class _LocalAvatarPickerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    final accentColor = context.isDarkTheme
-        ? palette.accentPrimary
-        : const Color(0xFF2C7FEB);
+    final accentColor = palette.accentPrimary;
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(16),
@@ -839,23 +843,21 @@ class _AgentAvatarCropDialogState extends State<_AgentAvatarCropDialog> {
                             ? null
                             : () => _confirmCrop(cropSize.toDouble()),
                         style: FilledButton.styleFrom(
-                          backgroundColor: isDark
-                              ? palette.accentPrimary
-                              : const Color(0xFF2C7FEB),
+                          backgroundColor: palette.accentPrimary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         child: _isSaving
-                            ? const SizedBox(
+                            ? SizedBox(
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onPrimary,
                                 ),
                               )
                             : const Text('设为头像'),
@@ -936,9 +938,7 @@ class _AgentAvatarPickerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    final selectedColor = context.isDarkTheme
-        ? palette.accentPrimary
-        : const Color(0xFF2C7FEB);
+    final selectedColor = palette.accentPrimary;
 
     return Material(
       color: selected

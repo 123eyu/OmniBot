@@ -240,7 +240,11 @@ class _AuthorizePageState extends State<AuthorizePage>
 
     return Scaffold(
       backgroundColor: palette.pageBackground,
-      appBar: CommonAppBar(primary: true, onBackPressed: () => _finish(false)),
+      appBar: CommonAppBar(
+        title: LegacyTextLocalizer.localize('设置权限'),
+        primary: true,
+        onBackPressed: () => _finish(false),
+      ),
       body: SafeArea(
         top: false,
         bottom: false,
@@ -249,26 +253,16 @@ class _AuthorizePageState extends State<AuthorizePage>
             Expanded(
               child: SingleChildScrollView(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 35),
-                      Text(
-                        LegacyTextLocalizer.localize('设置权限'),
-                        style: TextStyle(
-                          color: palette.textPrimary,
-                          fontSize: 35,
-                          fontWeight: FontWeight.w500,
-                          height: 0.86,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       Text(
                         LegacyTextLocalizer.localize('请放心，这些权限你随时可以收回'),
                         style: TextStyle(
                           color: palette.textSecondary,
-                          fontSize: 14,
+                          fontSize: 15,
                           fontWeight: FontWeight.w400,
                           height: 1.57,
                         ),
@@ -279,7 +273,7 @@ class _AuthorizePageState extends State<AuthorizePage>
                           requiredPermissionHint,
                           style: TextStyle(
                             color: palette.accentPrimary,
-                            fontSize: 14,
+                            fontSize: 15,
                             fontWeight: FontWeight.w500,
                             height: 1.57,
                           ),
@@ -300,7 +294,7 @@ class _AuthorizePageState extends State<AuthorizePage>
             ),
             SafeArea(
               top: false,
-              minimum: const EdgeInsets.fromLTRB(62, 16, 62, 16),
+              minimum: const EdgeInsets.fromLTRB(22, 16, 22, 16),
               child: ValueListenableBuilder<bool>(
                 valueListenable: _canContinue,
                 builder: (context, authorized, child) {
@@ -318,23 +312,21 @@ class _AuthorizePageState extends State<AuthorizePage>
                         width: double.infinity,
                         height: 48,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment(0.14, -1.09),
-                            end: Alignment(1.10, 1.26),
-                            colors: [Color(0xFF1930D9), Color(0xFF2CA5F0)],
-                          ),
-                          borderRadius: BorderRadius.circular(8),
+                          color: palette.accentPrimary,
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         child: Center(
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               if (_isLoading) ...[
-                                const SizedBox(
+                                SizedBox(
                                   width: 16,
                                   height: 16,
                                   child: CircularProgressIndicator(
-                                    color: Colors.white,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimary,
                                     strokeWidth: 2,
                                   ),
                                 ),
@@ -342,8 +334,10 @@ class _AuthorizePageState extends State<AuthorizePage>
                                 Text(
                                   LegacyTextLocalizer.localize('权限检查中...'),
                                   style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 17,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimary,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                     height: 1.29,
                                   ),
@@ -352,8 +346,10 @@ class _AuthorizePageState extends State<AuthorizePage>
                                 Text(
                                   LegacyTextLocalizer.localize('继续任务'),
                                   style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 17,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimary,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                     height: 1.29,
                                   ),

@@ -92,6 +92,13 @@ interface ConversationDao {
     @Query("SELECT COUNT(*) FROM conversations")
     suspend fun getConversationCount(): Int
 
+    @Query("""
+        SELECT c.id, c.mode, c.createdAt, b.threadId
+        FROM conversations c LEFT JOIN codex_thread_bindings b ON b.conversationId = c.id
+        WHERE c.createdAt >= :since AND c.createdAt < :until
+    """)
+    suspend fun getActivityRows(since: Long, until: Long): List<ConversationActivityRow>
+
     @Query("DELETE FROM conversations WHERE id = :id")
     suspend fun deleteById(id: Long): Int
 

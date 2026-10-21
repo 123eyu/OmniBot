@@ -64,6 +64,7 @@ mixin _ChatPageTerminalEnvMixin on _ChatPageStateBase {
     await showGlassPopup<String>(
       context: context,
       anchor: anchorRect,
+      overlapAnchor: false,
       horizontalPlacement: GlassPopupHorizontalPlacement.centerOnScreen,
       child: _TerminalEnvironmentEditorContent(
         width: popupWidth,
@@ -243,30 +244,21 @@ class _TerminalEnvironmentEditorContentState
       hintText: hintText,
       hintStyle: TextStyle(
         fontSize: 13,
-        color: isDark ? palette.textTertiary : const Color(0xFF9AA4B6),
+        color: palette.textTertiary,
         fontWeight: FontWeight.w500,
       ),
       filled: true,
-      fillColor: isDark
-          ? palette.surfaceSecondary.withValues(alpha: 0.62)
-          : Colors.white.withValues(alpha: 0.48),
+      fillColor: palette.surfaceSecondary,
       border: const OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(12)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: const BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(
-          color: isDark
-              ? palette.borderSubtle.withValues(alpha: 0.72)
-              : Colors.white.withValues(alpha: 0.70),
-        ),
+        borderSide: BorderSide(color: palette.borderSubtle),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: const BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(
-          color: isDark ? palette.accentPrimary : const Color(0xFF2C7FEB),
-          width: 1.2,
-        ),
+        borderSide: BorderSide(color: palette.accentPrimary, width: 1.2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     );
@@ -289,7 +281,6 @@ class _TerminalEnvironmentEditorContentState
     required VoidCallback onTap,
   }) {
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -297,11 +288,7 @@ class _TerminalEnvironmentEditorContentState
         borderRadius: BorderRadius.circular(999),
         child: Padding(
           padding: const EdgeInsets.all(4),
-          child: Icon(
-            icon,
-            size: 18,
-            color: isDark ? palette.textTertiary : const Color(0xFF8FA1BC),
-          ),
+          child: Icon(icon, size: 18, color: palette.textTertiary),
         ),
       ),
     );
@@ -309,7 +296,6 @@ class _TerminalEnvironmentEditorContentState
 
   Widget _buildVariableRow(ChatTerminalEnvironmentVariable item) {
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     if (_editingOriginalKey == item.normalizedKey) {
       return _buildEditingVariableRow();
     }
@@ -318,15 +304,9 @@ class _TerminalEnvironmentEditorContentState
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: isDark
-              ? palette.surfaceSecondary.withValues(alpha: 0.58)
-              : Colors.white.withValues(alpha: 0.38),
+          color: palette.surfaceSecondary,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark
-                ? palette.borderSubtle.withValues(alpha: 0.62)
-                : Colors.white.withValues(alpha: 0.58),
-          ),
+          border: Border.all(color: palette.borderSubtle),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -342,9 +322,7 @@ class _TerminalEnvironmentEditorContentState
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 13,
-                      color: isDark
-                          ? palette.textPrimary
-                          : const Color(0xFF1F2937),
+                      color: palette.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -355,9 +333,7 @@ class _TerminalEnvironmentEditorContentState
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 12,
-                      color: isDark
-                          ? palette.textSecondary
-                          : const Color(0xFF64748B),
+                      color: palette.textSecondary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -394,15 +370,9 @@ class _TerminalEnvironmentEditorContentState
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: isDark
-              ? palette.surfaceSecondary.withValues(alpha: 0.58)
-              : Colors.white.withValues(alpha: 0.38),
+          color: palette.surfaceSecondary,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark
-                ? palette.borderSubtle.withValues(alpha: 0.62)
-                : Colors.white.withValues(alpha: 0.58),
-          ),
+          border: Border.all(color: palette.borderSubtle),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,9 +389,7 @@ class _TerminalEnvironmentEditorContentState
                     cursorColor: isDark ? palette.accentPrimary : null,
                     style: TextStyle(
                       fontSize: 13,
-                      color: isDark
-                          ? palette.textPrimary
-                          : const Color(0xFF1F2937),
+                      color: palette.textPrimary,
                       fontWeight: FontWeight.w500,
                     ),
                     decoration: _buildTextFieldDecoration(
@@ -441,9 +409,7 @@ class _TerminalEnvironmentEditorContentState
                     cursorColor: isDark ? palette.accentPrimary : null,
                     style: TextStyle(
                       fontSize: 13,
-                      color: isDark
-                          ? palette.textPrimary
-                          : const Color(0xFF1F2937),
+                      color: palette.textPrimary,
                       fontWeight: FontWeight.w500,
                     ),
                     decoration: _buildTextFieldDecoration(
@@ -505,7 +471,7 @@ class _TerminalEnvironmentEditorContentState
             cursorColor: isDark ? palette.accentPrimary : null,
             style: TextStyle(
               fontSize: 13,
-              color: isDark ? palette.textPrimary : const Color(0xFF1F2937),
+              color: palette.textPrimary,
               fontWeight: FontWeight.w500,
             ),
             decoration: _buildTextFieldDecoration(
@@ -525,7 +491,7 @@ class _TerminalEnvironmentEditorContentState
             cursorColor: isDark ? palette.accentPrimary : null,
             style: TextStyle(
               fontSize: 13,
-              color: isDark ? palette.textPrimary : const Color(0xFF1F2937),
+              color: palette.textPrimary,
               fontWeight: FontWeight.w500,
             ),
             decoration: _buildTextFieldDecoration(
@@ -549,9 +515,7 @@ class _TerminalEnvironmentEditorContentState
               label: const Text('添加'),
               style: FilledButton.styleFrom(
                 visualDensity: VisualDensity.compact,
-                foregroundColor: isDark
-                    ? palette.textPrimary
-                    : const Color(0xFF1930D9),
+                foregroundColor: palette.textPrimary,
                 backgroundColor: isDark
                     ? Color.alphaBlend(
                         palette.accentPrimary.withValues(alpha: 0.18),
@@ -570,7 +534,6 @@ class _TerminalEnvironmentEditorContentState
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     final dynamicMaxHeight =
         (mediaQuery.size.height - mediaQuery.viewInsets.bottom - 96)
             .clamp(220.0, widget.maxHeight)
@@ -594,9 +557,7 @@ class _TerminalEnvironmentEditorContentState
                       Icon(
                         Icons.tune_rounded,
                         size: 16,
-                        color: isDark
-                            ? palette.textSecondary
-                            : const Color(0xFF617390),
+                        color: palette.textSecondary,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -604,9 +565,7 @@ class _TerminalEnvironmentEditorContentState
                           '终端环境变量',
                           style: TextStyle(
                             fontSize: 13,
-                            color: isDark
-                                ? palette.textPrimary
-                                : const Color(0xFF1F2937),
+                            color: palette.textPrimary,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -615,9 +574,7 @@ class _TerminalEnvironmentEditorContentState
                         '${_variables.length}',
                         style: TextStyle(
                           fontSize: 11,
-                          color: isDark
-                              ? palette.textTertiary
-                              : const Color(0xFF8FA1BC),
+                          color: palette.textTertiary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -632,9 +589,7 @@ class _TerminalEnvironmentEditorContentState
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark
-                            ? palette.textTertiary
-                            : const Color(0xFF94A3B8),
+                        color: palette.textTertiary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -652,12 +607,7 @@ class _TerminalEnvironmentEditorContentState
                     ),
                   ),
                 if (!_isEditing) ...[
-                  Divider(
-                    height: 1,
-                    color: isDark
-                        ? palette.borderSubtle.withValues(alpha: 0.62)
-                        : Colors.white.withValues(alpha: 0.62),
-                  ),
+                  Divider(height: 1, color: palette.borderSubtle),
                   _buildAddForm(),
                 ],
               ],

@@ -26,9 +26,8 @@ extension _ChatPageUserMessageActions on _ChatPageStateBase {
             ? conversation.latestPromptTokens
             : null,
         onThresholdSaved: (nextThreshold) async {
-          final trackedConversation = _modeState(
-            conversationMode,
-          ).currentConversation;
+          final trackedConversation = _modeState(conversationMode)
+              .currentConversation;
           final activeConversation = _currentConversation;
           final ConversationModel latestConversation;
           if (trackedConversation?.id == conversation.id) {
@@ -136,6 +135,7 @@ extension _ChatPageUserMessageActions on _ChatPageStateBase {
     return showGlassPopup<_UserMessageQuickAction>(
       context: context,
       anchor: anchor,
+      overlapAnchor: false,
       verticalGap: 10,
       instant: true,
       horizontalPlacement: GlassPopupHorizontalPlacement.centerOnAnchor,

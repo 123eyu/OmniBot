@@ -1278,7 +1278,7 @@ void main() {
       final barTopLeft = tester.getTopLeft(find.byKey(kChatToolActivityBarKey));
       final titleTopLeft = tester.getTopLeft(find.text('检查 git 状态'));
       final barSize = tester.getSize(find.byKey(kChatToolActivityBarKey));
-      final glassSurface = find.descendant(
+      final solidSurface = find.descendant(
         of: find.byKey(kChatToolActivityBarKey),
         matching: find.byWidgetPredicate((widget) {
           if (widget is! DecoratedBox || widget.decoration is! BoxDecoration) {
@@ -1286,7 +1286,8 @@ void main() {
           }
           final decoration = widget.decoration as BoxDecoration;
           return decoration.border != null &&
-              decoration.gradient is LinearGradient;
+              decoration.gradient == null &&
+              decoration.color?.a == 1;
         }),
       );
 
@@ -1295,13 +1296,13 @@ void main() {
       expect(barTopLeft.dx, closeTo(72, 0.1));
       expect(barSize.width, closeTo(240, 0.1));
       expect(titleTopLeft.dx, greaterThan(previewTopRight.dx - 12));
-      expect(glassSurface, findsOneWidget);
+      expect(solidSurface, findsOneWidget);
       expect(
         find.descendant(
           of: find.byKey(kChatToolActivityBarKey),
           matching: find.byType(BackdropFilter),
         ),
-        findsOneWidget,
+        findsNothing,
       );
       expect(find.text('运行中'), findsOneWidget);
       expect(find.text('1/2'), findsNothing);

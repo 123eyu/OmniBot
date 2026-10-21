@@ -135,7 +135,7 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              padding: const EdgeInsets.fromLTRB(22, 12, 22, 8),
               child: OmniSettingsSearchField(
                 controller: _search,
                 focusNode: _focus,
@@ -153,7 +153,7 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: edgeToEdgeScrollPadding(
                     context,
-                    const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                    const EdgeInsets.fromLTRB(22, 8, 22, 32),
                   ),
                   children: [
                     Padding(
@@ -215,7 +215,7 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
                           ),
                           style: TextStyle(
                             color: palette.textSecondary,
-                            fontSize: 14,
+                            fontSize: 15,
                           ),
                         ),
                       ),
@@ -249,10 +249,7 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
           !_localFailed &&
           !_local.any((t) => t.group == group))
         _note(
-          _text(
-            '启用插件后，其工具会显示在这里。',
-            'Enable a plugin to see its tools here.',
-          ),
+          _text('启用插件后，其工具会显示在这里。', 'Enable a plugin to see its tools here.'),
         ),
       if (group == 'mcp' && !_remoteLoading && !_remoteFailed) ...[
         for (final server in _servers.where((s) => s.tools.isEmpty))
@@ -260,12 +257,7 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
             '${server.name} · ${server.status == 'discovered' ? _text('未提供工具', 'No tools exposed') : _status(server.status)}',
           ),
         if (_servers.isEmpty)
-          _note(
-            _text(
-              '尚未配置远程 MCP 服务。',
-              'No remote MCP servers configured.',
-            ),
-          ),
+          _note(_text('尚未配置远程 MCP 服务。', 'No remote MCP servers configured.')),
       ],
     ];
     if (rows.isEmpty) return const SizedBox.shrink();
@@ -299,7 +291,10 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
             ),
             child: Text(
               _text('管理', 'Manage'),
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
       ],
@@ -378,7 +373,7 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 14.5,
+                              fontSize: 15,
                               fontWeight: FontWeight.w500,
                               color: palette.textPrimary,
                               height: 1.35,

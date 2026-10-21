@@ -1984,24 +1984,36 @@ internal class LocalAcpRuntime(
             }
             profileStore.bindSession(session.sessionId.value, activeAgentId())
             applyRunConfig(session, args)
-            val conversationId = bindingRepository.ensureBinding(
-                threadId = session.sessionId.value,
-                conversationId = args.longValue("conversationId"),
-                cwd = cwd,
-                conversationMode = args.stringValue("conversationMode")
-                    ?: AgentSessionBindingRepository.AGENT_MODE_STORAGE_VALUE
-            )
-            profileStore.bindConversation(conversationId, activeAgentId())
-            if (activeAgentId() != AcpAgentProfileStore.XIAOWAN_AGENT_ID) {
-                // A new external Harness session has no ACP-native history.
-                // Carry the durable OmniBot conversation into its first turn;
-                // subsequent turns use the same session and do not duplicate
-                // the handoff. Xiaowan reads the same history natively in its
-                // Provider adapter, so injecting it there would duplicate it.
-                pendingHandoffConversationIds[session.sessionId.value] = conversationId
-            }
+            val conversationId = bindSessionHistory(session, args, cwd)
             sessionPayload(session, conversationId)
         }
+
+    /** ACP sessions may be configured before the Conversation has a first send. */
+    private suspend fun bindSessionHistory(
+        session: ClientSession,
+        args: Map<String, Any?>,
+        cwd: String = sessionCwds[session.sessionId.value] ?: AgentRuntimeDefaults.DEFAULT_WORKSPACE_CWD,
+        requestedConversationId: Long? = args.longValue("conversationId"),
+        prompt: Boolean = false,
+    ): Long? {
+        val threadId = session.sessionId.value
+        val existing = bindingRepository.getBindingByThreadId(threadId)
+        if (requestedConversationId == null && existing == null && !prompt) return null
+        val conversationId = bindingRepository.ensureBinding(
+            threadId = threadId,
+            conversationId = requestedConversationId ?: existing?.conversationId,
+            cwd = cwd,
+            conversationMode = args.stringValue("conversationMode")
+                ?: AgentSessionBindingRepository.AGENT_MODE_STORAGE_VALUE,
+        )
+        profileStore.bindConversation(conversationId, activeAgentId())
+        if (existing == null && activeAgentId() != AcpAgentProfileStore.XIAOWAN_AGENT_ID) {
+            // Carry durable OmniBot history into this Harness's first prompt.
+            // Xiaowan already reads it through its Provider adapter.
+            pendingHandoffConversationIds[threadId] = conversationId
+        }
+        return conversationId
+    }
 
     /**
      * Fork through the official ACP client operation instead of replaying a
@@ -2081,18 +2093,11 @@ internal class LocalAcpRuntime(
                 )
                 registerSession(fresh, cwd)
                 profileStore.bindSession(fresh.sessionId.value, activeAgentId())
-                val conversationId = bindingRepository.ensureBinding(
-                    threadId = fresh.sessionId.value,
-                    conversationId = args.longValue("conversationId")
+                val conversationId = bindSessionHistory(
+                    fresh, args, cwd,
+                    requestedConversationId = args.longValue("conversationId")
                         ?: bindingRepository.getBindingByThreadId(threadId)?.conversationId,
-                    cwd = cwd,
-                    conversationMode = args.stringValue("conversationMode")
-                        ?: AgentSessionBindingRepository.AGENT_MODE_STORAGE_VALUE
                 )
-                profileStore.bindConversation(conversationId, activeAgentId())
-                if (activeAgentId() != AcpAgentProfileStore.XIAOWAN_AGENT_ID) {
-                    pendingHandoffConversationIds[fresh.sessionId.value] = conversationId
-                }
                 return@withLock sessionPayload(fresh, conversationId).plus(
                     mapOf(
                         "sessionRestored" to false,
@@ -2181,18 +2186,11 @@ internal class LocalAcpRuntime(
                 )
                 registerSession(fresh, cwd)
                 profileStore.bindSession(fresh.sessionId.value, activeAgentId())
-                val conversationId = bindingRepository.ensureBinding(
-                    threadId = fresh.sessionId.value,
-                    conversationId = args.longValue("conversationId")
+                val conversationId = bindSessionHistory(
+                    fresh, args, cwd,
+                    requestedConversationId = args.longValue("conversationId")
                         ?: bindingRepository.getBindingByThreadId(threadId)?.conversationId,
-                    cwd = cwd,
-                    conversationMode = args.stringValue("conversationMode")
-                        ?: AgentSessionBindingRepository.AGENT_MODE_STORAGE_VALUE
                 )
-                profileStore.bindConversation(conversationId, activeAgentId())
-                if (activeAgentId() != AcpAgentProfileStore.XIAOWAN_AGENT_ID) {
-                    pendingHandoffConversationIds[fresh.sessionId.value] = conversationId
-                }
                 return@withLock sessionPayload(fresh, conversationId).plus(
                     mapOf(
                         "sessionRestored" to false,
@@ -2206,14 +2204,7 @@ internal class LocalAcpRuntime(
                 "ACP session/load restored persisted session=${compactId(threadId)}"
             )
             profileStore.bindSession(restored.sessionId.value, activeAgentId())
-            val conversationId = bindingRepository.ensureBinding(
-                threadId = threadId,
-                conversationId = args.longValue("conversationId"),
-                cwd = cwd,
-                conversationMode = args.stringValue("conversationMode")
-                    ?: AgentSessionBindingRepository.AGENT_MODE_STORAGE_VALUE
-            )
-            profileStore.bindConversation(conversationId, activeAgentId())
+            val conversationId = bindSessionHistory(restored, args, cwd)
             sessionPayload(restored, conversationId)
         }
 
@@ -2236,12 +2227,20 @@ internal class LocalAcpRuntime(
                 cwd = args.stringValue("cwd"),
                 additionalDirectories = args.stringList("additionalDirectories")
             ).toList().map { session ->
+                // Session ownership survives a process restart. A session we
+                // created without history stays unbound until its first send;
+                // observing the Agent's catalog must not create an empty row.
+                val existing = bindingRepository.getBindingByThreadId(session.sessionId.value)
+                val unboundOwnedSession = existing == null &&
+                    profileStore.agentIdForSession(session.sessionId.value) != null
                 profileStore.bindSession(session.sessionId.value, activeAgentId())
-                bindingRepository.ensureBinding(
-                    threadId = session.sessionId.value,
-                    cwd = session.cwd,
-                    title = session.title
-                )
+                if (!unboundOwnedSession) {
+                    bindingRepository.ensureBinding(
+                        threadId = session.sessionId.value,
+                        cwd = session.cwd,
+                        title = session.title
+                    )
+                }
                 linkedMapOf(
                     "id" to session.sessionId.value,
                     "threadId" to session.sessionId.value,
@@ -3139,9 +3138,10 @@ internal class LocalAcpRuntime(
             explicitThreadId = explicitThreadId,
             requestedConversationId = conversationId,
             boundConversationId = explicitBinding?.conversationId,
+            ownsUnboundSession = explicitThreadId?.let(::ownsSession) == true,
         )
         if (!explicitThreadId.isNullOrBlank() && canReuseExplicitThread) {
-            return sessions[explicitThreadId] ?: run {
+            val session = sessions[explicitThreadId] ?: run {
                 val response = resumeThread(args)
                 val resolvedThreadId = response.stringValue("threadId")
                     ?: response.stringValue("sessionId")
@@ -3149,6 +3149,8 @@ internal class LocalAcpRuntime(
                 sessions[resolvedThreadId]
                     ?: throw IllegalStateException("Failed to restore ACP session.")
             }
+            bindSessionHistory(session, args, prompt = true)
+            return session
         }
         val binding = if (conversationId != null) {
             bindingRepository.getBindingByConversationId(conversationId)
@@ -3170,8 +3172,10 @@ internal class LocalAcpRuntime(
             }
         }
         val created = startThread(args)
-        return sessions[created["threadId"]?.toString()]
+        val session = sessions[created["threadId"]?.toString()]
             ?: throw IllegalStateException("Failed to create ACP session.")
+        bindSessionHistory(session, args, prompt = true)
+        return session
         }
 
     private fun promptMeta(args: Map<String, Any?>): JsonElement? {
@@ -3223,6 +3227,7 @@ internal class LocalAcpRuntime(
                 operationsFactory()
             ).also { session ->
                 registerSession(session, cwd)
+                profileStore.bindSession(session.sessionId.value, activeAgentId())
                 catalogSessionId = session.sessionId.value
             }
         }

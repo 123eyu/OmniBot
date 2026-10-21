@@ -30,45 +30,39 @@ void main() {
   ) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final todayMs = today.add(const Duration(hours: 12)).millisecondsSinceEpoch;
-    final yesterdayMs = today
-        .subtract(const Duration(days: 1))
-        .add(const Duration(hours: 12))
-        .millisecondsSinceEpoch;
-
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(assistCoreChannel, (call) async {
           switch (call.method) {
-            case 'getConversations':
-              return <Map<String, Object?>>[
-                _conversation(id: 1, createdAt: todayMs),
-                _conversation(id: 2, createdAt: yesterdayMs),
-              ];
-            case 'getTokenUsageRecords':
-              return <Map<String, Object?>>[
-                {
-                  'id': 1,
-                  'conversationId': 1,
-                  'model': 'openai/gpt-4o',
-                  'promptTokens': 1200,
-                  'completionTokens': 300,
-                  'reasoningTokens': 100,
-                  'textTokens': 200,
-                  'cachedTokens': 400,
-                  'createdAt': todayMs,
+            case 'getConversationActivitySummary':
+              return <String, Object?>{
+                'activityMap': {
+                  _dateKey(today): 1,
+                  _dateKey(today.subtract(const Duration(days: 1))): 1,
                 },
-                {
-                  'id': 2,
-                  'conversationId': 2,
-                  'model': 'qwen/qwen3',
-                  'promptTokens': 800,
-                  'completionTokens': 600,
-                  'reasoningTokens': 0,
-                  'textTokens': 0,
-                  'cachedTokens': 0,
-                  'createdAt': yesterdayMs,
-                },
-              ];
+                'totalConversations': 2,
+                'currentStreak': 2,
+              };
+            case 'getTokenUsageSummary':
+              final arguments = call.arguments as Map;
+              return <String, Object?>{
+                'weeklyData': [
+                  for (final start in arguments['weekStartsMs'] as List)
+                    {
+                      'weekStartMs': start,
+                      'modelTokens':
+                          start == (arguments['weekStartsMs'] as List).last
+                          ? {'gpt-4o': 300, 'qwen3': 600}
+                          : <String, int>{},
+                      'cachedTokens':
+                          start == (arguments['weekStartsMs'] as List).last
+                          ? 400
+                          : 0,
+                    },
+                ],
+                'totalCached': 400,
+                'modelTotals': {'gpt-4o': 300, 'qwen3': 600},
+                'modelOrder': ['qwen3', 'gpt-4o'],
+              };
             default:
               return null;
           }
@@ -107,14 +101,5 @@ void main() {
   });
 }
 
-Map<String, Object?> _conversation({required int id, required int createdAt}) {
-  return <String, Object?>{
-    'id': id,
-    'mode': 'normal',
-    'title': 'Conversation $id',
-    'status': 0,
-    'messageCount': 1,
-    'createdAt': createdAt,
-    'updatedAt': createdAt,
-  };
-}
+String _dateKey(DateTime date) =>
+    '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';

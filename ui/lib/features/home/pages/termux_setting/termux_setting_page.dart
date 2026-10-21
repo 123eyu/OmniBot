@@ -198,7 +198,6 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
       _detectError == null &&
       _selectedLostCount > 0;
 
-  bool get _isDarkTheme => context.isDarkTheme;
   bool get _isEnglish => Localizations.localeOf(context).languageCode == 'en';
   Color get _pageBackground => context.omniPalette.pageBackground;
   Color get _primaryTextColor => context.omniPalette.textPrimary;
@@ -875,7 +874,7 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
           child: ListView(
             padding: edgeToEdgeScrollPadding(
               context,
-              const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              const EdgeInsets.fromLTRB(22, 12, 22, 24),
             ),
             children: [
               _buildDistributionCard(),
@@ -912,12 +911,12 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
                       ? _handleOpenSetupPage
                       : null,
                   icon: _isOpeningSetup
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2.2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : const Icon(LucideIcons.squareTerminal),
@@ -1101,11 +1100,7 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
               decoration: BoxDecoration(
                 color: _mutedSurfaceColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _isDarkTheme
-                      ? context.omniPalette.borderSubtle
-                      : const Color(0xFFE2E8F0),
-                ),
+                border: Border.all(color: context.omniPalette.borderSubtle),
               ),
               child: Text(
                 _workspaceMountEmptyDesc,
@@ -1130,18 +1125,19 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
   }
 
   Widget _buildErrorCard(String message) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
+        color: colors.errorContainer,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFCD34D)),
+        border: Border.all(color: colors.error.withValues(alpha: 0.22)),
       ),
       child: Text(
         message,
-        style: const TextStyle(
-          color: Color(0xFF92400E),
+        style: TextStyle(
+          color: colors.onErrorContainer,
           fontSize: 13,
           fontWeight: FontWeight.w600,
           height: 1.5,
@@ -1156,10 +1152,10 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
         : (_isEnglish ? 'mounted' : '已挂载');
     final stateBackground = entry.isBroken
         ? const Color(0xFFFFF7ED)
-        : const Color(0xFFEAF2FF);
+        : context.omniPalette.surfaceSecondary;
     final stateForeground = entry.isBroken
         ? const Color(0xFFC2410C)
-        : const Color(0xFF2563EB);
+        : context.omniPalette.textSecondary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1214,7 +1210,7 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
                   darkBackgroundColor: context.omniPalette.surfaceSecondary,
                   darkForegroundColor: entry.isBroken
                       ? const Color(0xFFE7D2B6)
-                      : const Color(0xFFD7DADF),
+                      : context.omniPalette.textSecondary,
                 ),
                 const SizedBox(height: 10),
                 TextButton.icon(
@@ -1288,11 +1284,7 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
               decoration: BoxDecoration(
                 color: _mutedSurfaceColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _isDarkTheme
-                      ? context.omniPalette.borderSubtle
-                      : const Color(0xFFE2E8F0),
-                ),
+                border: Border.all(color: context.omniPalette.borderSubtle),
               ),
               child: Text(
                 context.l10n.alpineNoTasksDesc,
@@ -1345,49 +1337,34 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
                         label: task.enabled
                             ? context.l10n.alpineBootOnAppOpen
                             : context.l10n.alpineNotEnabled,
-                        backgroundColor: task.enabled
-                            ? const Color(0xFFEAF2FF)
-                            : const Color(0xFFF1F5F9),
+                        backgroundColor: context.omniPalette.surfaceSecondary,
                         foregroundColor: task.enabled
-                            ? const Color(0xFF2563EB)
-                            : const Color(0xFF64748B),
-                        darkBackgroundColor: task.enabled
-                            ? Color.lerp(
-                                context.omniPalette.surfaceSecondary,
-                                context.omniPalette.accentPrimary,
-                                0.14,
-                              )
-                            : context.omniPalette.surfaceSecondary,
+                            ? context.omniPalette.textPrimary
+                            : context.omniPalette.textSecondary,
+                        darkBackgroundColor:
+                            context.omniPalette.surfaceSecondary,
                         darkForegroundColor: task.enabled
-                            ? Color.lerp(
-                                context.omniPalette.textPrimary,
-                                context.omniPalette.accentPrimary,
-                                0.38,
-                              )
+                            ? context.omniPalette.textPrimary
                             : context.omniPalette.textSecondary,
                       ),
                       _buildLegendTag(
                         label: task.running ? 'running' : 'idle',
                         backgroundColor: task.running
                             ? const Color(0xFFE8F7EE)
-                            : const Color(0xFFFFF7ED),
+                            : context.omniPalette.surfaceSecondary,
                         foregroundColor: task.running
                             ? const Color(0xFF17803D)
-                            : const Color(0xFFC2410C),
+                            : context.omniPalette.textSecondary,
                         darkBackgroundColor: task.running
                             ? Color.lerp(
                                 context.omniPalette.surfaceSecondary,
                                 const Color(0xFF72A778),
                                 0.22,
                               )
-                            : Color.lerp(
-                                context.omniPalette.surfaceSecondary,
-                                const Color(0xFFB88B61),
-                                0.18,
-                              ),
+                            : context.omniPalette.surfaceSecondary,
                         darkForegroundColor: task.running
                             ? const Color(0xFFD6E7D6)
-                            : const Color(0xFFE7D2B6),
+                            : context.omniPalette.textSecondary,
                       ),
                     ],
                   ),
@@ -1408,11 +1385,7 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
           decoration: BoxDecoration(
             color: _mutedSurfaceColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _isDarkTheme
-                  ? context.omniPalette.borderSubtle
-                  : const Color(0xFFE2E8F0),
-            ),
+            border: Border.all(color: context.omniPalette.borderSubtle),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1499,7 +1472,8 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
                 )
               : Checkbox(
                   value: selected,
-                  activeColor: const Color(0xFF2563EB),
+                  activeColor: context.omniPalette.accentPrimary,
+                  checkColor: Theme.of(context).colorScheme.onPrimary,
                   onChanged: _isDetecting || unknown || _isDistributionSwitching
                       ? null
                       : (value) => _togglePackage(item.definition.id, value),
@@ -1551,24 +1525,20 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
                       : 'lost',
                   backgroundColor: ready
                       ? const Color(0xFFE8F7EE)
-                      : const Color(0xFFEAF2FF),
+                      : context.omniPalette.surfaceSecondary,
                   foregroundColor: ready
                       ? const Color(0xFF17803D)
-                      : const Color(0xFF2563EB),
+                      : context.omniPalette.textSecondary,
                   darkBackgroundColor: ready
                       ? Color.lerp(
                           context.omniPalette.surfaceSecondary,
                           const Color(0xFF72A778),
                           0.22,
                         )
-                      : Color.lerp(
-                          context.omniPalette.surfaceSecondary,
-                          const Color(0xFF79808A),
-                          0.16,
-                        ),
+                      : context.omniPalette.surfaceSecondary,
                   darkForegroundColor: ready
                       ? const Color(0xFFD6E7D6)
-                      : const Color(0xFFD7DADF),
+                      : context.omniPalette.textSecondary,
                 ),
               const SizedBox(height: 6),
               Text(

@@ -241,7 +241,11 @@ internal class NaCloudRuntime(
         } else request("GET", "/api/conversations/${existing.removePrefix(prefix)}")
         val snapshot = response.map("conversation")
         val sessionId = existing ?: prefix + snapshot["id"]
-        val local = bind(sessionId, (args["conversationId"] as? Number)?.toLong(), snapshot["title"]?.toString())
+        profiles.bindSession(sessionId, NA_AGENT_ID)
+        val requestedConversationId = (args["conversationId"] as? Number)?.toLong()
+        val local = if (requestedConversationId != null || bindings.getBindingByThreadId(sessionId) != null) {
+            bind(sessionId, requestedConversationId, snapshot["title"]?.toString())
+        } else null
         return mapOf("sessionId" to sessionId, "threadId" to sessionId, "conversationId" to local,
             "agentId" to NA_AGENT_ID, "agentRuntime" to "na", "configOptions" to emptyList<Any>(),
             "thread" to naThreadSnapshot(sessionId, response))
@@ -253,6 +257,9 @@ internal class NaCloudRuntime(
         val sessions = entries.mapNotNull { raw ->
             val c = raw as? Map<*, *> ?: return@mapNotNull null
             val id = prefix + c["id"]
+            if (profiles.agentIdForSession(id) != null && bindings.getBindingByThreadId(id) == null) {
+                return@mapNotNull null
+            }
             val local = bind(id, null, c["title"]?.toString())
             mapOf("id" to id, "sessionId" to id, "threadId" to id, "conversationId" to local,
                 "agentId" to NA_AGENT_ID, "agentRuntime" to "na", "title" to c["title"],

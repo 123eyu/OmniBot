@@ -15,6 +15,7 @@ import 'package:ui/services/agent_tool_call_parser.dart';
 import 'package:ui/services/assists_core_service.dart';
 import 'package:ui/services/omnibot_resource_service.dart';
 import 'package:ui/theme/app_colors.dart';
+import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/omni_glass.dart';
 
@@ -39,6 +40,154 @@ class AgentToolTranscript {
   final String outputText;
   final String previewText;
   final bool isTerminal;
+}
+
+/// Tool details for the neutral run sheet, using the same persisted transcript
+/// and resource actions as the standalone terminal detail surface.
+class AgentToolDetailBody extends StatelessWidget {
+  const AgentToolDetailBody({
+    super.key,
+    required this.cardData,
+    this.scrollController,
+  });
+
+  final Map<String, dynamic> cardData;
+  final ScrollController? scrollController;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.omniPalette;
+    final transcript = buildAgentToolTranscript(cardData);
+    final diffSummary = _resolveDiffSummary(cardData);
+    final isDiffView = diffSummary?.files.isNotEmpty == true;
+    final actions = _resolveAgentToolActions(cardData);
+    final copyText = _agentToolCopyText(
+      cardData,
+      transcript,
+      isDiffView:
+          isDiffView && (cardData['diffText'] ?? '').toString().isNotEmpty,
+    );
+    final textStyle = TextStyle(
+      color: Color.alphaBlend(
+        palette.textPrimary.withValues(alpha: 0.72),
+        palette.surfacePrimary,
+      ),
+      fontSize: 15,
+      height: 1.55,
+    );
+    // ANSI colors belong to the terminal surface. Keep the same output text
+    // readable on both neutral light and dark surfaces.
+    final outputText = AnsiTextSpanBuilder.build(
+      transcript.outputText,
+      textStyle,
+    ).toPlainText();
+
+    return SingleChildScrollView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(22, 4, 22, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _AgentToolSectionLabel(
+                  label: transcript.isTerminal
+                      ? (LegacyTextLocalizer.isEnglish ? 'Command' : '命令')
+                      : (LegacyTextLocalizer.isEnglish ? 'Input' : '输入'),
+                ),
+              ),
+              IconButton(
+                tooltip: LegacyTextLocalizer.isEnglish
+                    ? 'Copy details'
+                    : '复制详情',
+                icon: const Icon(LucideIcons.copy, size: 18),
+                color: palette.textSecondary,
+                onPressed: copyText.isEmpty
+                    ? null
+                    : () => unawaited(_copyAgentToolDetails(copyText)),
+              ),
+            ],
+          ),
+          _AgentToolNeutralSurface(
+            child: SelectableText(transcript.promptLine, style: textStyle),
+          ),
+          const SizedBox(height: 24),
+          _AgentToolSectionLabel(
+            label: LegacyTextLocalizer.isEnglish ? 'Output' : '输出',
+          ),
+          const SizedBox(height: 12),
+          if (isDiffView)
+            AgentDiffViewer(
+              summary: diffSummary!,
+              padding: EdgeInsets.zero,
+              scrollable: false,
+            )
+          else
+            _AgentToolNeutralSurface(
+              child: outputText.isEmpty
+                  ? Text(
+                      LegacyTextLocalizer.isEnglish ? 'No output' : '暂无输出',
+                      style: textStyle.copyWith(color: palette.textSecondary),
+                    )
+                  : SelectableText(outputText, style: textStyle),
+            ),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            _AgentToolActionBar(actions: actions, neutral: true),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentToolSectionLabel extends StatelessWidget {
+  const _AgentToolSectionLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: TextStyle(
+        color: context.omniPalette.textSecondary,
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+}
+
+class _AgentToolNeutralSurface extends StatelessWidget {
+  const _AgentToolNeutralSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.omniPalette;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: palette.surfacePrimary,
+        border: Border.all(color: palette.borderSubtle),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: child,
+    );
+  }
+}
+
+Future<void> _copyAgentToolDetails(String text) async {
+  final copied = await AssistsMessageService.copyToClipboard(text);
+  showToast(
+    copied
+        ? (LegacyTextLocalizer.isEnglish ? 'Copied' : '已复制')
+        : (LegacyTextLocalizer.isEnglish ? 'Copy failed' : '复制失败'),
+    type: copied ? ToastType.success : ToastType.error,
+  );
 }
 
 AgentToolTranscript buildAgentToolTranscript(
@@ -1171,9 +1320,10 @@ List<Map<String, dynamic>> _resolveAgentToolActions(
 }
 
 class _AgentToolActionBar extends StatelessWidget {
-  const _AgentToolActionBar({required this.actions});
+  const _AgentToolActionBar({required this.actions, this.neutral = false});
 
   final List<Map<String, dynamic>> actions;
+  final bool neutral;
 
   @override
   Widget build(BuildContext context) {
@@ -1188,18 +1338,26 @@ class _AgentToolActionBar extends StatelessWidget {
               key: ValueKey('agent-tool-action-$index'),
               onPressed: () => unawaited(_runAgentToolAction(actions[index])),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFDDE8F7),
-                side: const BorderSide(color: Color(0xFF34445E)),
+                foregroundColor: neutral
+                    ? context.omniPalette.textPrimary
+                    : const Color(0xFFDDE8F7),
+                side: BorderSide(
+                  color: neutral
+                      ? context.omniPalette.borderStrong
+                      : const Color(0xFF34445E),
+                ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 8,
                 ),
-                minimumSize: const Size(0, 34),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                minimumSize: Size(0, neutral ? 44 : 34),
+                tapTargetSize: neutral
+                    ? MaterialTapTargetSize.padded
+                    : MaterialTapTargetSize.shrinkWrap,
               ),
               child: Text(
                 actions[index]['label'].toString(),
-                style: const TextStyle(fontSize: 11.5),
+                style: TextStyle(fontSize: neutral ? 13 : 11.5),
               ),
             ),
         ],
