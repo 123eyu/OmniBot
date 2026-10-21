@@ -467,15 +467,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   List<ChatAcpAgentModeOption> get _chatAcpAgentModeOptions {
     final profiles = _agentCatalog?.agents ?? const <AcpAgentProfile>[];
     final hasXiaowan = profiles.any((profile) => profile.id == 'xiaowan-acp');
-    final orderedProfiles = profiles.toList(growable: false)
-      ..sort((left, right) {
-        final leftIsXiaowan = left.id == 'xiaowan-acp';
-        final rightIsXiaowan = right.id == 'xiaowan-acp';
-        if (leftIsXiaowan == rightIsXiaowan) {
-          return 0;
-        }
-        return leftIsXiaowan ? -1 : 1;
-      });
     final options = <ChatAcpAgentModeOption>[
       // Xiaowan is an in-process built-in ACP Agent. Keep its public entry
       // available even while the asynchronous native catalog is refreshing;
@@ -489,7 +480,8 @@ abstract class _ChatPageStateBase extends State<ChatPage>
           installed: true,
           status: 'online',
         ),
-      for (final profile in orderedProfiles)
+      // All Agent pickers follow the shared native catalog order.
+      for (final profile in profiles)
         ChatAcpAgentModeOption(
           id: profile.id,
           name: profile.name,

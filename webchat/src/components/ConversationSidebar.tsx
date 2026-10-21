@@ -86,8 +86,8 @@ const SECTION_ICONS: Record<Exclude<ConversationSection, "pinned">, IconName> = 
 };
 
 const FALLBACK_AGENT_PROFILES: AgentProfile[] = [
-  { id: "codex-acp", name: "Codex", enabled: true, builtIn: true },
   { id: "claude-code-acp", name: "Claude Code", enabled: true, builtIn: true },
+  { id: "codex-acp", name: "Codex", enabled: true, builtIn: true },
   { id: "opencode-acp", name: "OpenCode", enabled: true, builtIn: true },
   { id: "deepseek-harness-acp", name: "DeepSeek Harness", enabled: true, builtIn: true },
 ];
@@ -157,7 +157,9 @@ export function ConversationSidebar({
         icon: "agent" as IconName,
       },
       ...profiles
-        .filter((profile) => profile.enabled !== false)
+        // Xiaowan already has the entry above; preserve the native catalog
+        // order for every other Agent.
+        .filter((profile) => profile.enabled !== false && profile.id !== "xiaowan-acp")
         .map((profile) => ({
           key: profile.id,
           target: {

@@ -64,18 +64,12 @@ extension _HomeDrawerHome on HomeDrawerState {
               profile.status.trim().toLowerCase() != 'missing',
         )
         .toList(growable: false);
-    final ordered = [
-      ...available.where((profile) => profile.id == 'xiaowan-acp'),
-      ...available.where((profile) => profile.id == 'na-cloud'),
-      ...available.where(
-        (profile) => profile.id != 'xiaowan-acp' && profile.id != 'na-cloud',
-      ),
-    ];
     return [
       _HomeConversationFilter.all,
       if (!profiles.any((profile) => profile.id == 'xiaowan-acp'))
         _HomeConversationFilter.xiaowan,
-      for (final profile in ordered)
+      // Filtering availability preserves the shared native catalog order.
+      for (final profile in available)
         _HomeConversationFilter(
           id: profile.id,
           agentId: profile.id,
