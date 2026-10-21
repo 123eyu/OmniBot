@@ -84,7 +84,12 @@ void main() {
       NewConversationModeSelector.height,
     );
 
+    final triggerRect = tester.getRect(find.byKey(_trigger));
     await _open(tester);
+    expect(
+      tester.getRect(find.byKey(_menu)).contains(triggerRect.center),
+      isTrue,
+    );
     expect(find.text('Disabled'), findsNothing);
     expect(find.text('Uninstalled'), findsNothing);
     expect(find.text('Missing'), findsNothing);

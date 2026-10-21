@@ -147,8 +147,6 @@ class AcpConfigButtonState extends State<AcpConfigButton> {
       context: context,
       anchor: anchor,
       preferBelow: preferBelow,
-      transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
       builder: (_) => AcpConfigPanel(
         load: () => _projectConfigResponse(widget.load(), identity),
         refresh: widget.refresh == null

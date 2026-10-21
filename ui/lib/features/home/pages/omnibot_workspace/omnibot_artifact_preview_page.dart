@@ -8,6 +8,7 @@ import 'package:ui/services/omnibot_resource_service.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/image_preview_overlay.dart';
 import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/widgets/omni_menu.dart';
@@ -620,49 +621,59 @@ class _OmnibotArtifactPreviewPageState
     }
     if (widget.exists) {
       actions.add(
-        PopupMenuButton<_ArtifactPreviewAction>(
-          key: const ValueKey('artifact-preview-more-actions'),
-          tooltip: Localizations.localeOf(context).languageCode == 'en'
-              ? 'More actions'
-              : '更多操作',
-          splashRadius: 18,
-          onSelected: _handleToolbarAction,
-          itemBuilder: (context) => [
-            if (widget.previewKind == 'html')
-              OmniPopupMenuItem<_ArtifactPreviewAction>(
-                value: _ArtifactPreviewAction.openInBrowser,
-                child: Text(
-                  Localizations.localeOf(context).languageCode == 'en'
-                      ? 'Open in browser'
-                      : '在浏览器打开',
-                ),
-              ),
-            OmniPopupMenuItem<_ArtifactPreviewAction>(
-              value: _ArtifactPreviewAction.saveFile,
-              child: Text(
-                Localizations.localeOf(context).languageCode == 'en'
-                    ? 'Save to device'
-                    : '保存到设备',
-              ),
-            ),
-            OmniPopupMenuItem<_ArtifactPreviewAction>(
-              value: _ArtifactPreviewAction.openWithSystem,
-              child: Text(
-                Localizations.localeOf(context).languageCode == 'en'
-                    ? 'Open with system'
-                    : '系统打开',
-              ),
-            ),
-            OmniPopupMenuItem<_ArtifactPreviewAction>(
-              value: _ArtifactPreviewAction.shareFile,
-              child: Text(
-                Localizations.localeOf(context).languageCode == 'en'
-                    ? 'Share file'
-                    : '分享文件',
-              ),
-            ),
-          ],
-          icon: const Icon(Icons.more_horiz_rounded),
+        Builder(
+          builder: (anchorContext) => IconButton(
+            key: const ValueKey('artifact-preview-more-actions'),
+            tooltip: Localizations.localeOf(context).languageCode == 'en'
+                ? 'More actions'
+                : '更多操作',
+            splashRadius: 18,
+            onPressed: () async {
+              final anchor = glassPopupAnchorFromContext(anchorContext);
+              if (anchor == null) return;
+              final action = await showOmniMenu<_ArtifactPreviewAction>(
+                context: anchorContext,
+                anchor: anchor,
+                items: [
+                  if (widget.previewKind == 'html')
+                    OmniPopupMenuItem<_ArtifactPreviewAction>(
+                      value: _ArtifactPreviewAction.openInBrowser,
+                      child: Text(
+                        Localizations.localeOf(context).languageCode == 'en'
+                            ? 'Open in browser'
+                            : '在浏览器打开',
+                      ),
+                    ),
+                  OmniPopupMenuItem<_ArtifactPreviewAction>(
+                    value: _ArtifactPreviewAction.saveFile,
+                    child: Text(
+                      Localizations.localeOf(context).languageCode == 'en'
+                          ? 'Save to device'
+                          : '保存到设备',
+                    ),
+                  ),
+                  OmniPopupMenuItem<_ArtifactPreviewAction>(
+                    value: _ArtifactPreviewAction.openWithSystem,
+                    child: Text(
+                      Localizations.localeOf(context).languageCode == 'en'
+                          ? 'Open with system'
+                          : '系统打开',
+                    ),
+                  ),
+                  OmniPopupMenuItem<_ArtifactPreviewAction>(
+                    value: _ArtifactPreviewAction.shareFile,
+                    child: Text(
+                      Localizations.localeOf(context).languageCode == 'en'
+                          ? 'Share file'
+                          : '分享文件',
+                    ),
+                  ),
+                ],
+              );
+              if (mounted && action != null) _handleToolbarAction(action);
+            },
+            icon: const Icon(Icons.more_horiz_rounded),
+          ),
         ),
       );
     }

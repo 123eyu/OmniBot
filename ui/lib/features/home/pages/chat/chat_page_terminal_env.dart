@@ -64,6 +64,7 @@ mixin _ChatPageTerminalEnvMixin on _ChatPageStateBase {
     await showGlassPopup<String>(
       context: context,
       anchor: anchorRect,
+      overlapAnchor: false,
       horizontalPlacement: GlassPopupHorizontalPlacement.centerOnScreen,
       child: _TerminalEnvironmentEditorContent(
         width: popupWidth,

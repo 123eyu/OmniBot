@@ -126,26 +126,6 @@ class ChatAppBar extends StatelessWidget {
     return english ? 'OmniBot Agent' : '小万 Agent';
   }
 
-  RelativeRect _menuPosition(BuildContext anchorContext) {
-    final button = anchorContext.findRenderObject()! as RenderBox;
-    final overlay =
-        Navigator.of(anchorContext).overlay!.context.findRenderObject()!
-            as RenderBox;
-    return RelativeRect.fromRect(
-      Rect.fromPoints(
-        button.localToGlobal(
-          Offset(0, button.size.height + 8),
-          ancestor: overlay,
-        ),
-        button.localToGlobal(
-          button.size.bottomRight(Offset.zero),
-          ancestor: overlay,
-        ),
-      ),
-      Offset.zero & overlay.size,
-    );
-  }
-
   Future<void> _openActionsMenu(BuildContext anchorContext) async {
     final english = Localizations.localeOf(anchorContext).languageCode == 'en';
     final items = <ChatAppBarAction>[
@@ -208,15 +188,12 @@ class ChatAppBar extends StatelessWidget {
           onSelected: (_) => onAppUpdateTap!(),
         ),
     ];
-    final selected = await showMenu<int>(
+    final anchor = glassPopupAnchorFromContext(anchorContext);
+    if (anchor == null) return;
+    final selected = await showOmniMenu<int>(
       context: anchorContext,
-      position: _menuPosition(anchorContext),
-      color: anchorContext.omniPalette.surfacePrimary,
-      shape: const RoundedRectangleBorder(
-        borderRadius: OmniMenuStyle.panelRadius,
-      ),
-      menuPadding: OmniMenuStyle.panelPadding,
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
+      anchor: anchor,
+      width: 260,
       requestFocus: false,
       items: [
         for (var index = 0; index < items.length; index++)

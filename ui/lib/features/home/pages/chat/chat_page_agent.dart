@@ -626,16 +626,8 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
       _agentCollaborationModeListError = null;
     });
     final generation = _conversationTargetRequestId;
-    final agentId = _activeAcpAgentId;
     try {
-      await _ensureActiveConversationReadyForStreaming();
-      if (!mounted || generation != _conversationTargetRequestId) return;
-      final response = await AgentRuntimeService.readSession(
-        conversationId: _currentConversationId,
-        agentId: agentId,
-        conversationMode: _modeKey(_activeMode),
-        includeHistory: false,
-      );
+      final response = await _readActiveAcpSessionConfig();
       if (!mounted || generation != _conversationTargetRequestId) return;
       final option = acpConfigOptions(response)
           .where((option) => option['id'] == 'collaboration_mode')
@@ -827,7 +819,9 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
     }
     await AgentRuntimeService.setSessionConfigOption(
       sessionId: threadId,
-      conversationId: conversationId,
+      conversationId: _unboundConfigurationSessions.values.contains(threadId)
+          ? null
+          : conversationId,
       agentId: agentId,
       configId: configId,
       value: value,
@@ -1647,6 +1641,9 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
         conversationId: resolvedConversationId,
         mode: dispatchModeKey,
         existingSessionId: dispatchSessionId,
+        preparedForFirstPrompt:
+            _unboundConfigurationSessions[dispatchMode] == dispatchSessionId &&
+            dispatchSessionId != null,
         isTargetCurrent: isDispatchTargetCurrent,
         model: turnModel,
         effort: dispatchReasoningEffort,
@@ -1661,6 +1658,7 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
         );
         return;
       }
+      _unboundConfigurationSessions.remove(dispatchMode);
       _activeAgentThreadId = acpSessionId;
       final response = await AgentRuntimeService.promptSession(
         conversationId: resolvedConversationId,

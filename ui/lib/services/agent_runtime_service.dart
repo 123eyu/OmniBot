@@ -1122,6 +1122,7 @@ class AgentRuntimeService {
   // native compatibility adapter and are not exposed as a Dart service API.
   static Future<Map<String, dynamic>> newSession({
     int? conversationId,
+    String? agentId,
     String? cwd,
     String? model,
     String? effort,
@@ -1131,6 +1132,8 @@ class AgentRuntimeService {
   }) {
     return _invokeMap('session/new', {
       if (conversationId != null) 'conversationId': conversationId,
+      if (agentId != null && agentId.trim().isNotEmpty)
+        'agentId': agentId.trim(),
       if (cwd != null && cwd.trim().isNotEmpty) 'cwd': cwd.trim(),
       if (model != null && model.trim().isNotEmpty) 'model': model.trim(),
       if (effort != null && effort.trim().isNotEmpty) 'effort': effort.trim(),

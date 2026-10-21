@@ -111,15 +111,10 @@ class _NewConversationModeSelectorState
           (mode.id, mode.name.trim().isEmpty ? mode.id : mode.name),
       (kNewConversationPureChatModeId, english ? 'Pure chat' : '纯聊天'),
     ];
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final handle = showOverlayGlassPopup<String>(
       context: context,
       anchor: anchor,
       preferBelow: false,
-      transitionDuration: reduceMotion
-          ? Duration.zero
-          : const Duration(milliseconds: 180),
-      reverseTransitionDuration: Duration.zero,
       builder: (handle) => TextFieldTapRegion(
         child: OmniMenuSurface(
           key: const ValueKey('new-conversation-mode-menu'),

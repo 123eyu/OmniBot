@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/features/home/pages/chat/chat_page.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
+import 'package:ui/features/home/pages/chat/widgets/acp_config_button.dart';
 import 'package:ui/features/home/pages/chat/widgets/new_conversation_mode_selector.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/chat_input_area.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
@@ -62,7 +63,36 @@ void main() {
   late _DraftFilePicker picker;
   late FilePickerPlatform originalPicker;
   Completer<void>? initializeGate;
+  Completer<void>? sessionNewGate;
+  Completer<void>? sessionLoadGate;
   var allowConversationCreation = false;
+  var failAgentStatus = false;
+  var nextSessionNumber = 0;
+  late Map<String, Map<String, Object>> sessionConfig;
+  List<Map<String, dynamic>>? messagesBeforeStatusFailure;
+
+  Map<String, Object?> sessionResponse(String sessionId) => {
+    'sessionId': sessionId,
+    'configOptions': [
+      {
+        'id': 'notifications',
+        'name': '通知提示',
+        'type': 'boolean',
+        'currentValue': sessionConfig[sessionId]?['notifications'] ?? false,
+      },
+      {
+        'id': 'collaboration_mode',
+        'name': '协作模式',
+        'type': 'select',
+        'currentValue':
+            sessionConfig[sessionId]?['collaboration_mode'] ?? 'default',
+        'options': [
+          {'value': 'default', 'name': 'Default'},
+          {'value': 'plan', 'name': 'Plan'},
+        ],
+      },
+    ],
+  };
 
   const agents = [
     {
@@ -97,7 +127,13 @@ void main() {
     picker = _DraftFilePicker();
     FilePickerPlatform.instance = picker;
     initializeGate = null;
+    sessionNewGate = null;
+    sessionLoadGate = null;
     allowConversationCreation = false;
+    failAgentStatus = false;
+    messagesBeforeStatusFailure = null;
+    nextSessionNumber = 0;
+    sessionConfig = {};
     assistCalls = [];
     agentCalls = [];
     conversations = [];
@@ -123,8 +159,29 @@ void main() {
           await initializeGate?.future;
           return 'SUCCESS';
         case 'createConversation':
-          return allowConversationCreation ? 901 : null;
+          if (!allowConversationCreation) return null;
+          final arguments = call.arguments as Map;
+          final conversationId = 901 + conversations.length;
+          conversations.add({
+            'id': conversationId,
+            'title': arguments['title'],
+            'mode': arguments['mode'],
+            'agentId': arguments['agentId'],
+            'status': 0,
+            'messageCount': 0,
+            'createdAt': 1000,
+            'updatedAt': 1000,
+          });
+          return conversationId;
         case 'updateConversation':
+          final arguments = call.arguments as Map;
+          final updated = Map<String, Object?>.from(
+            arguments['conversation'] as Map,
+          );
+          final index = conversations.indexWhere(
+            (conversation) => conversation['id'] == updated['id'],
+          );
+          if (index >= 0) conversations[index] = updated;
           return 'SUCCESS';
         case 'getWorkspaceLongMemory':
           return {'content': ''};
@@ -137,6 +194,17 @@ void main() {
         case 'agent/list':
           return {'selectedAgentId': 'xiaowan-acp', 'agents': agents};
         case 'status':
+          if (failAgentStatus) {
+            messagesBeforeStatusFailure = assistCalls
+                .where((call) => call.method == 'replaceConversationMessages')
+                .expand((call) => (call.arguments as Map)['messages'] as List)
+                .map((message) => Map<String, dynamic>.from(message as Map))
+                .toList();
+            throw PlatformException(
+              code: 'STATUS_UNAVAILABLE',
+              message: 'Agent status unavailable',
+            );
+          }
           return {
             'ready': false,
             'connected': false,
@@ -144,9 +212,36 @@ void main() {
             'activeAgentName': '小万',
           };
         case 'session/new':
-          return {'sessionId': 'new-draft-session'};
+          final number = ++nextSessionNumber;
+          final sessionId = number == 1
+              ? 'new-draft-session'
+              : 'new-draft-session-$number';
+          sessionConfig[sessionId] = {
+            'notifications': false,
+            'collaboration_mode': 'default',
+          };
+          await sessionNewGate?.future;
+          return sessionResponse(sessionId);
+        case 'session/load':
+          final arguments = call.arguments as Map;
+          if (arguments['refreshConfig'] == true) await sessionLoadGate?.future;
+          return sessionResponse(
+            (arguments['sessionId'] ??
+                    'existing-session-${arguments['conversationId']}')
+                as String,
+          );
+        case 'session/set_config_option':
+          final arguments = call.arguments as Map;
+          final sessionId = arguments['sessionId'] as String;
+          sessionConfig[sessionId]![arguments['configId'] as String] =
+              arguments['value'] as Object;
+          return sessionResponse(sessionId);
         case 'session/prompt':
-          return {'sessionId': 'new-draft-session', 'stopReason': 'end_turn'};
+          final arguments = call.arguments as Map;
+          return {
+            'sessionId': arguments['sessionId'] ?? 'new-draft-session',
+            'stopReason': 'end_turn',
+          };
       }
       return <String, Object?>{};
     });
@@ -205,7 +300,11 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> attachFile(WidgetTester tester, String name) async {
+  Future<void> attachFile(
+    WidgetTester tester,
+    String name, {
+    bool settle = true,
+  }) async {
     picker.nextFiles = [
       AndroidPlatformFile(
         name: name,
@@ -214,7 +313,11 @@ void main() {
       ),
     ];
     await composer(tester).onPickAttachment!();
-    await tester.pumpAndSettle();
+    if (settle) {
+      await tester.pumpAndSettle();
+    } else {
+      await tester.pump();
+    }
   }
 
   void expectNoSessionAdmission() {
@@ -232,6 +335,30 @@ void main() {
       assistCalls.where((call) => call.method == 'createConversation'),
       isEmpty,
     );
+  }
+
+  void expectNoPersistedDraft() {
+    expect(conversations, isEmpty);
+    expect(
+      assistCalls.where(
+        (call) => const {
+          'createConversation',
+          'updateConversation',
+          'replaceConversationMessages',
+        }.contains(call.method),
+      ),
+      isEmpty,
+    );
+    expect(
+      agentCalls.where((call) => call.method == 'session/prompt'),
+      isEmpty,
+    );
+  }
+
+  Future<void> dismissConfigPanel(WidgetTester tester) async {
+    await tester.tapAt(const Offset(360, 80));
+    await tester.pumpAndSettle();
+    expect(find.byType(AcpConfigPanel), findsNothing);
   }
 
   Future<void> disposeChat(WidgetTester tester) async {
@@ -298,6 +425,389 @@ void main() {
       await disposeChat(tester);
     });
   }
+
+  testWidgets(
+    'existing history config resolves its conversation without an in-memory session',
+    (tester) async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      conversations = [
+        {
+          'id': 77,
+          'title': 'Existing chat',
+          'mode': 'chat_only',
+          'status': 0,
+          'messageCount': 1,
+          'createdAt': now,
+          'updatedAt': now,
+        },
+      ];
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.existing(
+          conversationId: 77,
+          mode: ConversationMode.chatOnly,
+        ),
+      );
+      final config = tester.widget<AcpConfigButton>(
+        find.byType(AcpConfigButton),
+      );
+      agentCalls.clear();
+      final response = await config.load();
+      expect(response['sessionId'], 'existing-session-77');
+      final load = agentCalls.singleWhere(
+        (call) => call.method == 'session/load',
+      );
+      expect((load.arguments as Map)['conversationId'], 77);
+      expect(agentCalls.where((call) => call.method == 'session/new'), isEmpty);
+      await disposeChat(tester);
+      expect(
+        agentCalls.where((call) => call.method == 'session/close'),
+        isEmpty,
+      );
+      expect(
+        assistCalls.where((call) => call.method == 'createConversation'),
+        isEmpty,
+      );
+    },
+  );
+
+  testWidgets(
+    'Xiaowan config stays an unpersisted draft and first send reuses its session',
+    (tester) async {
+      // Permit writes so the test catches an eager empty conversation rather
+      // than depending on a rejected create call to keep history empty.
+      allowConversationCreation = true;
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.newConversation(agentId: 'xiaowan-acp'),
+      );
+      await tester.tap(find.byKey(const ValueKey('chat-acp-config-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AcpConfigPanel), findsOneWidget);
+      expect(selector(tester).selectedId, 'xiaowan-acp');
+      expect(selector(tester).enabled, isTrue);
+      expectNoPersistedDraft();
+      final createdSession = agentCalls.singleWhere(
+        (call) => call.method == 'session/new',
+      );
+      expect((createdSession.arguments as Map)['agentId'], 'xiaowan-acp');
+      expect(
+        (createdSession.arguments as Map).containsKey('conversationId'),
+        isFalse,
+      );
+
+      final config = tester.widget<AcpConfigButton>(
+        find.byType(AcpConfigButton),
+      );
+      final refreshed = await config.refresh!();
+      await tester.pumpAndSettle();
+      expect(refreshed['sessionId'], 'new-draft-session');
+      final refresh = agentCalls.lastWhere(
+        (call) => call.method == 'session/load',
+      );
+      expect((refresh.arguments as Map)['sessionId'], 'new-draft-session');
+      expect((refresh.arguments as Map)['refreshConfig'], isTrue);
+      expect((refresh.arguments as Map).containsKey('conversationId'), isFalse);
+      await tester.tap(find.byKey(const ValueKey('acp-config-notifications')));
+      await tester.pumpAndSettle();
+      final write = agentCalls.singleWhere(
+        (call) => call.method == 'session/set_config_option',
+      );
+      expect((write.arguments as Map)['sessionId'], 'new-draft-session');
+      expect((write.arguments as Map)['value'], isTrue);
+      expect((write.arguments as Map).containsKey('conversationId'), isFalse);
+      expectNoPersistedDraft();
+      expect(selector(tester).enabled, isTrue);
+
+      await dismissConfigPanel(tester);
+      composer(tester).controller.text = '配置后首次发送';
+      composer(tester).onSendMessage();
+      await tester.pumpAndSettle();
+
+      final creations = assistCalls.where(
+        (call) => call.method == 'createConversation',
+      );
+      final prompts = agentCalls.where(
+        (call) => call.method == 'session/prompt',
+      );
+      expect(creations, hasLength(1));
+      expect(conversations, hasLength(1));
+      expect(prompts, hasLength(1));
+      expect((prompts.single.arguments as Map)['conversationId'], 901);
+      expect(
+        (prompts.single.arguments as Map)['sessionId'],
+        'new-draft-session',
+      );
+      expect((prompts.single.arguments as Map)['text'], '配置后首次发送');
+      expect(
+        agentCalls.where((call) => call.method == 'session/new'),
+        hasLength(1),
+      );
+      expect(sessionConfig['new-draft-session']?['notifications'], isTrue);
+      expect(find.byType(NewConversationModeSelector), findsNothing);
+      await disposeChat(tester);
+    },
+  );
+
+  testWidgets(
+    'command and Plan configuration do not persist an empty Xiaowan draft',
+    (tester) async {
+      allowConversationCreation = true;
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.newConversation(agentId: 'xiaowan-acp'),
+      );
+      composer(tester).onTriggerSlashCommand!();
+      await tester.pumpAndSettle();
+      expect(composer(tester).controller.text, '/');
+      expect(
+        agentCalls.where((call) => call.method == 'session/new'),
+        hasLength(1),
+      );
+      expectNoPersistedDraft();
+
+      composer(tester).controller.text = '/plan';
+      composer(tester).onSendMessage();
+      await tester.pumpAndSettle();
+      final planWrite = agentCalls.singleWhere(
+        (call) =>
+            call.method == 'session/set_config_option' &&
+            (call.arguments as Map)['configId'] == 'collaboration_mode',
+      );
+      expect((planWrite.arguments as Map)['sessionId'], 'new-draft-session');
+      expect((planWrite.arguments as Map)['value'], 'plan');
+      expectNoPersistedDraft();
+      expect(selector(tester).enabled, isTrue);
+
+      await chooseMode(tester, 'codex-acp');
+      expect(selector(tester).selectedId, 'codex-acp');
+      expectNoPersistedDraft();
+      await disposeChat(tester);
+    },
+  );
+
+  testWidgets(
+    'late config session from a previous draft cannot replace the new target session',
+    (tester) async {
+      allowConversationCreation = true;
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.newConversation(agentId: 'xiaowan-acp'),
+      );
+      final oldSessionGate = sessionNewGate = Completer<void>();
+      await tester.tap(find.byKey(const ValueKey('chat-acp-config-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(
+        agentCalls.where((call) => call.method == 'session/new'),
+        hasLength(1),
+      );
+      await dismissConfigPanel(tester);
+      await chooseMode(tester, 'codex-acp');
+      expect(selector(tester).selectedId, 'codex-acp');
+      sessionNewGate = null;
+      oldSessionGate.complete();
+      await tester.pumpAndSettle();
+      expectNoPersistedDraft();
+      expect(selector(tester).selectedId, 'codex-acp');
+
+      await tester.tap(find.byKey(const ValueKey('chat-acp-config-button')));
+      await tester.pumpAndSettle();
+      final newSessions = agentCalls
+          .where((call) => call.method == 'session/new')
+          .toList();
+      expect(newSessions, hasLength(2));
+      expect((newSessions.last.arguments as Map)['agentId'], 'codex-acp');
+      expectNoPersistedDraft();
+      await dismissConfigPanel(tester);
+      composer(tester).controller.text = '只发送给新草稿';
+      composer(tester).onSendMessage();
+      await tester.pumpAndSettle();
+      final prompt = agentCalls.singleWhere(
+        (call) => call.method == 'session/prompt',
+      );
+      expect((prompt.arguments as Map)['agentId'], 'codex-acp');
+      expect((prompt.arguments as Map)['sessionId'], 'new-draft-session-2');
+      expect(
+        agentCalls.where((call) => call.method == 'session/new'),
+        hasLength(2),
+      );
+      expect(
+        assistCalls.where((call) => call.method == 'createConversation'),
+        hasLength(1),
+      );
+      await disposeChat(tester);
+    },
+  );
+
+  testWidgets(
+    'concurrent draft config and command reads share session preparation with first send',
+    (tester) async {
+      allowConversationCreation = true;
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.newConversation(agentId: 'xiaowan-acp'),
+      );
+      await attachFile(tester, 'submitted.pdf');
+      final submittedAttachmentId = composer(tester).attachments.single.id;
+      sessionNewGate = Completer<void>();
+      await tester.tap(find.byKey(const ValueKey('chat-acp-config-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      final config = tester.widget<AcpConfigButton>(
+        find.byType(AcpConfigButton),
+      );
+      final repeatedLoad = config.load();
+      composer(tester).onTriggerSlashCommand!();
+      composer(tester).controller.text = '等待配置完成后发送一次';
+      composer(tester).onSendMessage();
+      composer(tester).onSendMessage();
+      await tester.pump();
+      composer(tester).controller.text = '下一条草稿';
+      composer(tester).onRemoveAttachment!(submittedAttachmentId);
+      await attachFile(tester, 'next-draft.pdf', settle: false);
+      final nextDraftAttachment = composer(tester).attachments.single;
+
+      expect(
+        agentCalls.where((call) => call.method == 'session/new'),
+        hasLength(1),
+      );
+      expectNoPersistedDraft();
+      expect(selector(tester).selectedId, 'xiaowan-acp');
+
+      sessionNewGate!.complete();
+      expect((await repeatedLoad)['sessionId'], 'new-draft-session');
+      await tester.pumpAndSettle();
+      expect(
+        agentCalls.where((call) => call.method == 'session/new'),
+        hasLength(1),
+      );
+      expect(
+        assistCalls.where((call) => call.method == 'createConversation'),
+        hasLength(1),
+      );
+      expect(conversations, hasLength(1));
+      final prompt = agentCalls.singleWhere(
+        (call) => call.method == 'session/prompt',
+      );
+      expect((prompt.arguments as Map)['conversationId'], 901);
+      expect((prompt.arguments as Map)['sessionId'], 'new-draft-session');
+      expect((prompt.arguments as Map)['text'], '等待配置完成后发送一次');
+      final submittedAttachments =
+          ((prompt.arguments as Map)['attachments'] as List).cast<Map>();
+      expect(submittedAttachments, hasLength(1));
+      expect(submittedAttachments.single['id'], submittedAttachmentId);
+      expect(submittedAttachments.single['name'], 'submitted.pdf');
+      expect(composer(tester).controller.text, '下一条草稿');
+      expect(composer(tester).attachments.single.id, nextDraftAttachment.id);
+      expect(composer(tester).attachments.single.name, 'next-draft.pdf');
+      await disposeChat(tester);
+      expect(
+        agentCalls.where((call) => call.method == 'session/close'),
+        isEmpty,
+      );
+    },
+  );
+
+  testWidgets(
+    'first send persists its submitted user message before an Agent status failure',
+    (tester) async {
+      allowConversationCreation = true;
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.newConversation(agentId: 'xiaowan-acp'),
+      );
+      await tester.tap(find.byKey(const ValueKey('chat-acp-config-button')));
+      await tester.pumpAndSettle();
+      expectNoPersistedDraft();
+      await dismissConfigPanel(tester);
+      failAgentStatus = true;
+      composer(tester).controller.text = '连接失败也要保留已经提交的消息';
+      composer(tester).onSendMessage();
+      await tester.pumpAndSettle();
+
+      expect(
+        assistCalls.where((call) => call.method == 'createConversation'),
+        hasLength(1),
+      );
+      expect(conversations, hasLength(1));
+      expect(messagesBeforeStatusFailure, isNotNull);
+      final persistedUsers = {
+        for (final message in messagesBeforeStatusFailure!)
+          if (message['user'] == 1) message['id']: message,
+      }.values.toList();
+      expect(persistedUsers, hasLength(1));
+      expect(
+        (persistedUsers.single['content'] as Map)['text'],
+        '连接失败也要保留已经提交的消息',
+      );
+      expect(
+        agentCalls.where((call) => call.method == 'session/prompt'),
+        isEmpty,
+      );
+      expect(
+        agentCalls.where((call) => call.method == 'session/new'),
+        hasLength(1),
+      );
+      await disposeChat(tester);
+      expect(conversations, hasLength(1));
+    },
+  );
+
+  testWidgets(
+    'a late draft config refresh cannot mark its now committed session as unbound',
+    (tester) async {
+      allowConversationCreation = true;
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.newConversation(agentId: 'xiaowan-acp'),
+      );
+      await tester.tap(find.byKey(const ValueKey('chat-acp-config-button')));
+      await tester.pumpAndSettle();
+      final config = tester.widget<AcpConfigButton>(
+        find.byType(AcpConfigButton),
+      );
+      sessionLoadGate = Completer<void>();
+      final pendingRefresh = config.refresh!();
+      await tester.pump();
+      expectNoPersistedDraft();
+      expect(
+        (agentCalls.lastWhere((call) => call.method == 'session/load').arguments
+                as Map)
+            .containsKey('conversationId'),
+        isFalse,
+      );
+
+      composer(tester).controller.text = '刷新仍在等待时发送';
+      composer(tester).onSendMessage();
+      await tester.pumpAndSettle();
+      expect(
+        assistCalls.where((call) => call.method == 'createConversation'),
+        hasLength(1),
+      );
+      final prompt = agentCalls.singleWhere(
+        (call) => call.method == 'session/prompt',
+      );
+      expect((prompt.arguments as Map)['sessionId'], 'new-draft-session');
+      sessionLoadGate!.complete();
+      expect((await pendingRefresh)['sessionId'], 'new-draft-session');
+      await tester.pumpAndSettle();
+
+      await disposeChat(tester);
+      // Leaving the page may release unused configuration sessions only.
+      // This session has already been adopted by the committed conversation.
+      expect(
+        agentCalls.where((call) => call.method == 'session/close'),
+        isEmpty,
+      );
+      expect(conversations, hasLength(1));
+      expect(
+        agentCalls.where((call) => call.method == 'session/new'),
+        hasLength(1),
+      );
+    },
+  );
 
   testWidgets(
     'Agent switching preserves edits and attachment changes in flight',

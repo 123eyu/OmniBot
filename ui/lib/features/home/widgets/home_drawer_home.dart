@@ -285,96 +285,97 @@ extension _HomeDrawerHome on HomeDrawerState {
     final english = Localizations.localeOf(context).languageCode == 'en';
     // Keep the header's overflow glyph fully visible beside the overlay.
     final menuWidth = (MediaQuery.sizeOf(context).width - 84).clamp(0.0, 340.0);
-    return PopupMenuButton<String>(
-      key: const ValueKey('home-agent-switcher'),
-      enabled: !_isBatchConversationActionRunning,
-      tooltip: english ? 'Switch Agent' : '切换 Agent',
-      position: PopupMenuPosition.over,
-      color: palette.surfacePrimary,
-      surfaceTintColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: OmniMenuStyle.panelRadius,
-      ),
-      clipBehavior: Clip.antiAlias,
-      constraints: BoxConstraints.tightFor(width: menuWidth),
-      menuPadding: OmniMenuStyle.panelPadding,
-      borderRadius: BorderRadius.circular(14),
-      popUpAnimationStyle: MediaQuery.disableAnimationsOf(context)
-          ? AnimationStyle.noAnimation
-          : const AnimationStyle(
-              duration: Duration(milliseconds: 240),
-              reverseDuration: Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-            ),
-      onOpened: performOmniSelectionHaptic,
-      onSelected: (id) {
-        // The catalog can change while the menu is open. Select only a current
-        // entry, using its latest name and the existing conversation filter.
-        if (!mounted || _isBatchConversationActionRunning) return;
-        final filter = _homeFilters.where((item) => item.id == id).firstOrNull;
-        if (filter != null) _selectHomeFilter(filter);
-      },
-      itemBuilder: (menuContext) => [
-        for (final filter in _homeFilters)
-          OmniPopupMenuItem<String>(
-            key: ValueKey('home-agent-option-${filter.id}'),
-            value: filter.id,
-            selected: _homeFilter.id == filter.id,
-            child: Row(
-              children: [
-                SizedBox.square(
-                  dimension: 18,
-                  child: _homeFilter.id == filter.id
-                      ? const Icon(LucideIcons.check, size: 18)
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                ExcludeSemantics(
-                  child: _buildHomeFilterIcon(filter, OmniMenuStyle.iconSize),
-                ),
-                const SizedBox(width: OmniMenuStyle.iconGap),
-                Expanded(
-                  child: Text(
-                    _homeFilterLabel(filter),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+    return Builder(
+      builder: (anchorContext) => Tooltip(
+        message: english ? 'Switch Agent' : '切换 Agent',
+        child: InkWell(
+          key: const ValueKey('home-agent-switcher'),
+          borderRadius: BorderRadius.circular(14),
+          onTap: _isBatchConversationActionRunning
+              ? null
+              : () async {
+                  final anchor = glassPopupAnchorFromContext(anchorContext);
+                  if (anchor == null) return;
+                  performOmniSelectionHaptic();
+                  final id = await showOmniMenu<String>(
+                    context: anchorContext,
+                    anchor: anchor,
+                    width: menuWidth,
+                    items: [
+                      for (final filter in _homeFilters)
+                        OmniPopupMenuItem<String>(
+                          key: ValueKey('home-agent-option-${filter.id}'),
+                          value: filter.id,
+                          selected: _homeFilter.id == filter.id,
+                          child: Row(
+                            children: [
+                              SizedBox.square(
+                                dimension: 18,
+                                child: _homeFilter.id == filter.id
+                                    ? const Icon(LucideIcons.check, size: 18)
+                                    : null,
+                              ),
+                              const SizedBox(width: 12),
+                              ExcludeSemantics(
+                                child: _buildHomeFilterIcon(
+                                  filter,
+                                  OmniMenuStyle.iconSize,
+                                ),
+                              ),
+                              const SizedBox(width: OmniMenuStyle.iconGap),
+                              Expanded(
+                                child: Text(
+                                  _homeFilterLabel(filter),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  );
+                  // The catalog can change while the menu is open. Select only
+                  // a current entry using the existing conversation filter.
+                  if (!mounted || _isBatchConversationActionRunning) return;
+                  final filter = _homeFilters
+                      .where((item) => item.id == id)
+                      .firstOrNull;
+                  if (filter != null) _selectHomeFilter(filter);
+                },
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ExcludeSemantics(
+                    child: _buildHomeFilterIcon(_homeFilter, compact ? 24 : 30),
                   ),
-                ),
-              ],
-            ),
-          ),
-      ],
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ExcludeSemantics(
-                child: _buildHomeFilterIcon(_homeFilter, compact ? 24 : 30),
-              ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  _homeFilterLabel(_homeFilter),
-                  key: const ValueKey('home-agent-name'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: compact ? 17 : 22,
-                    fontWeight: FontWeight.w600,
-                    color: palette.textPrimary,
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      _homeFilterLabel(_homeFilter),
+                      key: const ValueKey('home-agent-name'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compact ? 17 : 22,
+                        fontWeight: FontWeight.w600,
+                        color: palette.textPrimary,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    LucideIcons.chevronDown,
+                    size: 18,
+                    color: palette.textSecondary,
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Icon(
-                LucideIcons.chevronDown,
-                size: 18,
-                color: palette.textSecondary,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -402,7 +403,6 @@ extension _HomeDrawerHome on HomeDrawerState {
     // plugin registry again so newly enabled or removed actions are reflected.
     await _loadWebQuickActions();
     if (!mounted || !anchorContext.mounted) return;
-    final palette = context.omniPalette;
     final english = Localizations.localeOf(context).languageCode == 'en';
     final actions = [
       _DrawerShortcutAction(
@@ -418,26 +418,12 @@ extension _HomeDrawerHome on HomeDrawerState {
           onTap: _showHomeWebActions,
         ),
     ];
-    final box = anchorContext.findRenderObject() as RenderBox;
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final origin = box.localToGlobal(Offset.zero, ancestor: overlay);
-    final selected = await showMenu<int>(
+    final anchor = glassPopupAnchorFromContext(anchorContext);
+    if (anchor == null) return;
+    final selected = await showOmniMenu<int>(
       context: context,
-      position: RelativeRect.fromRect(
-        Rect.fromLTWH(
-          origin.dx,
-          origin.dy + box.size.height + 8,
-          box.size.width,
-          0,
-        ),
-        Offset.zero & overlay.size,
-      ),
-      color: palette.surfacePrimary,
-      surfaceTintColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: OmniMenuStyle.panelRadius,
-      ),
-      constraints: const BoxConstraints(minWidth: 224, maxWidth: 300),
+      anchor: anchor,
+      width: 260,
       items: [
         for (var i = 0; i < actions.length; i++)
           OmniPopupMenuItem<int>(

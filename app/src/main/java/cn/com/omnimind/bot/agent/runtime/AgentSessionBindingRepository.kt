@@ -58,6 +58,13 @@ internal class AgentSessionBindingRepository(
     ): Long {
         val normalizedThreadId = threadId.trim()
         require(normalizedThreadId.isNotEmpty()) { "threadId is required" }
+        // A late load/config request must not resurrect deleted history as a
+        // new empty Conversation under another id.
+        val requestedConversation = conversationId?.let { id ->
+            requireNotNull(DatabaseHelper.getConversationById(id)) {
+                "Conversation $id no longer exists."
+            }
+        }
         val now = System.currentTimeMillis()
 
         val existingBinding = DatabaseHelper.getAgentSessionBindingByThreadId(normalizedThreadId)
@@ -115,8 +122,7 @@ internal class AgentSessionBindingRepository(
             return existingBinding.conversationId
         }
 
-        val targetConversation = conversationId
-            ?.let { DatabaseHelper.getConversationById(it) }
+        val targetConversation = requestedConversation
             ?.let {
                 val updated = buildUpdatedConversation(
                     conversation = it,
@@ -371,10 +377,12 @@ internal object AgentRuntimeDefaults {
 internal fun explicitThreadMatchesConversation(
     explicitThreadId: String?,
     requestedConversationId: Long?,
-    boundConversationId: Long?
+    boundConversationId: Long?,
+    ownsUnboundSession: Boolean = false,
 ): Boolean {
     if (explicitThreadId.isNullOrBlank() || requestedConversationId == null) {
         return true
     }
-    return boundConversationId == requestedConversationId
+    return boundConversationId == requestedConversationId ||
+        (boundConversationId == null && ownsUnboundSession)
 }

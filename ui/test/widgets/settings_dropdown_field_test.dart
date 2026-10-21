@@ -7,6 +7,61 @@ import 'package:ui/widgets/omni_menu.dart';
 import 'package:ui/widgets/settings_ui.dart';
 
 void main() {
+  for (final alignment in [
+    Alignment.topLeft,
+    Alignment.topRight,
+    Alignment.bottomLeft,
+    Alignment.bottomRight,
+  ]) {
+    testWidgets('selector covers its trigger near $alignment', (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var changeCount = 0;
+      const triggerKey = ValueKey('selector-trigger');
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Align(
+                alignment: alignment,
+                child: OmniSettingsDropdown<String>(
+                  dropdownKey: triggerKey,
+                  value: 'first',
+                  options: const [
+                    OmniSettingsOption(value: 'first', label: 'First choice'),
+                    OmniSettingsOption(value: 'second', label: 'Second choice'),
+                    OmniSettingsOption(value: 'third', label: 'Third choice'),
+                  ],
+                  onChanged: (_) => changeCount += 1,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final trigger = tester.getRect(find.byKey(triggerKey));
+      await tester.tap(find.byKey(triggerKey));
+      await tester.pumpAndSettle();
+      final panel = tester.getRect(find.byType(OmniMenuSurface));
+      expect(panel.contains(trigger.center), isTrue);
+      expect(panel.left, greaterThanOrEqualTo(16));
+      expect(panel.right, lessThanOrEqualTo(304));
+      expect(panel.top, greaterThanOrEqualTo(16));
+      expect(panel.bottom, lessThanOrEqualTo(552));
+      expect(changeCount, 0);
+
+      await tester.tap(find.text('First choice').last);
+      await tester.pumpAndSettle();
+      expect(find.byType(OmniMenuSurface), findsNothing);
+      expect(changeCount, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'refresh waits for rebuilt options and suppresses repeated opens',
     (tester) async {

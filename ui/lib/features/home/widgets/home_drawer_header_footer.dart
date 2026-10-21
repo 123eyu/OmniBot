@@ -83,96 +83,57 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
     if (_webQuickActions.isEmpty) return;
     performOmniSelectionHaptic();
 
-    final box = anchorContext.findRenderObject() as RenderBox?;
-    final overlay =
-        Overlay.maybeOf(anchorContext)?.context.findRenderObject()
-            as RenderBox?;
-    if (box == null || !box.hasSize || overlay == null || !overlay.hasSize) {
-      return;
-    }
+    final anchor = glassPopupAnchorFromContext(anchorContext);
+    if (anchor == null) return;
 
-    final triggerTopLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-    final triggerBottomRight = box.localToGlobal(
-      box.size.bottomRight(Offset.zero),
-      ancestor: overlay,
-    );
-    final overlaySize = overlay.size;
-    final bottomOffset = overlaySize.height - triggerTopLeft.dy + 8;
-    final rightEdge = (overlaySize.width - triggerBottomRight.dx).clamp(
-      16.0,
-      overlaySize.width - 16.0,
-    );
-
-    await showGeneralDialog<void>(
+    await showGlassPopup<void>(
       context: anchorContext,
-      barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(anchorContext)
-          .modalBarrierDismissLabel,
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 170),
-      pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        final palette = dialogContext.omniPalette;
-        final english =
-            Localizations.localeOf(dialogContext).languageCode == 'en';
-        final surface = palette.surfacePrimary;
+      anchor: anchor,
+      preferBelow: false,
+      child: Builder(
+        builder: (dialogContext) {
+          final palette = dialogContext.omniPalette;
+          final english =
+              Localizations.localeOf(dialogContext).languageCode == 'en';
+          final surface = palette.surfacePrimary;
 
-        return Stack(
-          children: [
-            Positioned(
-              left: 16,
-              right: rightEdge,
-              bottom: bottomOffset,
-              child: Material(
-                color: Colors.transparent,
-                child: OmniMenuSurface(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
-                        child: Text(
-                          english ? 'Local Web Interfaces' : '本地 Web 界面',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.3,
-                            color: palette.textTertiary,
-                          ),
+          return Material(
+            color: Colors.transparent,
+            child: OmniMenuSurface(
+              width: 320,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+                      child: Text(
+                        english ? 'Local Web Interfaces' : '本地 Web 界面',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3,
+                          color: palette.textTertiary,
                         ),
                       ),
-                      for (var i = 0; i < _webQuickActions.length; i++) ...[
-                        if (i > 0) const SizedBox(height: 2),
-                        _buildWebPopoverOptionTile(
-                          dialogContext,
-                          _webQuickActions[i],
-                          surface: surface,
-                          english: english,
-                        ),
-                      ],
+                    ),
+                    for (var i = 0; i < _webQuickActions.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 2),
+                      _buildWebPopoverOptionTile(
+                        dialogContext,
+                        _webQuickActions[i],
+                        surface: surface,
+                        english: english,
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ),
             ),
-          ],
-        );
-      },
-      transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            alignment: Alignment.bottomRight,
-            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
-            child: child,
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

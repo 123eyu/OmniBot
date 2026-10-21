@@ -775,6 +775,9 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
 
   @override
   void dispose() {
+    for (final mode in _unboundConfigurationSessions.keys.toList()) {
+      _releaseUnboundConfigurationSession(mode);
+    }
     unawaited(_clearVisibleChatConversation());
     unawaited(_conversationModelSelectorHandle?.dismiss());
     _conversationModelSelectorHandle = null;

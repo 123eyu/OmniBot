@@ -674,7 +674,12 @@ void main() {
         ),
       ),
     );
+    // Start the non-zero close transition before advancing its clock. The
+    // composer has a continuous border animation, so it cannot fully settle.
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 700));
+    await tester.pump();
+    expect(find.byType(GlassPopupOverlayContent), findsNothing);
     expect(selectedModel, 'gpt-5.1-agent');
 
     await tester.tap(settingsButton);
@@ -696,7 +701,7 @@ void main() {
     expect(selectedEffort, 'xhigh');
   });
 
-  testWidgets('agent run settings menu opens above a focused composer', (
+  testWidgets('agent run settings menu covers its focused composer trigger', (
     tester,
   ) async {
     final controller = TextEditingController();
@@ -748,8 +753,8 @@ void main() {
     );
     expect(menu, findsOneWidget);
     expect(
-      tester.getBottomLeft(menu).dy,
-      lessThan(tester.getTopLeft(settingsButton).dy),
+      tester.getRect(menu).contains(tester.getCenter(settingsButton)),
+      isTrue,
     );
     expect(focusNode.hasFocus, isTrue);
   });

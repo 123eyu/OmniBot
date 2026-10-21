@@ -35,6 +35,7 @@ import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/cache_util.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
+import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:ui/widgets/omni_menu.dart';
 import 'package:ui/widgets/settings_ui.dart';

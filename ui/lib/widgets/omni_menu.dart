@@ -2,6 +2,67 @@ import 'dart:ui' show SemanticsRole;
 
 import 'package:flutter/material.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/glass_popup.dart';
+
+/// Opens a button's menu on the shared anchored popup surface.
+///
+/// Entries keep their own selection and dismissal behavior. The viewport caps
+/// long menus without fixing row heights, so text can grow with accessibility
+/// settings and custom entries can retain their own scrolling content.
+Future<T?> showOmniMenu<T>({
+  required BuildContext context,
+  required Rect anchor,
+  required List<PopupMenuEntry<T>> items,
+  double width = 260,
+  bool preferBelow = true,
+  bool? requestFocus,
+  EdgeInsetsGeometry padding = OmniMenuStyle.panelPadding,
+}) {
+  final focusMenu = requestFocus ?? Navigator.of(context).widget.requestFocus;
+  return showGlassPopup<T>(
+    context: context,
+    anchor: anchor,
+    preferBelow: preferBelow,
+    requestFocus: requestFocus,
+    child: FocusScope(
+      autofocus: focusMenu,
+      child: FocusTraversalGroup(
+        policy: WidgetOrderTraversalPolicy(),
+        child: Semantics(
+          role: SemanticsRole.menu,
+          scopesRoute: true,
+          namesRoute: true,
+          explicitChildNodes: true,
+          label: MaterialLocalizations.of(context).popupMenuLabel,
+          child: Material(
+            color: Colors.transparent,
+            child: OmniMenuSurface(
+              width: width,
+              padding: padding,
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final item in items)
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: constraints.maxHeight,
+                          ),
+                          child: item,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
 
 /// Menu metrics shared with the home conversation context menu.
 /// Keep the reference menu unchanged; other menus consume these same metrics.

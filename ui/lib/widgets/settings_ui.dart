@@ -4,6 +4,7 @@ import 'package:flutter_switch/flutter_switch.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/omni_menu.dart';
 
 /// Triggers a crisp toggle haptic feedback.
@@ -832,140 +833,34 @@ class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
   Future<void> _showPopover(BuildContext anchorContext) async {
     performOmniSelectionHaptic();
 
-    final box = anchorContext.findRenderObject() as RenderBox?;
-    final overlay =
-        Overlay.maybeOf(anchorContext)?.context.findRenderObject()
-            as RenderBox?;
-    if (box == null || !box.hasSize || overlay == null || !overlay.hasSize) {
-      return;
-    }
+    final anchor = glassPopupAnchorFromContext(anchorContext);
+    if (anchor == null) return;
 
-    final triggerTopLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-    final triggerBottomRight = box.localToGlobal(
-      box.size.bottomRight(Offset.zero),
-      ancestor: overlay,
-    );
-    final overlaySize = overlay.size;
-    final hasSubtitles = widget.options.any(
-      (item) => item.subtitle != null && item.subtitle!.trim().isNotEmpty,
-    );
-    final estimatedItemHeight = hasSubtitles ? 82.0 : OmniMenuStyle.minHeight;
-    final estimatedMenuHeight =
-        widget.options.length * estimatedItemHeight +
-        OmniMenuStyle.panelPadding.vertical +
-        (widget.searchHint == null ? 0 : 48);
-    final media = MediaQuery.of(anchorContext);
-    final spaceBelow =
-        (overlaySize.height -
-                media.viewInsets.bottom -
-                media.padding.bottom -
-                triggerBottomRight.dy -
-                16.0)
-            .clamp(0.0, overlaySize.height);
-    final spaceAbove = (triggerTopLeft.dy - media.padding.top - 16.0).clamp(
-      0.0,
-      overlaySize.height,
-    );
-    final openUpward =
-        spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
-    final maxMenuHeight = openUpward ? spaceAbove : spaceBelow;
-    final maxMenuWidth = widget.menuMaxWidth.clamp(
-      0.0,
-      (overlaySize.width - 32.0).clamp(0.0, overlaySize.width),
-    );
-    final minMenuWidth = widget.menuMinWidth.clamp(0.0, maxMenuWidth);
-
-    final rightEdge = (overlaySize.width - triggerBottomRight.dx).clamp(
-      16.0,
-      overlaySize.width - maxMenuWidth - 16.0,
-    );
-
-    final selected = await showGeneralDialog<T>(
+    final selected = await showGlassPopup<T>(
       context: anchorContext,
-      barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(anchorContext)
-          .modalBarrierDismissLabel,
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 170),
-      pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        var menuRight = rightEdge;
-        var menuTop = openUpward ? null : triggerBottomRight.dy + 6;
-        var menuBottom = openUpward
-            ? overlaySize.height - triggerTopLeft.dy + 6
-            : null;
-        var menuHeight = maxMenuHeight;
-        var menuMaxWidth = maxMenuWidth;
-        var menuMinWidth = minMenuWidth;
-        if (widget.searchHint != null) {
-          // Search opens the IME after the route is already visible. Read the
-          // route's current metrics so the entire list stays above it.
-          final liveMedia = MediaQuery.of(dialogContext);
-          final liveSize = liveMedia.size;
-          final usableTop = liveMedia.padding.top + 16;
-          final usableBottom =
-              (liveSize.height -
-                      liveMedia.viewInsets.bottom -
-                      liveMedia.padding.bottom -
-                      16)
-                  .clamp(usableTop, liveSize.height);
-          final anchorTop = triggerTopLeft.dy.clamp(usableTop, usableBottom);
-          final anchorBottom = (triggerBottomRight.dy + 6).clamp(
-            usableTop,
-            usableBottom,
+      anchor: anchor,
+      screenPadding: const EdgeInsets.all(16),
+      child: LayoutBuilder(
+        builder: (popupContext, constraints) {
+          // The shared popup owns live safe-area/keyboard positioning. Keep
+          // the menu as wide as its trigger where possible, without exceeding
+          // either the configured limit or the space currently available.
+          final maxWidth = widget.menuMaxWidth.clamp(0.0, constraints.maxWidth);
+          final minWidth = anchor.width.clamp(
+            widget.menuMinWidth.clamp(0.0, maxWidth),
+            maxWidth,
           );
-          final below = (usableBottom - anchorBottom).clamp(
-            0.0,
-            liveSize.height,
+          return _OmniSettingsPopoverCard<T>(
+            options: widget.options,
+            selectedValue: widget.value,
+            searchHint: widget.searchHint,
+            minWidth: minWidth,
+            maxWidth: maxWidth,
+            maxHeight: constraints.maxHeight,
+            onSelected: (picked) => Navigator.of(popupContext).pop(picked),
           );
-          final above = (anchorTop - 6 - usableTop).clamp(0.0, liveSize.height);
-          final upward = below < estimatedMenuHeight && above > below;
-          menuTop = upward ? null : anchorBottom;
-          menuBottom = upward ? liveSize.height - anchorTop + 6 : null;
-          menuHeight = upward ? above : below;
-          menuMaxWidth = widget.menuMaxWidth.clamp(
-            0.0,
-            (liveSize.width - 32).clamp(0.0, liveSize.width),
-          );
-          menuMinWidth = widget.menuMinWidth.clamp(0.0, menuMaxWidth);
-          menuRight = (liveSize.width - triggerBottomRight.dx).clamp(
-            16.0,
-            liveSize.width - menuMaxWidth - 16,
-          );
-        }
-        return Stack(
-          children: [
-            Positioned(
-              right: menuRight,
-              top: menuTop,
-              bottom: menuBottom,
-              child: _OmniSettingsPopoverCard<T>(
-                options: widget.options,
-                selectedValue: widget.value,
-                searchHint: widget.searchHint,
-                minWidth: menuMinWidth,
-                maxWidth: menuMaxWidth,
-                maxHeight: menuHeight,
-                onSelected: (picked) => Navigator.of(dialogContext).pop(picked),
-              ),
-            ),
-          ],
-        );
-      },
-      transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            alignment: openUpward ? Alignment.bottomRight : Alignment.topRight,
-            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
-            child: child,
-          ),
-        );
-      },
+        },
+      ),
     );
 
     if (!mounted ||

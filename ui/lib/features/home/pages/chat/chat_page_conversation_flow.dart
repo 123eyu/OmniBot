@@ -14,6 +14,7 @@ Future<String?> _prepareAcpSessionForTurn({
   required String mode,
   required String? existingSessionId,
   required bool Function() isTargetCurrent,
+  bool preparedForFirstPrompt = false,
   String? model,
   String? effort,
   String? collaborationMode,
@@ -29,8 +30,25 @@ Future<String?> _prepareAcpSessionForTurn({
   if (!ownsTurn()) return null;
 
   final hadExistingSession = existingSessionId?.trim().isNotEmpty == true;
+  String? preparedSessionId;
+  if (preparedForFirstPrompt && hadExistingSession) {
+    // The process may have reconnected since the panel configured this
+    // unbound session. Restore it through ACP before native prompt admission.
+    final loaded = await AgentRuntimeService.readSession(
+      sessionId: existingSessionId,
+      includeHistory: false,
+      conversationMode: conversationMode,
+    );
+    preparedSessionId = (loaded['sessionId'] ?? loaded['threadId'])?.toString();
+    if (preparedSessionId != existingSessionId) {
+      if (preparedSessionId != null && preparedSessionId.isNotEmpty) {
+        await AgentRuntimeService.closeSession(sessionId: preparedSessionId);
+      }
+      throw StateError('The configured ACP session could not be restored');
+    }
+  }
   final sessionId = await AgentRuntimeService.ensureSession(
-    sessionId: existingSessionId,
+    sessionId: preparedSessionId ?? existingSessionId,
     conversationId: conversationId,
     model: model,
     effort: effort,
@@ -38,7 +56,7 @@ Future<String?> _prepareAcpSessionForTurn({
     conversationMode: conversationMode,
   );
   if (!ownsTurn()) {
-    if (!hadExistingSession) {
+    if (!hadExistingSession || preparedForFirstPrompt) {
       try {
         await AgentRuntimeService.closeSession(
           sessionId: sessionId,
@@ -56,7 +74,7 @@ Future<String?> _prepareAcpSessionForTurn({
     mode: mode,
     sessionId: sessionId,
   )) {
-    if (!hadExistingSession) {
+    if (!hadExistingSession || preparedForFirstPrompt) {
       try {
         await AgentRuntimeService.closeSession(
           sessionId: sessionId,
@@ -189,6 +207,128 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
     _rememberRuntimeUiSnapshot(mode);
   }
 
+  /// Configuration may create an official ACP session, but never a history
+  /// row. This same session is adopted by the first admitted user prompt.
+  @override
+  Future<Map<String, dynamic>> _readActiveAcpSessionConfig({
+    bool refreshConfig = false,
+  }) async {
+    final generation = _conversationTargetRequestId;
+    final mode = _activeMode;
+    final agentId = _activeAcpAgentId;
+    final conversationId = _currentConversationId;
+    final sessionId = mode == ChatPageMode.normal
+        ? (_normalAcpSessionConversationId == conversationId
+              ? _normalAcpSessionId
+              : null)
+        : _activeAgentThreadId;
+    bool isCurrent() => mounted && generation == _conversationTargetRequestId;
+
+    void remember(Map<String, dynamic> response) {
+      final id = (response['sessionId'] ?? response['threadId'])
+          ?.toString()
+          .trim();
+      if (id == null || id.isEmpty) {
+        throw StateError('ACP session did not return a session id');
+      }
+      // A refresh can finish after the first send commits this same target.
+      // It must not turn the now-adopted session back into an unused draft.
+      final adoptedConversationId =
+          _modeState(mode).currentConversationId ?? conversationId;
+      if (mode == ChatPageMode.normal) {
+        _normalAcpSessionId = id;
+        _normalAcpSessionConversationId = adoptedConversationId;
+      } else {
+        _activeAgentThreadId = id;
+      }
+      if (sessionId != null &&
+          _unboundConfigurationSessions[mode] == sessionId) {
+        _unboundConfigurationSessions[mode] = id;
+      }
+    }
+
+    if (conversationId == null && (sessionId == null || sessionId.isEmpty)) {
+      final pending = _configurationSessionCreation;
+      if (pending != null &&
+          _configurationSessionCreationTarget == generation) {
+        return pending;
+      }
+      Future<Map<String, dynamic>> create() async {
+        final response = await AgentRuntimeService.newSession(
+          agentId: agentId,
+          conversationMode: activeConversationModeValue.storageValue,
+          model: mode == ChatPageMode.normal
+              ? (_activeConversationModelOverrideSelection?.modelId ??
+                    _activeNormalChatModelId)
+              : _activeAgentModelId,
+          effort: mode == ChatPageMode.normal
+              ? _activeConversationReasoningEffort
+              : _activeAgentReasoningEffort,
+          collaborationMode: mode == ChatPageMode.agent
+              ? _activeAgentCollaborationMode
+              : null,
+        );
+        if (!isCurrent()) {
+          final id = (response['sessionId'] ?? response['threadId'])
+              ?.toString();
+          if (id != null && id.isNotEmpty) {
+            try {
+              await AgentRuntimeService.closeSession(sessionId: id);
+            } catch (error) {
+              debugPrint(
+                'Abandoned configuration session close failed: $error',
+              );
+            }
+          }
+          throw StateError('Conversation changed');
+        }
+        remember(response);
+        _unboundConfigurationSessions[mode] =
+            (response['sessionId'] ?? response['threadId']).toString();
+        return response;
+      }
+
+      final creation = create();
+      _configurationSessionCreation = creation;
+      _configurationSessionCreationTarget = generation;
+      try {
+        return await creation;
+      } finally {
+        if (identical(_configurationSessionCreation, creation)) {
+          _configurationSessionCreation = null;
+          _configurationSessionCreationTarget = null;
+        }
+      }
+    }
+
+    final isPreparedSession =
+        sessionId != null && _unboundConfigurationSessions[mode] == sessionId;
+    final response = await AgentRuntimeService.readSession(
+      sessionId: conversationId == null || isPreparedSession ? sessionId : null,
+      conversationId: isPreparedSession ? null : conversationId,
+      agentId: agentId,
+      conversationMode: activeConversationModeValue.storageValue,
+      includeHistory: false,
+      refreshConfig: refreshConfig,
+    );
+    if (!isCurrent()) throw StateError('Conversation changed');
+    remember(response);
+    return response;
+  }
+
+  @override
+  void _releaseUnboundConfigurationSession(ChatPageMode mode) {
+    final sessionId = _unboundConfigurationSessions.remove(mode);
+    if (sessionId == null) return;
+    unawaited(
+      AgentRuntimeService.closeSession(sessionId: sessionId)
+          .catchError((Object error) {
+            debugPrint('Unused configuration session close failed: $error');
+            return <String, dynamic>{};
+          }),
+    );
+  }
+
   @override
   Future<void> _ensureActiveConversationReadyForStreaming() async {
     if (_currentConversationId == null) {
@@ -196,7 +336,6 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
         generateSummary: false,
         markComplete: false,
         rethrowOnFailure: true,
-        allowEmpty: true,
       );
     }
     if (_currentConversationId == null) {
@@ -549,14 +688,10 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
     // A Harness switch changes both the native ACP adapter and the visible
     // conversation runtime. Let a user submit queue behind that atomic
     // transition instead of registering it against the old target.
-    final queuedDuringSwitch =
-        waitForBootstrap && _harnessSwitchSendBarrier.isActive;
-    final submittedText = queuedDuringSwitch
-        ? (text ?? _messageController.text)
-        : null;
-    final submittedAttachments = queuedDuringSwitch
-        ? List<ChatInputAttachment>.of(_pendingAttachments)
-        : null;
+    final submittedText = text ?? _messageController.text;
+    final submittedAttachments = List<ChatInputAttachment>.of(
+      _pendingAttachments,
+    );
     if (waitForBootstrap) {
       final switched = await _harnessSwitchSendBarrier.waitUntilIdle();
       // A failed switch must not deliver the queued prompt to the old Agent.
@@ -582,9 +717,21 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
       if (waitForBootstrap && bootstrapFuture != null) {
         await bootstrapFuture;
       }
-      final messageText = (submittedText ?? text ?? _messageController.text)
-          .trim();
-      final inputAttachments = submittedAttachments ?? _pendingAttachments;
+      // A panel may still be preparing the draft's official session when the
+      // user submits. Reuse that request before freezing the prompt target.
+      final configurationSession = _configurationSessionCreation;
+      if (configurationSession != null &&
+          _configurationSessionCreationTarget == sendTargetId) {
+        try {
+          await configurationSession;
+        } catch (_) {
+          // A failed settings read owns no turn. Normal send admission still
+          // reports its own canonical session/prompt result.
+        }
+      }
+      if (!_isConversationTargetRequestCurrent(sendTargetId)) return;
+      final messageText = submittedText.trim();
+      final inputAttachments = submittedAttachments;
       final hasAttachments = inputAttachments.isNotEmpty;
       if ((messageText.isEmpty && !hasAttachments) || _isAiResponding) return;
       if (!hasAttachments &&
@@ -593,14 +740,14 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
         return;
       }
       if (!await _ensureNormalChatModelConfigurationForSend()) return;
+      if (!_isConversationTargetRequestCurrent(sendTargetId)) return;
 
       final attachments = inputAttachments.map((item) => item.toMap()).toList();
       await _dispatchUserMessage(
         messageText,
         attachments: attachments,
         runSlashCommand: true,
-        restoreInputValue:
-            queuedDuringSwitch && _messageController.text != submittedText
+        restoreInputValue: _messageController.text != submittedText
             ? _messageController.value
             : null,
       );
@@ -690,6 +837,8 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
     TextEditingValue? restoreInputValue,
     String? retainedUserMessageId,
   }) async {
+    final generation = _conversationTargetRequestId;
+    bool isCurrent() => mounted && generation == _conversationTargetRequestId;
     if ((messageText.isEmpty && attachments.isEmpty) || _isAiResponding) {
       return;
     }
@@ -707,7 +856,7 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
         messageText,
         attachments: attachments,
       );
-      if (handledSlash) return;
+      if (!isCurrent() || handledSlash) return;
     }
 
     if (_isOpenClawSurface && _openClawBaseUrl.trim().isEmpty) {
@@ -716,6 +865,7 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
       return;
     }
     if (!await _ensureNormalChatModelConfigurationForSend()) return;
+    if (!isCurrent()) return;
 
     _inputFocusNode.unfocus();
     final retainedUserMessageIndex = retainedUserMessageId == null
@@ -754,6 +904,42 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
       return;
     }
 
+    if (_activeConversationMode == ChatPageMode.agent &&
+        _resolvedThreadTarget?.isRemoteCodexSessionTarget != true &&
+        _resolvedThreadTarget?.agentRuntime?.trim().toLowerCase() != 'remote' &&
+        _activeAcpAgentId != _kRemoteCodexModeAgentId) {
+      try {
+        await _ensureActiveConversationReadyForStreaming();
+        if (!isCurrent()) return;
+        final admittedConversationId = _currentConversationId!;
+        final admittedMode = _modeKey(_activeMode);
+        _runtimeCoordinator.beginAcpTurn(
+          taskId: messageIds.aiMessageId,
+          conversationId: admittedConversationId,
+          mode: admittedMode,
+        );
+        await _runtimeCoordinator.persistRuntimeConversation(
+          conversationId: admittedConversationId,
+          mode: admittedMode,
+          persistMessages: true,
+        );
+        if (!isCurrent()) {
+          _runtimeCoordinator.unregisterTask(
+            messageIds.aiMessageId,
+            conversationId: admittedConversationId,
+            mode: admittedMode,
+          );
+          return;
+        }
+      } catch (error) {
+        if (isCurrent()) {
+          handleAgentError('Conversation setup failed. Please retry. $error');
+        }
+        return;
+      }
+    }
+
+    if (!isCurrent()) return;
     if (_activeConversationMode == ChatPageMode.agent) {
       await _sendAgentMessage(
         messageIds.aiMessageId,
@@ -1021,6 +1207,9 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
         conversationId: resolvedConversationId,
         mode: dispatchModeKey,
         existingSessionId: dispatchSessionId,
+        preparedForFirstPrompt:
+            _unboundConfigurationSessions[dispatchMode] == dispatchSessionId &&
+            dispatchSessionId != null,
         isTargetCurrent: isDispatchTargetCurrent,
         model: dispatchSelection?.modelId,
         effort: dispatchReasoningEffort,
@@ -1034,6 +1223,7 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
         );
         return;
       }
+      _unboundConfigurationSessions.remove(dispatchMode);
       _normalAcpSessionId = acpSessionId;
       _normalAcpSessionConversationId = resolvedConversationId;
       final response = await AgentRuntimeService.promptSession(
@@ -1198,6 +1388,9 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
         conversationId: resolvedConversationId,
         mode: dispatchModeKey,
         existingSessionId: dispatchSessionId,
+        preparedForFirstPrompt:
+            _unboundConfigurationSessions[dispatchMode] == dispatchSessionId &&
+            dispatchSessionId != null,
         isTargetCurrent: isDispatchTargetCurrent,
         model: dispatchSelection?.modelId,
         effort: dispatchReasoningEffort,
@@ -1211,6 +1404,7 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
         );
         return false;
       }
+      _unboundConfigurationSessions.remove(dispatchMode);
       _normalAcpSessionId = acpSessionId;
       _normalAcpSessionConversationId = resolvedConversationId;
       final response = await AgentRuntimeService.promptSession(

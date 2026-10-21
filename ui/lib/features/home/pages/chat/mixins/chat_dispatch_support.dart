@@ -41,7 +41,6 @@ mixin ChatDispatchSupport<T extends StatefulWidget> on State<T> {
     bool generateSummary,
     bool markComplete,
     bool rethrowOnFailure = false,
-    bool allowEmpty = false,
   });
 
   // ===================== 上下文保存 =====================

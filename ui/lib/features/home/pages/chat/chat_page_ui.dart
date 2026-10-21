@@ -35,34 +35,16 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
 
   Widget _buildAcpConfigButton() {
     final generation = _conversationTargetRequestId;
-    final mode = _activeMode;
     final agentId = _activeAcpAgentId;
     int? targetConversationId = _currentConversationId;
     bool isCurrent() => mounted && generation == _conversationTargetRequestId;
     Future<Map<String, dynamic>> read({bool refreshConfig = false}) async {
       if (!isCurrent()) throw StateError('Conversation changed');
-      await _ensureActiveConversationReadyForStreaming();
-      if (!isCurrent()) throw StateError('Conversation changed');
-      targetConversationId = _currentConversationId;
-      final response = await AgentRuntimeService.readSession(
-        conversationId: targetConversationId,
-        agentId: agentId,
-        conversationMode: _modeKey(mode),
-        includeHistory: false,
+      final response = await _readActiveAcpSessionConfig(
         refreshConfig: refreshConfig,
       );
       if (!isCurrent()) throw StateError('Conversation changed');
-      final sessionId = (response['sessionId'] ?? response['threadId'])
-          ?.toString();
-      if (sessionId != null && sessionId.isNotEmpty) {
-        // Reuse the session whose official settings the user is editing.
-        // The next send must not create a replacement session with defaults.
-        if (mode == ChatPageMode.normal) {
-          _normalAcpSessionId = sessionId;
-        } else {
-          _activeAgentThreadId = sessionId;
-        }
-      }
+      targetConversationId = _currentConversationId;
       return response;
     }
 
@@ -85,7 +67,10 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         if (_isAiResponding) throw StateError('本轮结束后可修改运行参数');
         return AgentRuntimeService.setSessionConfigOption(
           sessionId: sessionId,
-          conversationId: targetConversationId,
+          conversationId:
+              _unboundConfigurationSessions.values.contains(sessionId)
+              ? null
+              : targetConversationId,
           agentId: agentId,
           configId: configId,
           value: value,

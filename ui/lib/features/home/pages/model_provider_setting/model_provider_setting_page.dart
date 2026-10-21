@@ -13,7 +13,6 @@ import 'package:ui/services/model_vendor_catalog.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/omni_menu.dart';
-import 'package:ui/utils/popup_menu_anchor_position.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
@@ -1696,23 +1695,11 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     final estimatedHeight = (_kProviderTypeOptions.length * 48 + 24)
         .clamp(120.0, _kProviderSwitchPopupMaxHeight)
         .toDouble();
-    final position = PopupMenuAnchorPosition.fromAnchorRect(
-      anchorRect: anchorRect,
-      overlaySize: overlay.size,
-      estimatedMenuHeight: estimatedHeight,
-      reservedBottom: MediaQuery.of(context).viewInsets.bottom,
-      verticalGap: 6,
-    );
-    final selected = await showMenu<String>(
+    final selected = await showOmniMenu<String>(
       context: context,
-      color: _cardColor,
-      menuPadding: EdgeInsets.zero,
-      surfaceTintColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: OmniMenuStyle.panelRadius,
-      ),
-      constraints: BoxConstraints(minWidth: popupWidth, maxWidth: popupWidth),
-      position: position,
+      anchor: anchorRect,
+      width: popupWidth,
+      padding: EdgeInsets.zero,
       items: [
         _ProviderTypePopupEntry(
           width: popupWidth,
@@ -1779,23 +1766,11 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     final estimatedHeight = (options.length * 48 + 24)
         .clamp(120.0, _kProviderSwitchPopupMaxHeight)
         .toDouble();
-    final position = PopupMenuAnchorPosition.fromAnchorRect(
-      anchorRect: anchorRect,
-      overlaySize: overlay.size,
-      estimatedMenuHeight: estimatedHeight,
-      reservedBottom: MediaQuery.of(context).viewInsets.bottom,
-      verticalGap: 6,
-    );
-    return showMenu<String>(
+    return showOmniMenu<String>(
       context: context,
-      color: _cardColor,
-      menuPadding: EdgeInsets.zero,
-      surfaceTintColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: OmniMenuStyle.panelRadius,
-      ),
-      constraints: BoxConstraints(minWidth: popupWidth, maxWidth: popupWidth),
-      position: position,
+      anchor: anchorRect,
+      width: popupWidth,
+      padding: EdgeInsets.zero,
       items: [
         _SelectionPopupEntry(
           width: popupWidth,
@@ -2695,23 +2670,11 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     final estimatedHeight = (_profiles.length * 48 + 24)
         .clamp(120.0, _kProviderSwitchPopupMaxHeight)
         .toDouble();
-    final position = PopupMenuAnchorPosition.fromAnchorRect(
-      anchorRect: anchorRect,
-      overlaySize: overlay.size,
-      estimatedMenuHeight: estimatedHeight,
-      reservedBottom: MediaQuery.of(context).viewInsets.bottom,
-      verticalGap: 6,
-    );
-    final selected = await showMenu<String>(
+    final selected = await showOmniMenu<String>(
       context: context,
-      color: _cardColor,
-      menuPadding: EdgeInsets.zero,
-      surfaceTintColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: OmniMenuStyle.panelRadius,
-      ),
-      constraints: BoxConstraints(minWidth: popupWidth, maxWidth: popupWidth),
-      position: position,
+      anchor: anchorRect,
+      width: popupWidth,
+      padding: EdgeInsets.zero,
       items: [
         _ProviderSwitchPopupEntry(
           width: popupWidth,
@@ -2752,23 +2715,11 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     final estimatedHeight = (_remoteModels.length * 48 + 72)
         .clamp(160.0, 360.0)
         .toDouble();
-    final position = PopupMenuAnchorPosition.fromAnchorRect(
-      anchorRect: anchorRect,
-      overlaySize: overlay.size,
-      estimatedMenuHeight: estimatedHeight,
-      reservedBottom: MediaQuery.of(context).viewInsets.bottom,
-      verticalGap: 6,
-    );
-    await showMenu<String>(
+    await showOmniMenu<String>(
       context: context,
-      color: _cardColor,
-      menuPadding: EdgeInsets.zero,
-      surfaceTintColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: OmniMenuStyle.panelRadius,
-      ),
-      constraints: BoxConstraints(minWidth: popupWidth, maxWidth: popupWidth),
-      position: position,
+      anchor: anchorRect,
+      width: popupWidth,
+      padding: EdgeInsets.zero,
       items: [
         _ChatModelVisibilityPopupEntry(
           width: popupWidth,

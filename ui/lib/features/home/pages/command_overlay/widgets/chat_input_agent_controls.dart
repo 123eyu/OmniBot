@@ -136,7 +136,6 @@ extension _ChatInputAgentControls on _ChatInputAreaStateBase {
         context: anchorContext,
         anchor: anchor,
         preferBelow: false,
-        reverseTransitionDuration: Duration.zero,
         builder: (handle) => _AgentRunSettingsMenuContent(
           width: 280,
           maxHeight: 420,
@@ -363,7 +362,6 @@ extension _ChatInputAgentControls on _ChatInputAreaStateBase {
       context: anchorContext,
       anchor: anchor,
       preferBelow: preferBelow ?? widget.minimalComposer,
-      reverseTransitionDuration: Duration.zero,
       builder: (handle) => _AgentPermissionGlassMenuContent(
         width: 244,
         selected: selected,

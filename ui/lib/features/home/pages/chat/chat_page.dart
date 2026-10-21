@@ -287,6 +287,9 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   String? _normalAcpSessionId;
   int? _normalAcpSessionConversationId;
   String? _normalAcpTurnId;
+  Future<Map<String, dynamic>>? _configurationSessionCreation;
+  int? _configurationSessionCreationTarget;
+  final Map<ChatPageMode, String> _unboundConfigurationSessions = {};
   String? _activeAgentModelId;
   String? _activeAgentReasoningEffort;
   String? _agentReasoningEffortConfigId;
@@ -1414,6 +1417,14 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     List<ChatMessageModel> messages,
   ) {
     final pageMode = _pageModeForConversationMode(mode);
+    // Pair the prepared session with the committed input. Resource ownership
+    // transfers only at official prompt admission, so an abandoned preparation
+    // still releases its unused session.
+    if (pageMode == ChatPageMode.normal &&
+        _normalAcpSessionId != null &&
+        _normalAcpSessionConversationId == null) {
+      _normalAcpSessionConversationId = conversationId;
+    }
     _modeState(pageMode).currentConversationId = conversationId;
     _modeState(pageMode).currentConversation = conversation;
     _syncRuntimeSnapshotForMode(
@@ -1615,6 +1626,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   }
 
   void _resetLocalConversationState(ChatPageMode mode) {
+    _releaseUnboundConfigurationSession(mode);
     _modeState(mode).resetConversation();
     if (mode == ChatPageMode.agent) {
       _stopRemoteCodexSessionSync();
@@ -1919,6 +1931,10 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   });
 
   Future<void> _ensureActiveConversationReadyForStreaming();
+  Future<Map<String, dynamic>> _readActiveAcpSessionConfig({
+    bool refreshConfig = false,
+  });
+  void _releaseUnboundConfigurationSession(ChatPageMode mode);
 
   void _createThinkingCard(
     String taskID, {

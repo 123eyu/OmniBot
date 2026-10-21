@@ -20,31 +20,36 @@ void main() {
     messenger.setMockMethodCallHandler(channel, null);
   });
 
-  testWidgets(
-    'explicit draft reservation creates an identity without a fake message',
-    (tester) async {
-      SharedPreferences.setMockInitialValues(<String, Object>{});
-      var creates = 0;
-      messenger.setMockMethodCallHandler(channel, (call) async {
-        if (call.method == 'createConversation') {
-          creates++;
-          return 901;
-        }
-        return 'SUCCESS';
-      });
-      final key = GlobalKey<_ConversationManagerHarnessState>();
-      await tester.pumpWidget(
-        MaterialApp(home: _ConversationManagerHarness(key)),
-      );
-      await key.currentState!.persistConversationSnapshot();
-      expect(creates, 0);
-      await key.currentState!.persistConversationSnapshot(allowEmpty: true);
-      expect(key.currentState!.currentConversationId, 901);
-      expect(key.currentState!.messages, isEmpty);
-      await key.currentState!.persistConversationSnapshot(allowEmpty: true);
-      expect(creates, 1);
-    },
-  );
+  testWidgets('empty snapshots never reserve a durable conversation', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    var creates = 0;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'createConversation') {
+        creates++;
+        return 901;
+      }
+      return 'SUCCESS';
+    });
+    final key = GlobalKey<_ConversationManagerHarnessState>();
+    await tester.pumpWidget(
+      MaterialApp(home: _ConversationManagerHarness(key)),
+    );
+    await key.currentState!.persistConversationSnapshot();
+    expect(creates, 0);
+    await key.currentState!.persistConversationSnapshot(
+      markComplete: true,
+      generateSummary: true,
+    );
+    expect(key.currentState!.currentConversationId, isNull);
+    expect(key.currentState!.messages, isEmpty);
+    expect(creates, 0);
+    key.currentState!.messages.add(ChatMessageModel.userMessage('First input'));
+    await key.currentState!.persistConversationSnapshot();
+    expect(key.currentState!.currentConversationId, 901);
+    expect(creates, 1);
+  });
 
   testWidgets('forced history refresh must reach the runtime owner before mutating its list', (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});

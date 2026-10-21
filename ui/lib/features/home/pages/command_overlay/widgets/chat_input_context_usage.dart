@@ -99,6 +99,7 @@ class _ContextUsageRingButtonState extends State<_ContextUsageRingButton> {
     final handle = showOverlayGlassPopup<void>(
       context: anchorContext,
       anchor: anchor,
+      overlapAnchor: false,
       preferBelow: false,
       verticalGap: 8,
       horizontalPlacement: GlassPopupHorizontalPlacement.centerOnAnchor,

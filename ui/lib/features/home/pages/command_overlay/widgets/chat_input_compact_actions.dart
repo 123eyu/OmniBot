@@ -53,8 +53,6 @@ extension _CompactComposerActions on _ChatInputAreaStateBase {
       context: context,
       anchor: anchor,
       preferBelow: false,
-      transitionDuration: _compactAnimationDuration,
-      reverseTransitionDuration: Duration.zero,
       builder: (handle) => TextFieldTapRegion(
         child: OmniMenuSurface(
           width: 224,
