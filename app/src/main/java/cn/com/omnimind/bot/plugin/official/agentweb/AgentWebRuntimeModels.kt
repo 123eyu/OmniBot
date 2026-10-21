@@ -5,7 +5,11 @@ import cn.com.omnimind.bot.agent.runtime.normalizeAnthropicServiceRoot
 import cn.com.omnimind.baselib.llm.DeepSeekProvider
 import cn.com.omnimind.baselib.llm.OpenAiWireApi
 import cn.com.omnimind.baselib.llm.ProviderCustomHeaderUtils
+import cn.com.omnimind.baselib.llm.ProviderModelOption
 import cn.com.omnimind.bot.agent.runtime.AgentProviderCredentials
+import cn.com.omnimind.bot.agent.runtime.AcpHarnessAdapters
+import cn.com.omnimind.bot.agent.runtime.AgentConfigAdapterRegistry
+import cn.com.omnimind.bot.agent.runtime.AgentProviderMappingInput
 import cn.com.omnimind.bot.agent.runtime.KIMI_CODE_NATIVE_HEALTH_COMMAND
 import cn.com.omnimind.bot.agent.runtime.KIMI_CODE_NPM_INSTALL_COMMAND
 import cn.com.omnimind.bot.agent.runtime.buildKimiCodeEnvironment
@@ -25,11 +29,13 @@ internal const val DEEPSEEK_HARNESS_WEB_HOME = "/root/.dsh/omnibot-web"
 internal const val DEEPSEEK_HARNESS_WEB_PATCH_PATH =
     "$DEEPSEEK_HARNESS_WEB_HOME/omnibot-dispatch.patch.yml"
 internal const val DEEPSEEK_HARNESS_API_KEY_ENV = "OMNIBOT_DSH_API_KEY"
+internal const val OPENCODE_WEB_CONFIG_PATH = "/root/.config/opencode/omnibot-web.json"
 private const val DEEPSEEK_HARNESS_FALLBACK_ROUTE = "omnibot-dispatch"
 
 internal enum class AgentWebUrlKind {
     KIMI,
     DEEPSEEK_HARNESS,
+    OPENCODE,
 }
 
 internal enum class AgentWebService(
@@ -41,6 +47,7 @@ internal enum class AgentWebService(
     val sessionId: String,
     val urlKind: AgentWebUrlKind,
     val readinessTimeoutMs: Long,
+    val minimumMajorVersion: Int? = null,
 ) {
     KIMI(
         id = "kimi",
@@ -68,6 +75,22 @@ internal enum class AgentWebService(
         sessionId = "omnibot-web-dsh",
         urlKind = AgentWebUrlKind.DEEPSEEK_HARNESS,
         readinessTimeoutMs = 90_000L,
+    ),
+    OPENCODE(
+        id = "opencode",
+        displayName = "OpenCode Web",
+        packageId = "opencode",
+        commandName = "opencode",
+        // A dedicated foreground server stays under the existing ReTerminal
+        // owner. Do not mutate or start OpenCode's shared background service.
+        // Unset inherited passwords so the official startup output supplies
+        // this process's fresh credentials for /api/pair.
+        command = "env -u OPENCODE_PASSWORD -u OPENCODE_SERVER_PASSWORD " +
+            "opencode serve --hostname 127.0.0.1 --port 0",
+        sessionId = "omnibot-web-opencode",
+        urlKind = AgentWebUrlKind.OPENCODE,
+        readinessTimeoutMs = 90_000L,
+        minimumMajorVersion = 2,
     );
 }
 
@@ -85,6 +108,7 @@ internal enum class AgentWebResultCode {
     STOP_FAILED,
     URL_TIMEOUT,
     BROWSER_UNAVAILABLE,
+    PAIRING_FAILED,
 }
 
 internal data class AgentWebOperationResult(
@@ -118,7 +142,7 @@ internal data class AgentWebRuntimeLaunch(
 )
 
 internal interface AgentWebRuntimeGateway {
-    suspend fun isCommandAvailable(commandName: String): Boolean
+    suspend fun isRuntimeAvailable(service: AgentWebService): Boolean
 
     suspend fun snapshot(sessionId: String): AgentWebRuntimeSnapshot?
 
@@ -131,12 +155,17 @@ internal interface AgentWebRuntimeGateway {
     suspend fun stop(sessionId: String): Boolean
 
     suspend fun openBrowser(url: String): Boolean
+
+    /** May mint a single-use login link; never cache it as process readiness. */
+    suspend fun prepareBrowserUrl(service: AgentWebService, snapshot: AgentWebRuntimeSnapshot): String?
 }
 
 internal interface AgentWebConfigurationProvider {
     fun providerCredentials(): AgentProviderCredentials?
 
     fun modelId(): String?
+
+    fun providerModels(): List<ProviderModelOption> = emptyList()
 }
 
 internal data class AgentWebLaunchConfiguration(
@@ -150,6 +179,7 @@ internal fun buildAgentWebLaunchConfiguration(
     provider: AgentProviderCredentials,
     model: String,
     reasoningEffort: String? = null,
+    providerModels: List<ProviderModelOption> = emptyList(),
 ): AgentWebLaunchConfiguration {
     val credentials = provider.normalizedForAgentWeb()
     val modelId = model.trim().also {
@@ -176,6 +206,25 @@ internal fun buildAgentWebLaunchConfiguration(
                     reasoningEffort = reasoningEffort,
                 ),
             )
+        }
+        AgentWebService.OPENCODE -> {
+            require(reasoningEffort.isNullOrBlank()) {
+                "Choose OpenCode reasoning options in its Web interface."
+            }
+            // Use the same configuration owner as ACP, with a dedicated Web
+            // overlay instead of overwriting the user's/ACP global config.
+            val input = AgentProviderMappingInput(
+                agentId = "opencode-acp",
+                provider = credentials,
+                model = modelId,
+                harnessAdapter = AcpHarnessAdapters.openCode,
+            )
+            val mapping = AgentConfigAdapterRegistry.map(input)
+            val write = AgentConfigAdapterRegistry.launchConfigWrites(
+                input, mapping, providerModels, "",
+            ).single()
+            environment = mapping.environment + mapOf("OPENCODE_CONFIG" to OPENCODE_WEB_CONFIG_PATH)
+            managedFiles = mapOf(OPENCODE_WEB_CONFIG_PATH to write.content)
         }
     }
     val fingerprintSource = buildString {

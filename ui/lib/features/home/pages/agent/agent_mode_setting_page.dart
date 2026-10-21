@@ -33,6 +33,8 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   String _query = '';
   bool _loading = true;
   bool _refreshing = false;
+  bool _checkingUpdates = false;
+  bool _upgradingAll = false;
   String? _error;
   String? _busyAgentId;
   String? _busyPluginActionKey;
@@ -188,6 +190,104 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
     }
   }
 
+  Future<void> _checkUpdates() async {
+    if (_checkingUpdates) return;
+    setState(() => _checkingUpdates = true);
+    try {
+      final catalog = await AgentRuntimeService.checkAgentUpdates();
+      if (!mounted) return;
+      setState(() {
+        _catalog = catalog;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _text('检查更新失败，请稍后重试。', 'Update check failed. Try again later.'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _checkingUpdates = false);
+    }
+  }
+
+  List<AcpAgentProfile> get _updatableAgents =>
+      (_catalog?.agents ?? const <AcpAgentProfile>[])
+          .where(
+            (agent) =>
+                agent.enabled &&
+                agent.managedAdapter &&
+                agent.packageVersion?.updateAvailable == true,
+          )
+          .toList(growable: false);
+
+  Future<void> _upgradeAll() async {
+    final agents = _updatableAgents;
+    if (agents.isEmpty || _preparingAgentIds.isNotEmpty || _upgradingAll) {
+      return;
+    }
+    final english = _english;
+    final distributionId = _catalog?.distributionId;
+    String text(String zh, String en) => english ? en : zh;
+    String failure(Object? error) => formatAgentRuntimeErrorForUser(
+      error,
+      english: english,
+      fallback: text(
+        '升级未完成，请检查网络后重试。',
+        'Update did not finish. Check your connection and try again.',
+      ),
+    );
+    setState(() => _upgradingAll = true);
+    // Schedule the complete batch before awaiting it; the service owns its
+    // lifetime and serial execution even if this settings page is closed.
+    final results = await Future.wait(
+      agents.map((agent) async {
+        try {
+          final result = await AgentRuntimeService.prepareAgentInBackground(
+            agent.id,
+            force: true,
+            distributionId: distributionId,
+          );
+          final version = _resultVersion(result);
+          final updated =
+              version?.installedVersion != null &&
+              version?.targetVersion != null &&
+              version?.error == null &&
+              version?.updateAvailable == false;
+          final ready = result['ok'] == true;
+          final label = updated
+              ? ready
+                    ? text('已升级', 'Updated')
+                    : text('已升级，启动未完成', 'Updated; startup incomplete')
+              : text('升级未完成', 'Update incomplete');
+          return '${agent.name}：$label${updated ? ' ${version!.installedVersion}' : ''}'
+              '${updated && ready ? '' : '\n${failure(result['error'])}'}';
+        } catch (error) {
+          return '${agent.name}：${text('升级失败', 'Update failed')}\n${failure(error)}';
+        }
+      }),
+    );
+    if (!mounted) return;
+    setState(() => _upgradingAll = false);
+    await _load();
+    if (!mounted) return;
+    await _showActionResult(
+      agents.first,
+      _text('升级结果', 'Update results'),
+      results.join('\n\n'),
+    );
+  }
+
+  AgentPackageVersion? _resultVersion(Map<String, dynamic> result) {
+    final agent = result['agent'];
+    return agent is Map && agent['packageVersion'] is Map
+        ? AgentPackageVersion.fromMap(agent['packageVersion'] as Map)
+        : null;
+  }
+
   List<AcpAgentProfile> get _visibleAgents {
     final normalizedQuery = _query.trim().toLowerCase();
     return (_catalog?.agents ?? const <AcpAgentProfile>[])
@@ -231,12 +331,19 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
 
   void _prepare(AcpAgentProfile agent) {
     if (_preparingAgentIds.contains(agent.id) || !agent.enabled) return;
-    unawaited(_runAgentAction(agent, prepare: true));
+    unawaited(
+      _runAgentAction(
+        agent,
+        prepare: true,
+        upgrade: agent.packageVersion?.updateAvailable == true,
+      ),
+    );
   }
 
   Future<void> _runAgentAction(
     AcpAgentProfile agent, {
     required bool prepare,
+    bool upgrade = false,
   }) async {
     if (!prepare) setState(() => _busyAgentId = agent.id);
     try {
@@ -244,17 +351,33 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
           ? await AgentRuntimeService.prepareAgentInBackground(
               agent.id,
               force: true,
+              distributionId: _catalog?.distributionId,
             )
           : await AgentRuntimeService.testAgent(agent.id);
       if (!mounted) return;
       await _load();
       if (!mounted) return;
-      final ok = result['ok'] == true;
+      final version = _resultVersion(result);
+      final verifiedUpgrade =
+          version?.installedVersion != null &&
+          version?.targetVersion != null &&
+          version?.error == null &&
+          version?.updateAvailable == false;
+      final ok = result['ok'] == true && (!upgrade || verifiedUpgrade);
       final installed =
           result['agent'] is Map &&
           (result['agent'] as Map)['installed'] == true;
       final initializationFailed = prepare && !ok && installed;
-      final title = prepare
+      final title = upgrade
+          ? (ok
+                ? _text('助手升级成功', 'Assistant updated')
+                : verifiedUpgrade
+                ? _text(
+                    '版本已升级，助手未能启动',
+                    'Updated, but the assistant could not start',
+                  )
+                : _text('升级未完成', 'Update incomplete'))
+          : prepare
           ? (ok
                 ? _text('助手安装成功', 'Assistant installed')
                 : initializationFailed
@@ -269,7 +392,17 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
       await _showActionResult(
         agent,
         title,
-        ok
+        upgrade && ok
+            ? _text(
+                '已安装 ${version!.installedVersion}。已运行的助手将在下次启动时使用新版本。',
+                'Installed ${version.installedVersion}. Running assistants will use it on their next launch.',
+              )
+            : upgrade && result['ok'] == true && !verifiedUpgrade
+            ? _text(
+                '尚未检测到目标版本，请检查网络后重试。',
+                'The target version was not detected. Check your connection and try again.',
+              )
+            : ok
             ? _text('助手已准备好，可以开始对话。', 'The assistant is ready to chat.')
             : _actionError(
                 result['error'],
@@ -280,7 +413,9 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
       if (!mounted) return;
       await _showActionResult(
         agent,
-        prepare
+        upgrade
+            ? _text('升级未完成', 'Update incomplete')
+            : prepare
             ? _text('安装未完成', 'Installation did not finish')
             : _text('助手暂时无法启动', 'Assistant could not start'),
         _actionError(error, installation: prepare),
@@ -404,7 +539,9 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
         actions: [
           IconButton(
             tooltip: _text('刷新检测', 'Refresh detection'),
-            onPressed: _refreshing ? null : () => _load(refresh: true),
+            onPressed: _refreshing || _checkingUpdates
+                ? null
+                : () => _load(refresh: true),
             icon: _refreshing
                 ? const SizedBox(
                     width: 18,
@@ -485,6 +622,8 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                     ],
                     onChanged: (value) => setState(() => _filter = value),
                   ),
+                  const SizedBox(height: 10),
+                  _buildUpdateActions(),
                   if (managed.isNotEmpty) ...[
                     const SizedBox(height: 18),
                     OmniSettingsGroup(
@@ -542,7 +681,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                   if (_pluginActions.isNotEmpty) ...[
                     const SizedBox(height: 22),
                     OmniSettingsGroup(
-                      title: _text('本地 Web 界面', 'Local Web interfaces'),
+                      title: 'Agent WebUI',
                       translateTitle: false,
                       dividerIndent: 46,
                       children: [
@@ -679,9 +818,13 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
     final canTest =
         agent.enabled && (agent.status != 'missing' || agent.managedAdapter);
     final preparing = _preparingAgentIds.contains(agent.id);
+    final queued = AgentRuntimeService.queuedAgentIds.contains(agent.id);
     final busy = agent.id == _busyAgentId || preparing;
     final testLabel = agent.managedAdapter
-        ? agent.installed == true
+        ? agent.packageVersion?.updateAvailable == true
+              ? _text('升级', 'Update')
+              : agent.installed == true ||
+                    agent.packageVersion?.installedVersion != null
               ? _text('重新安装', 'Reinstall')
               : _text('安装', 'Install')
         : _text('重新检测', 'Check again');
@@ -697,7 +840,9 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
       title: agent.name,
       statusColor: preparing ? const Color(0xFFE3A52B) : statusColor,
       statusLabel: preparing
-          ? _text('后台安装中', 'Installing in background')
+          ? queued
+                ? _text('等待安装 / 升级', 'Queued')
+                : _text('后台安装 / 升级中', 'Installing / updating')
           : !agent.enabled
           ? _text('已停用', 'Disabled')
           : status.label,
@@ -710,6 +855,8 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
               : ([agent.command, ...agent.arguments]).join(' ')),
       subtitleMonospace:
           capabilitySubtitle == null && agent.description.isEmpty,
+      detailText: _versionSummary(agent),
+      detailIsError: agent.packageVersion?.error != null,
       errorText: hasError && !preparing
           ? _actionError(
               agent.lastCheckError,
@@ -727,6 +874,100 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
       onTap: !agent.configurationAvailable || preparing
           ? null
           : () => _openAgentConfig(agent),
+    );
+  }
+
+  String? _versionSummary(AcpAgentProfile agent) {
+    if (!agent.managedAdapter) return null;
+    final version = agent.packageVersion;
+    if (version == null) return _text('版本未检测', 'Version not checked');
+    final current = version.installedVersion;
+    final prefix = current == null ? '' : '$current · ';
+    if (version.error != null) {
+      return '$prefix${version.error == 'local_probe_failed' ? _text('无法读取本地版本', 'Could not read installed version') : _text('检查更新失败，点击重试', 'Update check failed; try again')}';
+    }
+    if (version.updateAvailable) {
+      return '$prefix${_text('有新版本', 'Update available')} ${version.targetVersion}';
+    }
+    if (version.pinned) {
+      final upstream = version.latestVersion;
+      return '$prefix${_text('版本由应用管理', 'Version managed by the app')}'
+          '${upstream != null && upstream != current ? '\n${_text('上游版本', 'Upstream version')} $upstream' : ''}';
+    }
+    if (current == null) {
+      return version.latestVersion == null
+          ? null
+          : '${_text('最新版本', 'Latest')} ${version.latestVersion}';
+    }
+    return version.checkedAt == null
+        ? current
+        : '$current · ${_text('无可用更新', 'No updates')}';
+  }
+
+  Widget _buildUpdateActions() {
+    final times = (_catalog?.agents ?? const <AcpAgentProfile>[])
+        .map((agent) => agent.packageVersion?.checkedAt)
+        .whereType<int>()
+        .toList();
+    times.sort();
+    final checked = times.isEmpty
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(times.last);
+    final timeLabel = checked == null
+        ? _text('尚未检查更新', 'Updates not checked')
+        : '${_text('上次检查', 'Last checked')} ${MaterialLocalizations.of(context).formatShortDate(checked)} '
+              '${TimeOfDay.fromDateTime(checked).format(context)}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          timeLabel,
+          style: TextStyle(
+            fontSize: 11,
+            color: context.omniPalette.textTertiary,
+          ),
+        ),
+        Wrap(
+          spacing: 8,
+          children: [
+            TextButton.icon(
+              key: const Key('agent-check-updates'),
+              onPressed:
+                  _checkingUpdates ||
+                      _refreshing ||
+                      _preparingAgentIds.isNotEmpty
+                  ? null
+                  : _checkUpdates,
+              icon: _checkingUpdates
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(LucideIcons.refreshCw, size: 16),
+              label: Text(
+                _checkingUpdates
+                    ? _text('正在检查', 'Checking')
+                    : _text('检查更新', 'Check updates'),
+              ),
+            ),
+            if (_updatableAgents.isNotEmpty || _upgradingAll)
+              TextButton.icon(
+                key: const Key('agent-upgrade-all'),
+                onPressed:
+                    _checkingUpdates ||
+                        _preparingAgentIds.isNotEmpty ||
+                        _upgradingAll
+                    ? null
+                    : _upgradeAll,
+                icon: const Icon(LucideIcons.arrowUpCircle, size: 16),
+                label: Text(
+                  '${_text('全部升级', 'Update all')} (${_updatableAgents.length})',
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -945,6 +1186,8 @@ class _FlatTile extends StatelessWidget {
     this.subtitle,
     this.subtitleMonospace = false,
     this.errorText,
+    this.detailText,
+    this.detailIsError = false,
     this.actionLabel,
     this.actionColor,
     this.actionKey,
@@ -963,6 +1206,8 @@ class _FlatTile extends StatelessWidget {
   final String? subtitle;
   final bool subtitleMonospace;
   final String? errorText;
+  final String? detailText;
+  final bool detailIsError;
   final String? actionLabel;
   final Color? actionColor;
   final Key? actionKey;
@@ -1056,6 +1301,19 @@ class _FlatTile extends StatelessWidget {
                             ),
                           ],
                         ],
+                      ),
+                    ],
+                    if ((detailText ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        detailText!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          height: 1.5,
+                          color: detailIsError
+                              ? Theme.of(context).colorScheme.error
+                              : palette.textSecondary,
+                        ),
                       ),
                     ],
                     if ((errorText ?? '').isNotEmpty) ...[

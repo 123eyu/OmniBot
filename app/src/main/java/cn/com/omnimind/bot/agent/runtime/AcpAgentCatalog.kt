@@ -88,6 +88,7 @@ internal object AcpAgentCatalog {
             },
             requiresNativeBuildTools = get("requiresNativeBuildTools")?.asBoolean ?: false,
             managedAdapterHealthCommand = string("managedAdapterHealthCommand"),
+            validateBeforeConfigWrite = get("validateBeforeConfigWrite")?.asBoolean ?: false,
             harnessAdapter = AcpHarnessAdapters.forConfigAdapterId(string("configAdapterId")),
             usesSharedProvider = get("usesSharedProvider")?.asBoolean ?: false,
             terminalPackageId = string("terminalPackageId"),

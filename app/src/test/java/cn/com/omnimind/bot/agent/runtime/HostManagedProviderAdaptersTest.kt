@@ -143,16 +143,16 @@ class HostManagedProviderAdaptersTest {
         val config = JsonParser.parseString(AgentConfigAdapterRegistry.launchConfigWrites(
             input, mapping, models, existing,
         ).single().content).asJsonObject
-        val managed = config["provider"].asJsonObject["omnibot"].asJsonObject
+        val managed = config["providers"].asJsonObject["omnibot"].asJsonObject
         val model = managed["models"].asJsonObject[models.single().id].asJsonObject
-        val variant = model["variants"].asJsonObject["high"].asJsonObject
-        listOf(managed["options"].asJsonObject, model["options"].asJsonObject, variant).forEach {
+        val variant = model["variants"].asJsonArray.single().asJsonObject
+        listOf(managed["body"].asJsonObject, model["body"].asJsonObject, variant["body"].asJsonObject).forEach {
             assertFalse(it["store"].asBoolean)
             assertFalse(it.has("previousResponseId"))
             assertFalse(it.has("previous_response_id"))
         }
-        assertEquals("@ai-sdk/openai", managed["npm"].asString)
-        assertEquals("{env:OPENAI_API_KEY}", managed["options"].asJsonObject["apiKey"].asString)
+        assertEquals("@opencode/ai/providers/openai-compatible/responses", managed["package"].asString)
+        assertEquals("{env:OPENAI_API_KEY}", managed["settings"].asJsonObject["apiKey"].asString)
         assertEquals(provider.apiKey, mapping.environment["OPENAI_API_KEY"])
         assertFalse(config.toString().contains(provider.apiKey))
         assertEquals("keep-other", config["provider"].asJsonObject["other"].asJsonObject["options"].asJsonObject["previousResponseId"].asString)

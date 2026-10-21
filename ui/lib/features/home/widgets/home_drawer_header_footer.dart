@@ -109,7 +109,7 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
                       child: Text(
-                        english ? 'Local Web Interfaces' : '本地 Web 界面',
+                        'Agent WebUI',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -353,12 +353,9 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
       AgentWebStatus.starting => const Color(0xFFE3A52B),
       _ => null,
     };
-    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
-    final tooltip = isEnglish ? 'Web Interfaces' : 'Web 界面';
-
     return Builder(
       builder: (buttonContext) => Tooltip(
-        message: tooltip,
+        message: 'Agent WebUI',
         child: InkWell(
           key: const ValueKey('home-drawer-web-menu-button'),
           onTap: () => _showWebQuickLaunchPopover(buttonContext),

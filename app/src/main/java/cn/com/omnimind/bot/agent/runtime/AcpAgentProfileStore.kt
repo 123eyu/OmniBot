@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import java.util.UUID
 
@@ -131,6 +132,7 @@ internal data class AcpOfficialRuntime(
         .orEmpty(),
     val requiresNativeBuildTools: Boolean = false,
     val managedAdapterHealthCommand: String? = null,
+    val validateBeforeConfigWrite: Boolean = false,
     val harnessAdapter: AcpHarnessAdapter = AcpHarnessAdapters.standard,
     val usesSharedProvider: Boolean = false,
     val terminalPackageId: String? = null,
@@ -405,6 +407,29 @@ internal class AcpAgentProfileStore(context: Context) {
             saveHealth(agentId, health)
         }
         return health
+    }
+
+    // Package inventory is distribution-scoped and independent of ACP health.
+    // A handshake/availability refresh must not erase the last update check.
+    fun packageVersion(distributionId: String, agentId: String): ManagedAgentVersion? = runCatching {
+        val source = preferences.getString("package_version:$distributionId:$agentId", null)
+            ?: return null
+        val value = JsonParser.parseString(source).asJsonObject
+        fun string(key: String) = value.get(key)?.takeUnless { it.isJsonNull }?.asString
+        ManagedAgentVersion(
+            installedVersion = string("installedVersion"),
+            latestVersion = string("latestVersion"),
+            targetVersion = string("targetVersion"),
+            checkedAt = value.get("checkedAt")?.takeUnless { it.isJsonNull }?.asLong,
+            error = string("error"),
+            pinned = value.get("pinned")?.asBoolean == true,
+        )
+    }.getOrNull()
+
+    fun savePackageVersion(distributionId: String, agentId: String, version: ManagedAgentVersion) {
+        preferences.edit().putString(
+            "package_version:$distributionId:$agentId", gson.toJson(version.toPayload()),
+        ).apply()
     }
 
     @Synchronized

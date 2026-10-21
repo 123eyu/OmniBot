@@ -561,6 +561,37 @@ String _normalizeAcpConfigKey(String key) {
   return key.toLowerCase().replaceAll(RegExp(r'[_-]'), '');
 }
 
+class AgentPackageVersion {
+  const AgentPackageVersion({
+    this.installedVersion,
+    this.latestVersion,
+    this.targetVersion,
+    this.checkedAt,
+    this.error,
+    this.pinned = false,
+    this.updateAvailable = false,
+  });
+
+  final String? installedVersion;
+  final String? latestVersion;
+  final String? targetVersion;
+  final int? checkedAt;
+  final String? error;
+  final bool pinned;
+  final bool updateAvailable;
+
+  factory AgentPackageVersion.fromMap(Map<dynamic, dynamic> map) =>
+      AgentPackageVersion(
+        installedVersion: _stringOrNull(map['installedVersion']),
+        latestVersion: _stringOrNull(map['latestVersion']),
+        targetVersion: _stringOrNull(map['targetVersion']),
+        checkedAt: _intOrNull(map['checkedAt']),
+        error: _stringOrNull(map['error']),
+        pinned: map['pinned'] == true,
+        updateAvailable: map['updateAvailable'] == true,
+      );
+}
+
 class AcpAgentProfile {
   const AcpAgentProfile({
     required this.id,
@@ -581,6 +612,7 @@ class AcpAgentProfile {
     this.capabilities = const <String, dynamic>{},
     this.discoveryCommand,
     this.managedAdapter = false,
+    this.packageVersion,
     bool? configurationAvailable,
   }) : configurationAvailable = configurationAvailable ?? id != 'na-cloud';
 
@@ -602,6 +634,7 @@ class AcpAgentProfile {
   final Map<String, dynamic> capabilities;
   final String? discoveryCommand;
   final bool managedAdapter;
+  final AgentPackageVersion? packageVersion;
 
   /// Native build policy owns whether this Agent exposes a configuration page.
   /// Na is account managed unless the native develop flavor opts in.
@@ -639,6 +672,9 @@ class AcpAgentProfile {
           _normalizeMap(map['capabilities']) ?? const <String, dynamic>{},
       discoveryCommand: _stringOrNull(map['discoveryCommand']),
       managedAdapter: map['managedAdapter'] == true,
+      packageVersion: map['packageVersion'] is Map
+          ? AgentPackageVersion.fromMap(map['packageVersion'] as Map)
+          : null,
       configurationAvailable: map['configurationAvailable'] is bool
           ? map['configurationAvailable'] as bool
           : null,
@@ -661,10 +697,12 @@ class AcpAgentCatalog {
     required this.selectedAgentId,
     required this.agents,
     this.runtimeStatus,
+    this.distributionId,
   });
 
   final String selectedAgentId;
   final List<AcpAgentProfile> agents;
+  final String? distributionId;
 
   /// A switch response may carry the status snapshot captured immediately
   /// after ACP initialization. Keeping it with the catalog avoids a second
@@ -697,6 +735,7 @@ class AcpAgentCatalog {
           _stringOrNull(source['selectedAgentId']) ??
           (agents.isEmpty ? '' : agents.first.id),
       agents: agents,
+      distributionId: _stringOrNull(source['distributionId']),
       runtimeStatus:
           source.containsKey('connected') || source.containsKey('ready')
           ? AgentRuntimeStatus.fromMap(source)
@@ -963,6 +1002,8 @@ class AgentRuntimeService {
       StreamController<Map<String, dynamic>>.broadcast();
   static final Map<String, Future<Map<String, dynamic>>>
   _agentPreparationTasks = <String, Future<Map<String, dynamic>>>{};
+  static Future<void>? _preparationQueue;
+  static final Set<String> _queuedAgentIds = <String>{};
   static final StreamController<Set<String>> _agentPreparationController =
       StreamController<Set<String>>.broadcast();
   static StreamSubscription<dynamic>? _nativeEventSubscription;
@@ -978,6 +1019,9 @@ class AgentRuntimeService {
   /// in-flight state without starting the same installation again.
   static Set<String> get preparingAgentIds =>
       Set<String>.unmodifiable(_agentPreparationTasks.keys);
+
+  static Set<String> get queuedAgentIds =>
+      Set<String>.unmodifiable(_queuedAgentIds);
 
   static Stream<Set<String>> get agentPreparationChanges =>
       _agentPreparationController.stream;
@@ -1015,6 +1059,10 @@ class AgentRuntimeService {
     return AcpAgentCatalog.fromMap(await _invokeMap('agent/refresh'));
   }
 
+  static Future<AcpAgentCatalog> checkAgentUpdates() async {
+    return AcpAgentCatalog.fromMap(await _invokeMap('agent/checkUpdates'));
+  }
+
   static Future<AcpAgentCatalog> selectAgent(String agentId) async {
     return AcpAgentCatalog.fromMap(
       await _invokeMap('agent/select', {'agentId': agentId.trim()}),
@@ -1043,22 +1091,42 @@ class AgentRuntimeService {
   static Future<Map<String, dynamic>> prepareAgent(
     String agentId, {
     bool force = false,
+    String? distributionId,
   }) {
     return _invokeMap('agent/prepare', {
       'agentId': agentId.trim(),
       if (force) 'force': true,
+      if (distributionId != null) 'distributionId': distributionId,
     });
   }
 
   static Future<Map<String, dynamic>> prepareAgentInBackground(
     String agentId, {
     bool force = false,
+    String? distributionId,
   }) {
     final normalizedId = agentId.trim();
     final existing = _agentPreparationTasks[normalizedId];
     if (existing != null) return existing;
 
-    final task = prepareAgent(normalizedId, force: force);
+    _queuedAgentIds.add(normalizedId);
+    // The npm prefix is shared. Queue installs in the existing service so
+    // bulk upgrades continue after leaving this page and never overlap.
+    Future<Map<String, dynamic>> run() {
+      _queuedAgentIds.remove(normalizedId);
+      _emitAgentPreparationState();
+      return prepareAgent(
+        normalizedId,
+        force: force,
+        distributionId: distributionId,
+      );
+    }
+
+    final task = _preparationQueue?.then((_) => run()) ?? Future.microtask(run);
+    _preparationQueue = task.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
     _agentPreparationTasks[normalizedId] = task;
     _emitAgentPreparationState();
     unawaited(
@@ -1078,6 +1146,8 @@ class AgentRuntimeService {
   ) {
     if (!identical(_agentPreparationTasks[agentId], task)) return;
     _agentPreparationTasks.remove(agentId);
+    _queuedAgentIds.remove(agentId);
+    if (_agentPreparationTasks.isEmpty) _preparationQueue = null;
     _emitAgentPreparationState();
   }
 

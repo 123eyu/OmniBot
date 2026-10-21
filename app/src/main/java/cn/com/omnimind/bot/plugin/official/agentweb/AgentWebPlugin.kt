@@ -32,13 +32,14 @@ internal class AgentWebPluginProvider(private val context: Context) : OmniPlugin
     override val descriptor = OmniPluginDescriptor(
         id = ID,
         name = "Agent Web",
-        version = "1.0.0",
+        version = "1.1.0",
         description = "Open and manage validated local Web UIs for installed Agent runtimes.",
         publisher = "OmniMind",
         kind = OmniPluginKind.BUNDLED_MODULE,
         capabilities = listOf(
-            "Kimi Code Web",
+            "OpenCode Web",
             "DeepSeek Harness Web",
+            "Kimi Code Web",
             "Validated loopback handoff",
         ),
         required = true,
@@ -57,7 +58,7 @@ internal class AgentWebPluginProvider(private val context: Context) : OmniPlugin
 private class AgentWebPlugin(context: Context) : OmniPlugin {
     private val controller: AgentWebController = AgentWebRuntimeManager(
         gateway = AndroidAgentWebRuntimeGateway(context),
-        configurationProvider = AndroidAgentWebConfigurationProvider(),
+        configurationProvider = AndroidAgentWebConfigurationProvider(context),
     )
 
     override fun contribution() = OmniPluginContribution(
@@ -83,6 +84,9 @@ internal object AgentWebTools {
     const val OPEN_DEEPSEEK = "open_deepseek_harness_web"
     const val DEEPSEEK_STATUS = "get_deepseek_harness_web_status"
     const val STOP_DEEPSEEK = "stop_deepseek_harness_web"
+    const val OPEN_OPENCODE = "open_opencode_web"
+    const val OPENCODE_STATUS = "get_opencode_web_status"
+    const val STOP_OPENCODE = "stop_opencode_web"
 
     val names = linkedSetOf(
         OPEN_KIMI,
@@ -91,6 +95,9 @@ internal object AgentWebTools {
         OPEN_DEEPSEEK,
         DEEPSEEK_STATUS,
         STOP_DEEPSEEK,
+        OPEN_OPENCODE,
+        OPENCODE_STATUS,
+        STOP_OPENCODE,
     )
 
     fun definitions(): List<OmniPluginToolDefinition> = listOf(
@@ -132,6 +139,23 @@ internal object AgentWebTools {
             description = "Stop the managed DeepSeek Harness Web process only after the user " +
                 "explicitly asks to stop or close it.",
         ),
+        definition(
+            name = OPEN_OPENCODE,
+            displayName = "Open OpenCode Web",
+            description = "Open the installed OpenCode V2 Web UI in the system browser with the shared Provider " +
+                "and model. Call only after the user explicitly asks to open OpenCode Web. " +
+                "The host creates a fresh one-time sign-in link; credentials and links are never returned.",
+        ),
+        definition(
+            name = OPENCODE_STATUS,
+            displayName = "Get OpenCode Web status",
+            description = "Check whether the managed OpenCode Web process is starting or running.",
+        ),
+        definition(
+            name = STOP_OPENCODE,
+            displayName = "Stop OpenCode Web",
+            description = "Stop the managed OpenCode Web process only after the user explicitly asks to stop or close it.",
+        ),
     )
 
     private fun definition(
@@ -168,6 +192,9 @@ internal object AgentWebActions {
     const val OPEN_DEEPSEEK = AgentWebTools.OPEN_DEEPSEEK
     const val DEEPSEEK_STATUS = AgentWebTools.DEEPSEEK_STATUS
     const val STOP_DEEPSEEK = AgentWebTools.STOP_DEEPSEEK
+    const val OPEN_OPENCODE = AgentWebTools.OPEN_OPENCODE
+    const val OPENCODE_STATUS = AgentWebTools.OPENCODE_STATUS
+    const val STOP_OPENCODE = AgentWebTools.STOP_OPENCODE
 
     val ids = linkedSetOf(
         OPEN_KIMI,
@@ -176,22 +203,25 @@ internal object AgentWebActions {
         STOP_KIMI,
         DEEPSEEK_STATUS,
         STOP_DEEPSEEK,
+        OPEN_OPENCODE,
+        OPENCODE_STATUS,
+        STOP_OPENCODE,
     )
 
     fun definitions(): List<OmniPluginActionDefinition> = listOf(
         action(
-            id = OPEN_KIMI,
-            displayName = "Kimi Code Web",
-            description = "Open the local Kimi Code browser interface.",
-            packageId = AgentWebService.KIMI.packageId,
-            agentId = "kimi-code-acp",
+            id = OPEN_OPENCODE,
+            displayName = "OpenCode Web",
+            description = "Open the local OpenCode V2 browser interface.",
+            packageId = AgentWebService.OPENCODE.packageId,
+            agentId = "opencode-acp",
             quickLaunchOrder = 0,
-            statusAction = KIMI_STATUS,
-            stopAction = STOP_KIMI,
-            labelZh = "Kimi Code Web",
-            labelEn = "Kimi Code Web",
-            shortLabelZh = "Kimi Web",
-            shortLabelEn = "Kimi Web",
+            statusAction = OPENCODE_STATUS,
+            stopAction = STOP_OPENCODE,
+            labelZh = "OpenCode Web",
+            labelEn = "OpenCode Web",
+            shortLabelZh = "OpenCode Web",
+            shortLabelEn = "OpenCode Web",
             descriptionZh = "使用统一 Provider 和模型，在系统浏览器中打开本机 Web 界面",
             descriptionEn = "Open the local Web UI with the shared Provider and model",
         ),
@@ -208,6 +238,22 @@ internal object AgentWebActions {
             labelEn = "DeepSeek Harness Web",
             shortLabelZh = "DSH Web",
             shortLabelEn = "DSH Web",
+            descriptionZh = "使用统一 Provider 和模型，在系统浏览器中打开本机 Web 界面",
+            descriptionEn = "Open the local Web UI with the shared Provider and model",
+        ),
+        action(
+            id = OPEN_KIMI,
+            displayName = "Kimi Code Web",
+            description = "Open the local Kimi Code browser interface.",
+            packageId = AgentWebService.KIMI.packageId,
+            agentId = "kimi-code-acp",
+            quickLaunchOrder = 2,
+            statusAction = KIMI_STATUS,
+            stopAction = STOP_KIMI,
+            labelZh = "Kimi Code Web",
+            labelEn = "Kimi Code Web",
+            shortLabelZh = "Kimi Web",
+            shortLabelEn = "Kimi Web",
             descriptionZh = "使用统一 Provider 和模型，在系统浏览器中打开本机 Web 界面",
             descriptionEn = "Open the local Web UI with the shared Provider and model",
         ),
@@ -230,6 +276,16 @@ internal object AgentWebActions {
             id = STOP_DEEPSEEK,
             displayName = "Stop DeepSeek Harness Web",
             description = "Stop the managed DeepSeek Harness Web process.",
+        ),
+        lifecycleAction(
+            id = OPENCODE_STATUS,
+            displayName = "Get OpenCode Web status",
+            description = "Report whether the managed OpenCode Web process is running.",
+        ),
+        lifecycleAction(
+            id = STOP_OPENCODE,
+            displayName = "Stop OpenCode Web",
+            description = "Stop the managed OpenCode Web process.",
         ),
     )
 
@@ -310,6 +366,9 @@ private class AgentWebActionHandler(
             AgentWebActions.STOP_KIMI -> controller.stop(AgentWebService.KIMI)
             AgentWebActions.DEEPSEEK_STATUS -> controller.status(AgentWebService.DEEPSEEK_HARNESS)
             AgentWebActions.STOP_DEEPSEEK -> controller.stop(AgentWebService.DEEPSEEK_HARNESS)
+            AgentWebActions.OPEN_OPENCODE -> controller.open(AgentWebService.OPENCODE, args.reasoningEffort())
+            AgentWebActions.OPENCODE_STATUS -> controller.status(AgentWebService.OPENCODE)
+            AgentWebActions.STOP_OPENCODE -> controller.stop(AgentWebService.OPENCODE)
             else -> error("Unsupported Agent Web action: $actionId")
         }.toJson()
     }
@@ -349,6 +408,9 @@ private class AgentWebToolHandler(
                     controller.status(AgentWebService.DEEPSEEK_HARNESS)
                 AgentWebTools.STOP_DEEPSEEK ->
                     controller.stop(AgentWebService.DEEPSEEK_HARNESS)
+                AgentWebTools.OPEN_OPENCODE -> controller.open(AgentWebService.OPENCODE, args.reasoningEffort())
+                AgentWebTools.OPENCODE_STATUS -> controller.status(AgentWebService.OPENCODE)
+                AgentWebTools.STOP_OPENCODE -> controller.stop(AgentWebService.OPENCODE)
                 else -> error("Unsupported Agent Web tool: $toolName")
             }
             val encoded = result.toJson().toString()
@@ -387,4 +449,5 @@ private fun AgentWebOperationResult.summary(): String = when (code) {
     AgentWebResultCode.STOP_FAILED -> "${service.displayName} 停止失败"
     AgentWebResultCode.URL_TIMEOUT -> "等待 ${service.displayName} 就绪超时"
     AgentWebResultCode.BROWSER_UNAVAILABLE -> "没有可用的系统浏览器"
+    AgentWebResultCode.PAIRING_FAILED -> "${service.displayName} 浏览器登录链接生成失败，请重试"
 }

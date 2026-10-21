@@ -460,25 +460,24 @@ internal fun buildCodexConfigToml(
 /** Keep the managed route stateless while retaining unrelated user settings. */
 private fun configureHostManagedOpenCode(config: String): String {
     val root = JsonParser.parseString(config).asJsonObject
-    val provider = root.getAsJsonObject("provider").getAsJsonObject(OPEN_CODE_PROVIDER_ID)
-    fun statelessOptionsValues(options: com.google.gson.JsonObject) {
-        options.addProperty("store", false)
-        options.remove("previousResponseId")
-        options.remove("previous_response_id")
-    }
-    fun statelessOptions(parent: com.google.gson.JsonObject) {
-        val options = parent.getAsJsonObject("options") ?: com.google.gson.JsonObject().also {
-            parent.add("options", it)
+    val provider = root.getAsJsonObject("providers").getAsJsonObject(OPEN_CODE_PROVIDER_ID)
+    fun statelessRequest(parent: com.google.gson.JsonObject) {
+        for (key in listOf("settings", "body")) {
+            parent.getAsJsonObject(key)?.apply {
+                remove("store")
+                remove("previousResponseId")
+                remove("previous_response_id")
+            }
         }
-        statelessOptionsValues(options)
+        parent.objectOrCreate("body").addProperty("store", false)
     }
-    statelessOptions(provider)
+    statelessRequest(provider)
     provider.getAsJsonObject("models").entrySet().forEach { (_, entry) ->
         if (entry.isJsonObject) {
             val model = entry.asJsonObject
-            statelessOptions(model)
-            model.getAsJsonObject("variants")?.entrySet()?.forEach { (_, variant) ->
-                if (variant.isJsonObject) statelessOptionsValues(variant.asJsonObject)
+            statelessRequest(model)
+            model.getAsJsonArray("variants")?.forEach { variant ->
+                if (variant.isJsonObject) statelessRequest(variant.asJsonObject)
             }
         }
     }

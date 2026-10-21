@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ui/services/agent_runtime_service.dart';
@@ -31,6 +33,79 @@ void main() {
   tearDown(() {
     messenger.setMockMethodCallHandler(channel, null);
   });
+
+  test(
+    'update check is read only and retains native version results',
+    () async {
+      final calls = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call.method);
+        return {
+          'agents': [
+            {
+              'id': 'opencode-acp',
+              'name': 'OpenCode',
+              'command': 'opencode',
+              'packageVersion': {
+                'installedVersion': '1.18.29',
+                'latestVersion': '2.0.32',
+                'targetVersion': '2.0.32',
+                'checkedAt': 42,
+                'updateAvailable': true,
+              },
+            },
+          ],
+        };
+      });
+      final catalog = await AgentRuntimeService.checkAgentUpdates();
+      expect(calls, ['agent/checkUpdates']);
+      expect(catalog.agents.single.packageVersion?.installedVersion, '1.18.29');
+      expect(catalog.agents.single.packageVersion?.updateAvailable, isTrue);
+    },
+  );
+
+  test(
+    'background upgrades are serialized and a failure does not stop the queue',
+    () async {
+      final first = Completer<Map<String, dynamic>>();
+      final second = Completer<Map<String, dynamic>>();
+      final calls = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'agent/prepare');
+        final id = (call.arguments as Map)['agentId'] as String;
+        calls.add(id);
+        return id == 'first' ? first.future : second.future;
+      });
+      final firstTask = AgentRuntimeService.prepareAgentInBackground(
+        'first',
+        force: true,
+      );
+      final failed = expectLater(firstTask, throwsA(isA<PlatformException>()));
+      final secondTask = AgentRuntimeService.prepareAgentInBackground(
+        'second',
+        force: true,
+      );
+      expect(
+        identical(
+          secondTask,
+          AgentRuntimeService.prepareAgentInBackground('second', force: true),
+        ),
+        isTrue,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(calls, ['first']);
+      expect(AgentRuntimeService.queuedAgentIds, {'second'});
+      first.completeError(PlatformException(code: 'INSTALL_FAILED'));
+      await failed;
+      await Future<void>.delayed(Duration.zero);
+      expect(calls, ['first', 'second']);
+      second.complete({'ok': true});
+      await secondTask;
+      await Future<void>.delayed(Duration.zero);
+      expect(AgentRuntimeService.preparingAgentIds, isEmpty);
+      expect(AgentRuntimeService.queuedAgentIds, isEmpty);
+    },
+  );
 
   test(
     'explicit reinstall reaches the installer with force, ordinary preparation does not',

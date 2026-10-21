@@ -524,7 +524,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('后台安装中'), findsOneWidget);
+      expect(find.text('后台安装 / 升级中'), findsOneWidget);
       await tester.tap(find.byTooltip('添加自定义 ACP Agent'));
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('添加自定义 ACP Agent'), findsOneWidget);
@@ -533,7 +533,7 @@ void main() {
       await tester.pump();
       await tester.pumpWidget(buildPage());
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('后台安装中'), findsOneWidget);
+      expect(find.text('后台安装 / 升级中'), findsOneWidget);
 
       await tester.tap(
         find.byKey(const Key('agent-navigation-deepseek-harness-acp')),
@@ -546,7 +546,7 @@ void main() {
         'error': 'expected test completion',
       });
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('后台安装中'), findsNothing);
+      expect(find.text('后台安装 / 升级中'), findsNothing);
     },
   );
 
@@ -560,16 +560,16 @@ void main() {
           if (call.method == 'listActions') {
             return <Map<String, dynamic>>[
               <String, dynamic>{
-                'id': 'open_kimi_web',
+                'id': 'open_opencode_web',
                 'pluginId': 'com.omnimind.agent-web',
-                'displayName': 'Kimi Code Web',
-                'description': 'Open Kimi Code Web',
+                'displayName': 'OpenCode Web',
+                'description': 'Open OpenCode Web',
                 'presentation': <String, dynamic>{
                   'placement': 'agent_settings',
-                  'packageId': 'kimi',
+                  'packageId': 'opencode',
                   'label': <String, String>{
-                    'zh': 'Kimi Code Web',
-                    'en': 'Kimi Code Web',
+                    'zh': 'OpenCode Web',
+                    'en': 'OpenCode Web',
                   },
                   'description': <String, String>{
                     'zh': '在系统浏览器中打开本机 Web 界面',
@@ -583,8 +583,8 @@ void main() {
             return <String, dynamic>{
               'success': true,
               'code': 'OPENED',
-              'serviceId': 'kimi',
-              'packageId': 'kimi',
+              'serviceId': 'opencode',
+              'packageId': 'opencode',
               'running': true,
             };
           }
@@ -606,12 +606,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('本地 Web 界面'), findsOneWidget);
-    expect(find.text('Kimi Code Web'), findsOneWidget);
+    expect(find.text('Agent WebUI'), findsOneWidget);
+    expect(find.text('OpenCode Web'), findsOneWidget);
     expect(find.text('在系统浏览器中打开本机 Web 界面'), findsOneWidget);
     await tester.tap(
       find.byKey(
-        const Key('plugin-action-button-com.omnimind.agent-web/open_kimi_web'),
+        const Key('plugin-action-button-com.omnimind.agent-web/open_opencode_web'),
       ),
     );
     await tester.pump();
@@ -619,7 +619,7 @@ void main() {
     final invocation = calls.lastWhere((call) => call.method == 'invokeAction');
     expect(invocation.arguments, <String, Object?>{
       'pluginId': 'com.omnimind.agent-web',
-      'actionId': 'open_kimi_web',
+      'actionId': 'open_opencode_web',
       'arguments': <String, dynamic>{},
     });
     expect(tester.takeException(), isNull);
