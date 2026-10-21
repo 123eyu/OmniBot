@@ -6,6 +6,7 @@ import cn.com.omnimind.bot.agent.ConversationUiActions
 import cn.com.omnimind.bot.agent.visibleConversationPage
 import cn.com.omnimind.bot.agent.runtime.AgentRuntimeManager
 import cn.com.omnimind.baselib.database.Conversation
+import cn.com.omnimind.baselib.database.ConversationActivityRow
 import cn.com.omnimind.baselib.database.DatabaseHelper
 import cn.com.omnimind.bot.agent.AgentConversationContextCompactor
 import cn.com.omnimind.bot.agent.AgentConversationHistoryRepository
@@ -17,6 +18,11 @@ import cn.com.omnimind.bot.agent.runtime.NaConversationAccess
 import cn.com.omnimind.bot.agent.runtime.NA_AGENT_ID
 
 private const val WEB_CONVERSATION_TITLE_LIMIT = 20
+
+internal data class VisibleConversationActivity(
+    val createdAt: Long,
+    val isNa: Boolean,
+)
 
 /**
  * Resolves the immutable Harness owner of one durable conversation.
@@ -149,6 +155,35 @@ class ConversationDomainService(
                 NaConversationAccess.sessionOwner(agentBindingByConversationId[id]?.threadId) == null &&
                 acpAgentProfileStore.naOwnerForConversation(id) == null
         }
+    }
+
+    /** Same hidden/account policy as history, without constructing history payloads. */
+    internal suspend fun listConversationActivity(
+        since: Long,
+        until: Long,
+    ): List<VisibleConversationActivity> {
+        val hidden = ChatConversationPreferences(context).hiddenIds()
+        val owner = naAccess.captureOwner()
+        val rows = DatabaseHelper.getConversationActivityRows(since, until)
+        val visible = rows.mapNotNull { row ->
+            val threadId = row.threadId.takeIf { isAgentMode(row.mode) }
+            if ((isAgentMode(row.mode) && row.id in hidden) ||
+                !naAccess.canReadStored(row.id, threadId, owner)) return@mapNotNull null
+            VisibleConversationActivity(row.createdAt, isNaActivity(row, threadId))
+        }
+        // A suspended Room read must not publish a previous account's counts.
+        return if (owner == naAccess.captureOwner()) visible else visible.filterNot { it.isNa }
+    }
+
+    private fun isNaActivity(row: ConversationActivityRow, threadId: String?): Boolean {
+        val agentId = if (isAgentMode(row.mode)) resolveConversationHarnessOwner(
+            storedMode = row.mode,
+            sessionAgentId = threadId?.let(acpAgentProfileStore::agentIdForSession),
+            conversationAgentId = acpAgentProfileStore.agentIdForConversation(row.id),
+        ) else null
+        return agentId == NA_AGENT_ID ||
+            NaConversationAccess.sessionOwner(threadId) != null ||
+            acpAgentProfileStore.naOwnerForConversation(row.id) != null
     }
 
     suspend fun archiveConversationsUpdatedBefore(cutoff: Long): Int {

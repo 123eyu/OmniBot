@@ -358,8 +358,8 @@ class LegacyTextLocalizer {
         'Termux capability is optional; leaving it off will not affect basic features',
     '未绑定': 'Unbound',
     '恢复默认': 'Restore default',
-    '点击右侧按钮后，可按 Provider 搜索、折叠并选择模型。':
-        'After tapping the button on the right, you can search, collapse, and select models by Provider.',
+    '点击右侧按钮选择模型，也可按模型名称、ID 或服务商搜索。':
+        'Tap the button on the right to select a model, or search by model name, ID, or provider.',
     '使用内置模型服务': 'Use Built-in Model Service',
     '内置模型服务': 'Built-in Model Service',
     '内置模型服务已启用': 'Built-in model service enabled',
@@ -367,7 +367,9 @@ class LegacyTextLocalizer {
     '已启用内置模型服务': 'Built-in model service enabled',
     '已切换为自定义模型': 'Switched to custom model',
     '没有匹配的模型': 'No matching models',
+    '没有匹配的选项': 'No matching options',
     '搜索模型 ID': 'Search model ID',
+    '搜索模型或服务商': 'Search models or providers',
     '请先在模型提供商页配置 Provider':
         'Please configure a provider in Model Providers first',
     '该 Provider 暂无可选模型': 'No selectable models for this provider',

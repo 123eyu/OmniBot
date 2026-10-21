@@ -40,6 +40,42 @@ void main() {
     expect(StorageService.getThemeMode(), AppThemeMode.dark);
   });
 
+  test('primary controls preserve readable contrast in both themes', () {
+    for (final theme in [AppTheme.lightTheme, AppTheme.darkTheme]) {
+      final foreground = theme.colorScheme.onPrimary.computeLuminance();
+      final background = theme.colorScheme.primary.computeLuminance();
+      final lighter = foreground > background ? foreground : background;
+      final darker = foreground > background ? background : foreground;
+      expect((lighter + 0.05) / (darker + 0.05), greaterThanOrEqualTo(7));
+      expect(
+        theme.switchTheme.thumbColor!.resolve({WidgetState.selected}),
+        theme.colorScheme.onPrimary,
+      );
+    }
+  });
+
+  testWidgets('round back control keeps the provided navigation callback', (
+    tester,
+  ) async {
+    var backCount = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: Scaffold(
+          appBar: CommonAppBar(
+            title: 'Settings',
+            primary: true,
+            onBackPressed: () => backCount++,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pump();
+    expect(backCount, 1);
+    expect(find.text('Settings'), findsOneWidget);
+  });
+
   testWidgets('system mode follows platform brightness for core surfaces', (
     tester,
   ) async {

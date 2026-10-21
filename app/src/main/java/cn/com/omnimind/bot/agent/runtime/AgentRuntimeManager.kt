@@ -2588,13 +2588,18 @@ class AgentRuntimeManager private constructor(
             acpAgentProfileStore.agentIdForSession(it)
         }
         val explicitThreadConversationId = explicitThreadId?.let {
-            conversationIdForSession(it)
+            // This request is owned by a local ACP runtime even when the
+            // remote bridge is enabled; use its durable binding directly.
+            bindingRepository.getBindingByThreadId(it)?.conversationId
         }
         val explicitThreadBelongsToAnotherConversation =
             !explicitThreadMatchesConversation(
                 explicitThreadId = explicitThreadId,
                 requestedConversationId = conversationId,
                 boundConversationId = explicitThreadConversationId,
+                ownsUnboundSession = method == "session/prompt" &&
+                    explicitThreadId != null &&
+                    allLocalRuntimes().any { it.ownsSession(explicitThreadId) },
             )
         val sessionAgentIdForConversation = if (
             explicitThreadId == null || !explicitThreadBelongsToAnotherConversation

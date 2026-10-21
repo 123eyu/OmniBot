@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:ui/features/home/pages/chat/tool_activity_utils.dart'
@@ -48,7 +47,6 @@ const double _kToolActivityStatusSlotWidth = 42;
 const double _kToolActivityTrailingSlotWidth = 24;
 const double _kCommandEffortSliderWidth = 156;
 const double _kToolActivityAttachedBorderReveal = 1.5;
-const double _kToolActivityGlassBlurSigma = 14;
 const BorderRadius _kToolActivitySurfaceBorderRadius = BorderRadius.only(
   topLeft: Radius.circular(_kToolActivitySurfaceRadius),
   topRight: Radius.circular(_kToolActivitySurfaceRadius),
@@ -591,7 +589,7 @@ class _CommandDrawerSurface extends StatelessWidget {
     final dividerColor = context.isDarkTheme
         ? context.omniPalette.borderSubtle.withValues(alpha: 0.52)
         : const Color(0x140F2034);
-    return _GlassActivitySurface(
+    return _ActivitySurface(
       key: const ValueKey('chat-command-activity-bar'),
       expanded: expanded,
       suppressShadow: suppressShadow,
@@ -691,7 +689,7 @@ class _ActivityDrawerSurface extends StatelessWidget {
     final dividerColor = context.isDarkTheme
         ? context.omniPalette.borderSubtle.withValues(alpha: 0.52)
         : const Color(0x140F2034);
-    return _GlassActivitySurface(
+    return _ActivitySurface(
       key: kChatToolActivityBarKey,
       expanded: expanded,
       suppressShadow: suppressShadow,
@@ -751,12 +749,9 @@ class _ActivityDrawerSurface extends StatelessWidget {
   }
 }
 
-/// Glass-styled chrome for the activity strip surfaces. Mirrors the look of
-/// [OmniGlassPanel] (blurred backdrop, gradient tint, top highlight) while
-/// keeping the strip's custom clipper so the preview-thumbnail cutout still
-/// works and so the bottom edge can sit flush against the input area.
-class _GlassActivitySurface extends StatelessWidget {
-  const _GlassActivitySurface({
+/// Opaque neutral chrome, retaining the strip's existing clipping geometry.
+class _ActivitySurface extends StatelessWidget {
+  const _ActivitySurface({
     super.key,
     required this.expanded,
     required this.suppressShadow,
@@ -772,26 +767,9 @@ class _GlassActivitySurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
-    final topTint = isDark
-        ? palette.surfacePrimary.withValues(alpha: 0.62)
-        : Colors.white.withValues(alpha: 0.72);
-    final bottomTint = isDark
-        ? palette.surfaceSecondary.withValues(alpha: 0.42)
-        : Colors.white.withValues(alpha: 0.48);
-    final borderColor = isDark
-        ? Colors.white.withValues(alpha: 0.08)
-        : Colors.white.withValues(alpha: 0.78);
-    final highlightColor = isDark
-        ? Colors.white.withValues(alpha: 0.32)
-        : Colors.white.withValues(alpha: 0.86);
-    final shadowColor = isDark
-        ? Colors.black.withValues(alpha: 0.34)
-        : Colors.black.withValues(alpha: 0.12);
     final bottomReveal = suppressShadow
         ? _kToolActivityAttachedBorderReveal
         : 0.0;
-
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: _kToolActivitySurfaceBorderRadius,
@@ -799,9 +777,9 @@ class _GlassActivitySurface extends StatelessWidget {
             ? const <BoxShadow>[]
             : <BoxShadow>[
                 BoxShadow(
-                  color: shadowColor,
-                  blurRadius: expanded ? 28 : 20,
-                  offset: const Offset(0, 8),
+                  color: palette.shadowColor,
+                  blurRadius: expanded ? 20 : 16,
+                  offset: const Offset(0, 6),
                 ),
               ],
       ),
@@ -810,50 +788,17 @@ class _GlassActivitySurface extends StatelessWidget {
           showPreviewCutout: showPreviewCutout,
           bottomReveal: bottomReveal,
         ),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: _kToolActivityGlassBlurSigma,
-            sigmaY: _kToolActivityGlassBlurSigma,
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[topTint, bottomTint],
-              ),
-              border: Border(
-                top: BorderSide(color: borderColor),
-                left: BorderSide(color: borderColor),
-                right: BorderSide(color: borderColor),
-              ),
-              borderRadius: _kToolActivitySurfaceBorderRadius,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: palette.surfacePrimary,
+            border: Border(
+              top: BorderSide(color: palette.borderSubtle, width: 0.5),
+              left: BorderSide(color: palette.borderSubtle, width: 0.5),
+              right: BorderSide(color: palette.borderSubtle, width: 0.5),
             ),
-            child: Stack(
-              children: <Widget>[
-                child,
-                Positioned(
-                  left: 8,
-                  right: 8,
-                  top: 0,
-                  child: IgnorePointer(
-                    child: Container(
-                      height: 1,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: <Color>[
-                            Colors.transparent,
-                            highlightColor,
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            borderRadius: _kToolActivitySurfaceBorderRadius,
           ),
+          child: child,
         ),
       ),
     );
@@ -1395,25 +1340,11 @@ class _CommandEffortSlider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     final colorScheme = Theme.of(context).colorScheme;
     final activeColor = palette.accentPrimary;
-    final activeGradient = isDark
-        ? <Color>[
-            Color.lerp(activeColor, Colors.white, 0.12)!,
-            Color.lerp(activeColor, Colors.black, 0.12)!,
-          ]
-        : <Color>[
-            Color.lerp(activeColor, Colors.white, 0.18)!,
-            Color.lerp(activeColor, const Color(0xFF1930D9), 0.34)!,
-          ];
-    final trackColor = isDark
-        ? palette.accentPrimary.withValues(alpha: 0.10)
-        : palette.accentPrimary.withValues(alpha: 0.08);
+    final trackColor = palette.surfaceSecondary;
     final selectedTextColor = colorScheme.onPrimary;
-    final idleTextColor = isDark
-        ? palette.textSecondary
-        : const Color(0xFF657891);
+    final idleTextColor = palette.textSecondary;
     final selectedIndex = selectedValue == null
         ? -1
         : options.indexOf(selectedValue!);
@@ -1447,21 +1378,8 @@ class _CommandEffortSlider extends StatelessWidget {
                       padding: const EdgeInsets.all(2),
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: activeGradient,
-                          ),
+                          color: activeColor,
                           borderRadius: BorderRadius.circular(999),
-                          boxShadow: [
-                            BoxShadow(
-                              color: activeColor.withValues(
-                                alpha: isDark ? 0.28 : 0.20,
-                              ),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
                         ),
                       ),
                     ),

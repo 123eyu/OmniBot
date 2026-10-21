@@ -15,6 +15,9 @@ void main() {
   const codec = StandardMethodCodec();
   const methodChannel = MethodChannel(channelName);
   const voiceChannel = MethodChannel('cn.com.omnimind.bot/VoicePlayback');
+  const agentEventsChannel = MethodChannel(
+    'cn.com.omnimind.bot/AgentRuntimeEvents',
+  );
   final coordinator = ChatConversationRuntimeCoordinator.instance;
   final recordedMethodCalls = <MethodCall>[];
 
@@ -151,6 +154,33 @@ void main() {
     await Future<void>.delayed(Duration.zero);
   }
 
+  Future<void> emitAgentEvent(Map<String, dynamic> event) async {
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(
+          agentEventsChannel.name,
+          codec.encodeSuccessEnvelope(event),
+          (ByteData? _) {},
+        );
+    await Future<void>.delayed(Duration.zero);
+  }
+
+  Map<String, dynamic> textUpdate(
+    String session,
+    String message,
+    String text,
+  ) => {
+    'method': 'session/update',
+    'allowImplicitTurnAdmission': true,
+    'params': {
+      'sessionId': session,
+      'update': {
+        'sessionUpdate': 'agent_message_chunk',
+        'messageId': message,
+        'content': {'type': 'text', 'text': text},
+      },
+    },
+  };
+
   setUp(() async {
     coordinator.resetForTest();
     await VoicePlaybackCoordinator.instance.debugResetForTest();
@@ -171,7 +201,10 @@ void main() {
         });
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(voiceChannel, (call) async => true);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(agentEventsChannel, (call) async => null);
     coordinator.ensureInitialized();
+    await Future<void>.delayed(Duration.zero);
   });
 
   tearDown(() async {
@@ -181,6 +214,144 @@ void main() {
         .setMockMethodCallHandler(methodChannel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(voiceChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(agentEventsChannel, null);
+  });
+
+  test('native ACP projection persists while chat observers detach', () async {
+    const conversationId = 99201;
+    const taskId = 'home-background-prompt';
+    const sessionId = 'home-background-session';
+    coordinator.beginAcpTurn(
+      taskId: taskId,
+      conversationId: conversationId,
+      mode: kChatRuntimeModeAgent,
+    );
+    expect(
+      coordinator.bindAcpSession(
+        taskId: taskId,
+        conversationId: conversationId,
+        mode: kChatRuntimeModeAgent,
+        sessionId: sessionId,
+      ),
+      isTrue,
+    );
+    var viewNotifications = 0;
+    void observeView() => viewNotifications++;
+    coordinator.addListener(observeView);
+    await emitAgentEvent(textUpdate(sessionId, 'reply', 'before '));
+    expect(viewNotifications, 1);
+
+    coordinator.removeListener(observeView);
+    await emitAgentEvent(textUpdate(sessionId, 'reply', 'during '));
+    expect(viewNotifications, 1);
+    final runtime = coordinator.runtimeFor(
+      conversationId: conversationId,
+      mode: kChatRuntimeModeAgent,
+    )!;
+    expect(runtime.messages.single.text, 'before during ');
+    expect(runtime.isAiResponding, isTrue);
+
+    coordinator.addListener(observeView);
+    await emitAgentEvent(textUpdate(sessionId, 'reply', 'after'));
+    coordinator.removeListener(observeView);
+    expect(viewNotifications, 2);
+    expect(runtime.messages.single.text, 'before during after');
+    coordinator.applyAcpPromptResponse(
+      taskId: taskId,
+      conversationId: conversationId,
+      mode: kChatRuntimeModeAgent,
+      sessionId: sessionId,
+      stopReason: 'end_turn',
+    );
+    await coordinator.flushPendingPersistence(
+      conversationId: conversationId,
+      mode: kChatRuntimeModeAgent,
+    );
+    expect(runtime.isAiResponding, isFalse);
+    final saved =
+        recordedMethodCalls
+                .where((call) => call.method == 'replaceConversationMessages')
+                .last
+                .arguments
+            as Map;
+    expect(saved['conversationId'], conversationId);
+    final reply = (saved['messages'] as List).cast<Map>().single;
+    expect(reply['content']['text'], 'before during after');
+    expect(reply['streamMeta']['isFinal'], isTrue);
+  });
+
+  test('native ACP attribution stays scoped with no visible chat', () async {
+    final cachedNormalRuntime = coordinator.ensureRuntime(
+      conversationId: 99203,
+      mode: kChatRuntimeModeNormal,
+    );
+    cachedNormalRuntime.knownAcpSessionIds.add('agent-session');
+    const owners = [
+      (id: 99202, mode: kChatRuntimeModeNormal, session: 'normal-session'),
+      (id: 99203, mode: kChatRuntimeModeAgent, session: 'agent-session'),
+      (id: -99204, mode: kChatRuntimeModeAgent, session: 'remote-session'),
+    ];
+    for (final owner in owners) {
+      if (owner.id < 0) {
+        coordinator.ensureEphemeralRuntime(
+          conversationId: owner.id,
+          mode: owner.mode,
+        );
+      }
+      coordinator.beginAcpTurn(
+        taskId: 'prompt-${owner.id}',
+        conversationId: owner.id,
+        mode: owner.mode,
+      );
+      expect(
+        coordinator.bindAcpSession(
+          taskId: 'prompt-${owner.id}',
+          conversationId: owner.id,
+          mode: owner.mode,
+          sessionId: owner.session,
+        ),
+        isTrue,
+      );
+    }
+    for (final owner in owners.reversed) {
+      await emitAgentEvent(textUpdate(owner.session, 'reply', owner.session));
+    }
+    await emitAgentEvent({
+      ...textUpdate('normal-session', 'wrong-owner', 'must not cross'),
+      'conversationId': 99203,
+      'allowImplicitTurnAdmission': false,
+    });
+    await emitAgentEvent(textUpdate('unknown-session', 'unknown', 'unowned'));
+    await emitAgentEvent({
+      'method': 'error',
+      'params': {'message': 'unscoped transport error'},
+    });
+    for (final owner in owners) {
+      final runtime = coordinator.runtimeFor(
+        conversationId: owner.id,
+        mode: owner.mode,
+      )!;
+      expect(runtime.messages.single.text, owner.session);
+      expect(runtime.isAiResponding, isTrue);
+      expect(
+        coordinator.conversationIdForAcpEvent(sessionId: owner.session),
+        owner.id,
+      );
+    }
+    expect(coordinator.latestAgentEventProjection!.conversationId, isNull);
+    expect(cachedNormalRuntime.messages, isEmpty);
+    for (final owner in owners) {
+      await coordinator.flushPendingPersistence(
+        conversationId: owner.id,
+        mode: owner.mode,
+      );
+    }
+    final savedIds = recordedMethodCalls
+        .where((call) => call.method == 'replaceConversationMessages')
+        .map((call) => (call.arguments as Map)['conversationId']);
+    expect(savedIds, containsAll([99202, 99203]));
+    expect(savedIds, isNot(contains(-99204)));
   });
 
   test(

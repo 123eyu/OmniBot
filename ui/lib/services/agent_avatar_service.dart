@@ -19,9 +19,10 @@ class AgentAvatarService {
 
   static const String storageKey = 'agentAvatarIndex';
   static const String customImagePathKey = 'agentAvatarCustomImagePath';
+  static const String defaultAvatarAsset = 'assets/common/omnibot_launcher.png';
 
   static const List<String> presetAvatars = <String>[
-    'assets/avatar/default_avatar1.png',
+    defaultAvatarAsset,
     'assets/avatar/default_avatar2.png',
     'assets/avatar/default_avatar3.png',
     'assets/avatar/default_avatar4.png',

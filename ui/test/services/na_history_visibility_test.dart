@@ -50,6 +50,10 @@ void main() {
       const MethodChannel('cn.com.omnimind.bot/VoicePlayback'),
       (_) async => null,
     );
+    messenger.setMockMethodCallHandler(
+      const MethodChannel('cn.com.omnimind.bot/AgentRuntimeEvents'),
+      (_) async => null,
+    );
     coordinator.ensureInitialized();
   });
   tearDown(coordinator.resetForTest);

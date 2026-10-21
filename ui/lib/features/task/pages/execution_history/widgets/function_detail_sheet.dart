@@ -303,7 +303,7 @@ Widget _sectionTitle(BuildContext context, String title) => Padding(
     title,
     style: TextStyle(
       color: context.omniPalette.textPrimary,
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: FontWeight.w700,
     ),
   ),

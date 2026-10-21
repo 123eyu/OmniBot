@@ -31,6 +31,33 @@ ConversationThreadTarget _newAgentThreadTarget({
 }
 
 mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
+  // UI-only preservation while the existing conversation initializer resets
+  // an unsubmitted target. The request id prevents an older initialization
+  // from restoring its composer into a newer conversation.
+  int? _composerPreservationRequestId;
+
+  @override
+  void onConversationReset(ConversationMode mode) {
+    final preserveComposer =
+        _composerPreservationRequestId == _conversationTargetRequestId &&
+        _pageModeForConversationMode(mode) == _activeConversationMode;
+    if (!preserveComposer) {
+      super.onConversationReset(mode);
+      return;
+    }
+    // Read immediately before the synchronous reset, not before its async
+    // initialization: the user may have edited text or attachments meanwhile.
+    final composerValue = _messageController.value;
+    final composerAttachments = List<ChatInputAttachment>.of(
+      _pendingAttachments,
+    );
+    super.onConversationReset(mode);
+    final state = _modeState(_activeConversationMode);
+    state.draftMessage = composerValue.text;
+    state.pendingAttachments.addAll(composerAttachments);
+    _messageController.value = composerValue;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +71,7 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     });
 
     _runtimeCoordinator.ensureInitialized();
+    _lastAgentEventProjection = _runtimeCoordinator.latestAgentEventProjection;
     _runtimeCoordinator.addListener(_handleRuntimeCoordinatorChanged);
     HomeGreetingSettingsService.notifier.addListener(
       _handleHomeGreetingSettingsChanged,
@@ -94,9 +122,6 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     _browserSessionSnapshotChangedSubscription = AssistsMessageService
         .browserSessionSnapshotChangedStream
         .listen(_handleBrowserSessionSnapshotChanged);
-    _agentEventSubscription = AgentRuntimeService.events.listen(
-      _handleAgentRuntimeEvent,
-    );
     _omniLinkEventSubscription = OmniLinkPluginService.events.listen(
       _handleOmniLinkEvent,
     );
@@ -117,7 +142,6 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       final isHdPadLandscape = _isHdPadLandscapeForMediaQuery(mediaQuery);
       if (_wasHdPadLandscape == true && !isHdPadLandscape) {
         _embeddedDrawerKey.currentState?.unfocusSearch();
-        _drawerKey.currentState?.unfocusSearch();
       }
       _wasHdPadLandscape = isHdPadLandscape;
       if (isHdPadLandscape && _activeSurfaceMode == ChatSurfaceMode.workspace) {
@@ -277,8 +301,8 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     );
     if (isStaleRequest()) return;
     final targetMode = _pageModeForConversationMode(effectiveTarget.mode);
-    // Capture after initialization so input typed during the switch survives
-    // the existing conversation reset below (including its attachment reset).
+    // Carry the current composer across the first synchronous target reset.
+    // onConversationReset preserves newer edits made during initialization.
     final composerValue = preserveComposer ? _messageController.value : null;
     final composerAttachments = preserveComposer
         ? List<ChatInputAttachment>.of(_pendingAttachments)
@@ -314,11 +338,22 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
         _syncExistingLocalAgentTarget(effectiveTarget, activeRequestId),
       );
     }
-    _applyDraftForConversationMode(targetMode);
-    if (effectiveTarget.isRemoteCodexSessionTarget) {
-      await _prepareRemoteCodexSessionTarget(effectiveTarget);
-    } else {
-      await initializeConversation(lifecycleToken: lifecycleToken);
+    if (!preserveComposer) {
+      _applyDraftForConversationMode(targetMode);
+    }
+    if (preserveComposer) {
+      _composerPreservationRequestId = activeRequestId;
+    }
+    try {
+      if (effectiveTarget.isRemoteCodexSessionTarget) {
+        await _prepareRemoteCodexSessionTarget(effectiveTarget);
+      } else {
+        await initializeConversation(lifecycleToken: lifecycleToken);
+      }
+    } finally {
+      if (_composerPreservationRequestId == activeRequestId) {
+        _composerPreservationRequestId = null;
+      }
     }
     if (isStaleRequest()) return;
     if (_activeConversationMode == ChatPageMode.agent) {
@@ -334,6 +369,27 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     if (isStaleRequest()) return;
     if (syncPage) {
       _jumpToCurrentModePage(animate: false);
+    }
+    if (effectiveTarget.isNewConversation &&
+        (effectiveTarget.initialMessage?.trim().isEmpty ?? true) &&
+        !widget.showFirstUseTour) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_isConversationTargetRequestCurrent(activeRequestId) ||
+            ModalRoute.of(context)?.isCurrent != true ||
+            widget.showFirstUseTour ||
+            _resolvedThreadTarget?.isNewConversation != true ||
+            _currentConversationId != null ||
+            _messages.isNotEmpty ||
+            _isAiResponding ||
+            _sendMessageInFlightTargetIds.contains(activeRequestId) ||
+            _isWorkspaceSurface ||
+            _isBrowserOverlayVisible ||
+            _isPopupVisible) {
+          return;
+        }
+        _requestComposerFocus(showKeyboard: true);
+      });
+      WidgetsBinding.instance.ensureVisualUpdate();
     }
   }
 
@@ -719,6 +775,9 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
 
   @override
   void dispose() {
+    for (final mode in _unboundConfigurationSessions.keys.toList()) {
+      _releaseUnboundConfigurationSession(mode);
+    }
     unawaited(_clearVisibleChatConversation());
     unawaited(_conversationModelSelectorHandle?.dismiss());
     _conversationModelSelectorHandle = null;
@@ -749,7 +808,6 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     _openClawTokenController.dispose();
     _openClawUserIdController.dispose();
     this._stopRemoteCodexSessionSync();
-    _agentEventSubscription?.cancel();
     _omniLinkEventSubscription?.cancel();
     super.dispose();
   }

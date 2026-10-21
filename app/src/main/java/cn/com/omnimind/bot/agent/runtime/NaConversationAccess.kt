@@ -26,13 +26,13 @@ internal class NaConversationAccess(
 
         fun currentOwnerPrefix(context: Context): String? = runCatching {
             val preferences = context.getSharedPreferences("na_cloud_connection", Context.MODE_PRIVATE)
-            if (BuildConfig.DEBUG && preferences.getBoolean("development", false)) {
+            if (NaCloudEnvironment.developmentAvailable && preferences.getBoolean("development", false)) {
                 NaCloudConnection(preferences.getString("baseUrl", "http://127.0.0.1:8787")!!).prefix
             } else {
                 if (!OmniAccount.isConfigured()) return@runCatching null
                 val userId = OmniAccount.repository().cachedCloudUserId() ?: return@runCatching null
                 NaCloudConnection(
-                    NaCloudConnection.officialBaseUrl(BuildConfig.CLOUD_URL, BuildConfig.DEBUG),
+                    NaCloudConnection.officialBaseUrl(BuildConfig.CLOUD_URL, NaCloudEnvironment.developmentAvailable),
                     userId = userId,
                 ).prefix
             }

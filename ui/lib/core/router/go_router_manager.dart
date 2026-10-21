@@ -3,8 +3,9 @@ import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:ui/features/home/pages/chat/chat_page.dart';
+import 'package:ui/features/home/pages/conversation_home_page.dart';
 
+import 'conversation_route_target.dart';
 import 'go_router_config.dart';
 
 import 'package:flutter/foundation.dart';
@@ -33,7 +34,8 @@ class RouteOptions {
 
 /// GoRouter路由管理器
 class GoRouterManager {
-  static const String homeRoute = '/home/chat';
+  static const String homeRoute = '/home/home';
+  static const String chatRoute = '/home/chat';
   static final GlobalKey<NavigatorState> _rootNavigatorKey =
       GlobalKey<NavigatorState>();
   static final GlobalKey<NavigatorState> _shellNavigatorKey =
@@ -228,7 +230,7 @@ class GoRouterManager {
             final parsed = _parseExtra(state.extra);
             final child = _isSubEngine
                 ? const SizedBox.shrink()
-                : const ChatPage();
+                : const ConversationHomePage();
             return _buildPage(
               key: state.pageKey,
               child: child,
@@ -283,8 +285,9 @@ class GoRouterManager {
     print('[GoRouterManager] go 调用堆栈: ${StackTrace.current}');
     final context = _rootNavigatorKey.currentContext;
     if (context != null) {
-      final finalRoute = _normalizeHomeRoute(
+      final finalRoute = resolveHomeRoute(
         _buildRouteWithQueryParams(route, queryParams),
+        extra: extra,
       );
       final wrappedExtra = _wrapExtra(extra, options ?? const RouteOptions());
       GoRouter.of(context).go(finalRoute, extra: wrappedExtra);
@@ -303,8 +306,9 @@ class GoRouterManager {
     print('[GoRouterManager] clearAndNavigateTo 调用堆栈: ${StackTrace.current}');
     final context = _rootNavigatorKey.currentContext;
     if (context != null) {
-      final finalRoute = _normalizeHomeRoute(
+      final finalRoute = resolveHomeRoute(
         _buildRouteWithQueryParams(route, queryParams),
+        extra: extra,
       );
       final wrappedExtra = _wrapExtra(extra, options ?? const RouteOptions());
       GoRouter.of(context).go(finalRoute, extra: wrappedExtra);
@@ -323,12 +327,13 @@ class GoRouterManager {
     );
     print('[GoRouterManager] push context: $context');
     if (context != null) {
-      final finalRoute = _normalizeHomeRoute(
+      final finalRoute = resolveHomeRoute(
         _buildRouteWithQueryParams(route, queryParams),
+        extra: extra,
       );
       final wrappedExtra = _wrapExtra(extra, options ?? const RouteOptions());
-      if (_isHomeChatRoute(finalRoute)) {
-        GoRouter.of(context).go(finalRoute, extra: wrappedExtra);
+      if (Uri.parse(finalRoute).path == chatRoute) {
+        _pushChatDestination(GoRouter.of(context), finalRoute, wrappedExtra);
         return;
       }
       GoRouter.of(context).push(finalRoute, extra: wrappedExtra);
@@ -348,10 +353,18 @@ class GoRouterManager {
     );
     print('[GoRouterManager] push context: $context');
     if (context != null) {
-      final finalRoute = _normalizeHomeRoute(
+      final finalRoute = resolveHomeRoute(
         _buildRouteWithQueryParams(route, queryParams),
+        extra: extra,
       );
       final wrappedExtra = _wrapExtra(extra, options ?? const RouteOptions());
+      if (Uri.parse(finalRoute).path == chatRoute) {
+        return _pushChatDestination<T>(
+          GoRouter.of(context),
+          finalRoute,
+          wrappedExtra,
+        );
+      }
       return GoRouter.of(context).push<T>(finalRoute, extra: wrappedExtra);
     }
     return null;
@@ -377,8 +390,9 @@ class GoRouterManager {
       '[GoRouterManager] pushReplacement route: $route, extra: $extra, queryParams: $queryParams, options: $options',
     );
     if (context != null) {
-      final finalRoute = _normalizeHomeRoute(
+      final finalRoute = resolveHomeRoute(
         _buildRouteWithQueryParams(route, queryParams),
+        extra: extra,
       );
       final wrappedExtra = _wrapExtra(extra, options ?? const RouteOptions());
       GoRouter.of(context).pushReplacement(finalRoute, extra: wrappedExtra);
@@ -392,18 +406,38 @@ class GoRouterManager {
     return canPop;
   }
 
-  static String _normalizeHomeRoute(String route) {
+  /// Keeps old home links carrying a thread target compatible without
+  /// redirecting ordinary launches away from the conversation list.
+  static String resolveHomeRoute(String route, {Object? extra}) {
     final uri = Uri.parse(route);
-    if (uri.path == '/home/home') {
-      return uri.replace(path: homeRoute).toString();
+    if (uri.path == homeRoute &&
+        parseConversationRouteTarget(uri, extra) != null) {
+      return uri.replace(path: chatRoute).toString();
     }
     return route;
   }
 
-  static bool _isHomeChatRoute(String route) {
-    final normalized = _normalizeHomeRoute(route);
-    final uri = Uri.parse(normalized);
-    return uri.path == homeRoute;
+  static Future<T?> _pushChatDestination<T>(
+    GoRouter router,
+    String route,
+    Object? extra,
+  ) {
+    final matches = router.routerDelegate.currentConfiguration.matches;
+    final hasChat = matches.any(
+      (match) =>
+          match.route is GoRoute && (match.route as GoRoute).path == chatRoute,
+    );
+    if (!hasChat) {
+      return router.push<T>(route, extra: extra);
+    }
+
+    // A chat can be covered by settings, history or an Agent session picker.
+    // Return to that existing owner, then update its target through
+    // ChatPage.didUpdateWidget instead of stacking a second chat owner.
+    _rootNavigatorKey.currentState?.popUntil(
+      (route) => route.settings.name == 'home/chat' || route.isFirst,
+    );
+    return router.replace<T>(route, extra: extra);
   }
 
   /// 重置回到首页并跳转到指定路由
@@ -420,12 +454,14 @@ class GoRouterManager {
     );
     if (context == null) return;
 
-    final finalRoute = _normalizeHomeRoute(
+    final finalRoute = resolveHomeRoute(
       _buildRouteWithQueryParams(route, queryParams),
+      extra: extra,
     );
 
-    // 如果目标是聊天主页（包含 query 参数场景），直接替换到目标路由，不再 push
-    if (_isHomeChatRoute(finalRoute)) {
+    // The list is the root; explicit chat/native destinations retain a
+    // separate page above it so back returns to the same conversation list.
+    if (Uri.parse(finalRoute).path == homeRoute) {
       print(
         '[GoRouterManager] resetToHomeAndPush: target is home, only clearAndNavigateTo',
       );

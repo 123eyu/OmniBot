@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/theme/theme_context.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ui/features/task/pages/execution_history/widgets/run_log_timeline_components.dart';
 import 'package:ui/features/task/run_log/omniflow_tool_client.dart';
@@ -115,9 +117,8 @@ class _RunLogDetailPageState extends State<RunLogDetailPage> {
       );
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.toString())));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.toString())));
       }
     }
   }
@@ -145,8 +146,10 @@ class _RunLogDetailPageState extends State<RunLogDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_text(context, '运行记录', 'Run Log')),
+      backgroundColor: context.omniPalette.pageBackground,
+      appBar: CommonAppBar(
+        primary: true,
+        title: _text(context, '运行记录', 'Run Log'),
         actions: [
           IconButton(
             tooltip: _text(context, '刷新', 'Refresh'),

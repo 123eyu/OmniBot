@@ -74,9 +74,8 @@ mixin _ChatPageModelContextMixin on _ChatPageStateBase {
       return;
     }
 
-    final normalConversationId = _modeState(
-      ChatPageMode.normal,
-    ).currentConversationId;
+    final normalConversationId = _modeState(ChatPageMode.normal)
+        .currentConversationId;
     if (shouldClearPersisted && normalConversationId != null) {
       await ConversationModelOverrideService.clearOverride(
         normalConversationId,
@@ -236,9 +235,8 @@ mixin _ChatPageModelContextMixin on _ChatPageStateBase {
       providerProfileId: providerProfileId,
       modelId: modelId,
     );
-    final normalConversationId = _modeState(
-      ChatPageMode.normal,
-    ).currentConversationId;
+    final normalConversationId = _modeState(ChatPageMode.normal)
+        .currentConversationId;
 
     if (normalConversationId == null) {
       if (!mounted) return;
@@ -291,9 +289,8 @@ mixin _ChatPageModelContextMixin on _ChatPageStateBase {
     if (normalizedEffort == null || _activeMode != ChatPageMode.normal) {
       return;
     }
-    final normalConversationId = _modeState(
-      ChatPageMode.normal,
-    ).currentConversationId;
+    final normalConversationId = _modeState(ChatPageMode.normal)
+        .currentConversationId;
     if (normalConversationId == null) {
       if (!mounted) return;
       setState(() {
@@ -325,9 +322,8 @@ mixin _ChatPageModelContextMixin on _ChatPageStateBase {
     if (!hasOverride) {
       return;
     }
-    final normalConversationId = _modeState(
-      ChatPageMode.normal,
-    ).currentConversationId;
+    final normalConversationId = _modeState(ChatPageMode.normal)
+        .currentConversationId;
     if (normalConversationId != null) {
       await ConversationModelOverrideService.clearOverride(
         normalConversationId,
@@ -501,8 +497,8 @@ mixin _ChatPageModelContextMixin on _ChatPageStateBase {
           maxHeight: popupMaxHeight,
           loadLiveProviders: true,
           currentSelection: currentSelection,
-          footer: TextButton.icon(
-            onPressed: () async {
+          footer: OmniMenuItem(
+            onTap: () async {
               await handle.dismiss();
               if (!mounted) return;
               await GoRouterManager.pushForResult<void>(
@@ -510,8 +506,8 @@ mixin _ChatPageModelContextMixin on _ChatPageStateBase {
               );
               if (mounted) await _loadNormalChatModelContext();
             },
-            icon: const Icon(Icons.settings_outlined, size: 16),
-            label: Text(LegacyTextLocalizer.localize('配置模型连接')),
+            leading: const Icon(Icons.settings_outlined),
+            label: LegacyTextLocalizer.localize('配置模型连接'),
           ),
           // 软键盘"确定"提交搜索时:先打开 popup 的"一次性键盘隐藏豁免",再 unfocus
           // —— 这样 IME 塌陷不会被 DismissOverlayOnKeyboardHide 当作"用户想关 popup"
@@ -737,13 +733,7 @@ class _ChatModelMentionPanelState extends State<_ChatModelMentionPanel> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isCurrentProvider
-              ? (context.isDarkTheme
-                    ? Color.lerp(
-                        palette.surfaceSecondary.withValues(alpha: 0.46),
-                        palette.accentPrimary,
-                        0.14,
-                      )!
-                    : const Color(0xFF2C7FEB).withValues(alpha: 0.10))
+              ? palette.surfaceSecondary
               : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
@@ -756,9 +746,7 @@ class _ChatModelMentionPanelState extends State<_ChatModelMentionPanel> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12,
-                  color: context.isDarkTheme
-                      ? palette.textSecondary
-                      : const Color(0xFF64748B),
+                  color: palette.textSecondary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -767,9 +755,7 @@ class _ChatModelMentionPanelState extends State<_ChatModelMentionPanel> {
               '$modelCount',
               style: TextStyle(
                 fontSize: 11,
-                color: context.isDarkTheme
-                    ? palette.textTertiary
-                    : const Color(0xFF9AA4B6),
+                color: palette.textTertiary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -778,9 +764,7 @@ class _ChatModelMentionPanelState extends State<_ChatModelMentionPanel> {
               Icon(
                 Icons.check_circle_rounded,
                 size: 13,
-                color: context.isDarkTheme
-                    ? palette.accentPrimary
-                    : const Color(0xFF2C7FEB),
+                color: palette.accentPrimary,
               ),
             ],
           ],
@@ -815,11 +799,7 @@ class _ChatModelMentionPanelState extends State<_ChatModelMentionPanel> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: selected
-                  ? (context.isDarkTheme
-                        ? palette.segmentThumb
-                        : const Color(0xFFEAF3FF))
-                  : Colors.transparent,
+              color: selected ? palette.surfaceSecondary : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -831,9 +811,7 @@ class _ChatModelMentionPanelState extends State<_ChatModelMentionPanel> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 13,
-                      color: context.isDarkTheme
-                          ? palette.textPrimary
-                          : const Color(0xFF1F2937),
+                      color: palette.textPrimary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -842,9 +820,7 @@ class _ChatModelMentionPanelState extends State<_ChatModelMentionPanel> {
                   Icon(
                     Icons.check_rounded,
                     size: 15,
-                    color: context.isDarkTheme
-                        ? palette.accentPrimary
-                        : const Color(0xFF2C7FEB),
+                    color: palette.accentPrimary,
                   ),
               ],
             ),

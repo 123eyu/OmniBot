@@ -83,132 +83,57 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
     if (_webQuickActions.isEmpty) return;
     performOmniSelectionHaptic();
 
-    final box = anchorContext.findRenderObject() as RenderBox?;
-    final overlay =
-        Overlay.maybeOf(anchorContext)?.context.findRenderObject()
-            as RenderBox?;
-    if (box == null || !box.hasSize || overlay == null || !overlay.hasSize) {
-      return;
-    }
+    final anchor = glassPopupAnchorFromContext(anchorContext);
+    if (anchor == null) return;
 
-    final triggerTopLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-    final triggerBottomRight = box.localToGlobal(
-      box.size.bottomRight(Offset.zero),
-      ancestor: overlay,
-    );
-    final overlaySize = overlay.size;
-    final bottomOffset = overlaySize.height - triggerTopLeft.dy + 8;
-    final rightEdge = (overlaySize.width - triggerBottomRight.dx).clamp(
-      16.0,
-      overlaySize.width - 16.0,
-    );
-
-    await showGeneralDialog<void>(
+    await showGlassPopup<void>(
       context: anchorContext,
-      barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(
-        anchorContext,
-      ).modalBarrierDismissLabel,
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 170),
-      pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        final palette = dialogContext.omniPalette;
-        final isDark = dialogContext.isDarkTheme;
-        final english =
-            Localizations.localeOf(dialogContext).languageCode == 'en';
-        final surface = isDark
-            ? palette.surfaceElevated
-            : palette.surfacePrimary;
+      anchor: anchor,
+      preferBelow: false,
+      child: Builder(
+        builder: (dialogContext) {
+          final palette = dialogContext.omniPalette;
+          final english =
+              Localizations.localeOf(dialogContext).languageCode == 'en';
+          final surface = palette.surfacePrimary;
 
-        return Stack(
-          children: [
-            Positioned(
-              left: 16,
-              right: rightEdge,
-              bottom: bottomOffset,
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: palette.borderSubtle.withValues(
-                        alpha: isDark ? 0.8 : 0.9,
+          return Material(
+            color: Colors.transparent,
+            child: OmniMenuSurface(
+              width: 320,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+                      child: Text(
+                        english ? 'Local Web Interfaces' : '本地 Web 界面',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3,
+                          color: palette.textTertiary,
+                        ),
                       ),
-                      width: 0.75,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: palette.shadowColor.withValues(
-                          alpha: isDark ? 0.36 : 0.09,
-                        ),
-                        blurRadius: 22,
-                        spreadRadius: -2,
-                        offset: const Offset(0, 8),
-                      ),
-                      BoxShadow(
-                        color: palette.shadowColor.withValues(
-                          alpha: isDark ? 0.18 : 0.04,
-                        ),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
+                    for (var i = 0; i < _webQuickActions.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 2),
+                      _buildWebPopoverOptionTile(
+                        dialogContext,
+                        _webQuickActions[i],
+                        surface: surface,
+                        english: english,
                       ),
                     ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
-                        child: Text(
-                          english ? 'Local Web Interfaces' : '本地 Web 界面',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.3,
-                            color: palette.textTertiary,
-                          ),
-                        ),
-                      ),
-                      for (
-                        var i = 0;
-                        i < _webQuickActions.length;
-                        i++
-                      ) ...[
-                        if (i > 0) const SizedBox(height: 2),
-                        _buildWebPopoverOptionTile(
-                          dialogContext,
-                          _webQuickActions[i],
-                          surface: surface,
-                          english: english,
-                        ),
-                      ],
-                    ],
-                  ),
+                  ],
                 ),
               ),
             ),
-          ],
-        );
-      },
-      transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            alignment: Alignment.bottomRight,
-            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
-            child: child,
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -237,156 +162,146 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
       fallback: action.displayName,
     );
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        key: ValueKey('home-drawer-web-$agentId'),
-        borderRadius: BorderRadius.circular(10),
-        onTap: disabled
-            ? null
-            : () {
-                Navigator.of(dialogContext).pop();
-                unawaited(_invokeWebQuickAction(action));
-              },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-          child: Row(
-            children: [
-              if (busy)
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: palette.accentPrimary,
-                  ),
-                )
-              else
-                _buildWebQuickBrandIcon(
-                  agentId,
-                  status: status,
-                  surface: surface,
-                ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      shortLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: palette.textPrimary,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                        height: 1.25,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      status.active
-                          ? '$fullLabel · ${english ? 'Running' : '运行中'}'
-                          : fullLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: status.active
-                            ? const Color(0xFF2EAF67)
-                            : palette.textSecondary,
-                        fontSize: 11.5,
-                        height: 1.25,
-                      ),
-                    ),
-                  ],
-                ),
+    return OmniMenuItem(
+      key: ValueKey('home-drawer-web-$agentId'),
+      enabled: !disabled,
+      onTap: disabled
+          ? null
+          : () {
+              Navigator.of(dialogContext).pop();
+              unawaited(_invokeWebQuickAction(action));
+            },
+      child: Row(
+        children: [
+          if (busy)
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: palette.accentPrimary,
               ),
-              if (stoppable) ...[
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  key: ValueKey('home-drawer-web-stop-$agentId'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFE05252),
-                    backgroundColor: const Color(
-                      0xFFE05252,
-                    ).withValues(alpha: 0.08),
-                    minimumSize: const Size(0, 30),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: disabled
-                      ? null
-                      : () {
-                          Navigator.of(dialogContext).pop();
-                          unawaited(_stopWebQuickAction(action));
-                        },
-                  icon: const Icon(LucideIcons.circleStop, size: 13),
-                  label: Text(
-                    english ? 'Stop' : '停止',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
+            )
+          else
+            _buildWebQuickBrandIcon(agentId, status: status, surface: surface),
+          const SizedBox(width: OmniMenuStyle.iconGap),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  shortLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w400,
+                    height: 1.25,
                   ),
                 ),
-              ] else ...[
-                const SizedBox(width: 8),
-                Icon(
-                  LucideIcons.arrowUpRight,
-                  size: 15,
-                  color: palette.textTertiary,
+                const SizedBox(height: 2),
+                Text(
+                  status.active
+                      ? '$fullLabel · ${english ? 'Running' : '运行中'}'
+                      : fullLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: status.active
+                        ? const Color(0xFF2EAF67)
+                        : palette.textSecondary,
+                    fontSize: 13,
+                    height: 1.25,
+                  ),
                 ),
               ],
-            ],
+            ),
           ),
-        ),
+          if (stoppable) ...[
+            const SizedBox(width: 8),
+            TextButton.icon(
+              key: ValueKey('home-drawer-web-stop-$agentId'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFE05252),
+                backgroundColor: const Color(0xFFE05252)
+                    .withValues(alpha: 0.08),
+                minimumSize: const Size(0, 30),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: disabled
+                  ? null
+                  : () {
+                      Navigator.of(dialogContext).pop();
+                      unawaited(_stopWebQuickAction(action));
+                    },
+              icon: const Icon(LucideIcons.circleStop, size: 13),
+              label: Text(
+                english ? 'Stop' : '停止',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(width: 8),
+            Icon(
+              LucideIcons.arrowUpRight,
+              size: 15,
+              color: palette.textTertiary,
+            ),
+          ],
+        ],
       ),
     );
   }
 
+  List<_DrawerShortcutAction> get _shortcutActions => <_DrawerShortcutAction>[
+    _DrawerShortcutAction(
+      label: context.l10n.settingsTitle,
+      assetPath: 'assets/home/setting_icon.svg',
+      onTap: () => _navigateTo('/home/settings'),
+    ),
+    _DrawerShortcutAction(
+      label: context.l10n.memoryCenterTitle,
+      svgString: _kDrawerMemoryIconSvg,
+      onTap: () => _navigateTo('/memory/memory_center_page'),
+    ),
+    _DrawerShortcutAction(
+      label: context.l10n.pluginMarketTitle,
+      svgString: _kDrawerPluginMarketIconSvg,
+      onTap: () => _navigateTo('/home/plugin_market'),
+    ),
+    _DrawerShortcutAction(
+      label: context.l10n.skillStoreTitle,
+      svgString: _kDrawerSkillStoreIconSvg,
+      onTap: () => _navigateTo('/home/skill_store'),
+    ),
+    _DrawerShortcutAction(
+      label: context.trLegacy('轨迹'),
+      svgString: _kDrawerUsageStatisticsIconSvg,
+      onTap: () => _navigateTo('/task/execution_history'),
+    ),
+    _DrawerShortcutAction(
+      label: context.l10n.homeDrawerScheduled,
+      assetPath: 'assets/common/schedule_icon.svg',
+      onTap: () => _navigateTo('/task/scheduled_tasks'),
+    ),
+  ];
+
   Widget _buildFooterShortcutBar() {
     final palette = context.omniPalette;
     final isDark = context.isDarkTheme;
-    final items = <_DrawerShortcutAction>[
-      _DrawerShortcutAction(
-        label: context.l10n.settingsTitle,
-        assetPath: 'assets/home/setting_icon.svg',
-        onTap: () => _navigateTo('/home/settings'),
-      ),
-      _DrawerShortcutAction(
-        label: context.l10n.memoryCenterTitle,
-        svgString: _kDrawerMemoryIconSvg,
-        onTap: () => _navigateTo('/memory/memory_center_page'),
-      ),
-      _DrawerShortcutAction(
-        label: context.l10n.pluginMarketTitle,
-        svgString: _kDrawerPluginMarketIconSvg,
-        onTap: () => _navigateTo('/home/plugin_market'),
-      ),
-      _DrawerShortcutAction(
-        label: context.l10n.skillStoreTitle,
-        svgString: _kDrawerSkillStoreIconSvg,
-        onTap: () => _navigateTo('/home/skill_store'),
-      ),
-      _DrawerShortcutAction(
-        label: context.trLegacy('轨迹'),
-        svgString: _kDrawerUsageStatisticsIconSvg,
-        onTap: () => _navigateTo('/task/execution_history'),
-      ),
-      _DrawerShortcutAction(
-        label: context.l10n.homeDrawerScheduled,
-        assetPath: 'assets/common/schedule_icon.svg',
-        onTap: () => _navigateTo('/task/scheduled_tasks'),
-      ),
-    ];
-
+    final items = _shortcutActions;
     const barHeight = 44.0;
     final surfaceColor = isDark ? palette.surfacePrimary : Colors.white;
     final borderColor = palette.borderSubtle.withValues(
@@ -471,10 +386,7 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
                           decoration: BoxDecoration(
                             color: dotColor,
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: surfaceColor,
-                              width: 1.3,
-                            ),
+                            border: Border.all(color: surfaceColor, width: 1.3),
                           ),
                         ),
                       ),
@@ -492,24 +404,6 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
     _DrawerShortcutAction item, {
     required double height,
   }) {
-    final palette = context.omniPalette;
-    final iconColor = context.isDarkTheme
-        ? palette.textPrimary
-        : AppColors.text;
-    final icon = item.assetPath != null
-        ? SvgPicture.asset(
-            item.assetPath!,
-            width: 17,
-            height: 17,
-            colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
-          )
-        : SvgPicture.string(
-            item.svgString!,
-            width: 17,
-            height: 17,
-            colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
-          );
-
     return Tooltip(
       message: item.label,
       child: InkWell(
@@ -520,9 +414,27 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
         borderRadius: BorderRadius.circular(10),
         child: SizedBox(
           height: height,
-          child: Center(child: icon),
+          child: Center(child: _shortcutIcon(item)),
         ),
       ),
     );
+  }
+
+  Widget _shortcutIcon(_DrawerShortcutAction item, {double size = 17}) {
+    final color = context.omniPalette.textPrimary;
+    if (item.icon != null) return Icon(item.icon, size: size, color: color);
+    return item.assetPath != null
+        ? SvgPicture.asset(
+            item.assetPath!,
+            width: size,
+            height: size,
+            colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+          )
+        : SvgPicture.string(
+            item.svgString!,
+            width: size,
+            height: size,
+            colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+          );
   }
 }

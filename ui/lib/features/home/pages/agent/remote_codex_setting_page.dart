@@ -325,7 +325,7 @@ class _RemoteCodexSettingPageState extends State<RemoteCodexSettingPage> {
             : ListView(
                 padding: edgeToEdgeScrollPadding(
                   context,
-                  const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                  const EdgeInsets.fromLTRB(22, 12, 22, 28),
                 ),
                 children: [
                   SettingsSectionTitle(
@@ -351,7 +351,7 @@ class _RemoteCodexSettingPageState extends State<RemoteCodexSettingPage> {
                                 ),
                                 style: TextStyle(
                                   color: palette.textPrimary,
-                                  fontSize: 14.5,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),

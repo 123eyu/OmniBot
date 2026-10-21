@@ -931,6 +931,28 @@ void main() {
     expect(agent.managedAdapter, isTrue);
   });
 
+  test('Na configuration requires explicit native development capability', () {
+    final managed = AcpAgentProfile.fromMap({
+      'id': 'na-cloud',
+      'name': 'Na',
+      'command': 'na-cloud',
+    });
+    final development = AcpAgentProfile.fromMap({
+      'id': 'na-cloud',
+      'name': 'Na',
+      'command': 'na-cloud',
+      'configurationAvailable': true,
+    });
+    final otherAgent = AcpAgentProfile.fromMap({
+      'id': 'codex-acp',
+      'name': 'Codex',
+      'command': 'codex-acp',
+    });
+    expect(managed.configurationAvailable, isFalse);
+    expect(development.configurationAvailable, isTrue);
+    expect(otherAgent.configurationAvailable, isTrue);
+  });
+
   test('deduplicates legacy Xiaowan Bot entries in the ACP catalog', () {
     final catalog = AcpAgentCatalog.fromMap(<String, dynamic>{
       'selectedAgentId': 'xiaowan-acp',

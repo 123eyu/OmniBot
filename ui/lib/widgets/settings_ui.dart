@@ -4,6 +4,8 @@ import 'package:flutter_switch/flutter_switch.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/glass_popup.dart';
+import 'package:ui/widgets/omni_menu.dart';
 
 /// Triggers a crisp toggle haptic feedback.
 void performOmniSwitchHaptic(bool nextValue) {
@@ -21,26 +23,21 @@ void performOmniSelectionHaptic() {
 
 /// Unified surface decoration used across settings groups and cards.
 ///
-/// Uses `palette.surfacePrimary` (#FFFFFF in light, #1C1E1F in dark) over
-/// `palette.pageBackground` (#F4F7FB in light, #151617 in dark) with a
-/// hairline subtle border and no drop shadow for a clean, restrained look.
+/// Uses a plain rounded surface over the page background. Borders are opt-in;
+/// fine inset dividers provide separation inside a group.
 BoxDecoration omniSettingsSurfaceDecoration(
   BuildContext context, {
   Color? color,
   Color? borderColor,
-  double borderRadius = 16,
+  double borderRadius = 22,
 }) {
   final palette = context.omniPalette;
-  final isDark = context.isDarkTheme;
   return BoxDecoration(
     color: color ?? palette.surfacePrimary,
     borderRadius: BorderRadius.circular(borderRadius),
-    border: Border.all(
-      color:
-          borderColor ??
-          palette.borderSubtle.withValues(alpha: isDark ? 0.65 : 0.85),
-      width: 0.75,
-    ),
+    border: borderColor == null
+        ? null
+        : Border.all(color: borderColor, width: 0.75),
   );
 }
 
@@ -48,18 +45,13 @@ BoxDecoration omniSettingsSurfaceDecoration(
 ShapeBorder omniSettingsSurfaceShape(
   BuildContext context, {
   Color? borderColor,
-  double borderRadius = 16,
+  double borderRadius = 22,
 }) {
-  final palette = context.omniPalette;
-  final isDark = context.isDarkTheme;
   return RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(borderRadius),
-    side: BorderSide(
-      color:
-          borderColor ??
-          palette.borderSubtle.withValues(alpha: isDark ? 0.65 : 0.85),
-      width: 0.75,
-    ),
+    side: borderColor == null
+        ? BorderSide.none
+        : BorderSide(color: borderColor, width: 0.75),
   );
 }
 
@@ -73,7 +65,7 @@ class OmniSettingsCard extends StatelessWidget {
     this.margin,
     this.color,
     this.borderColor,
-    this.borderRadius = 16,
+    this.borderRadius = 22,
     this.clipBehavior = Clip.antiAlias,
   });
 
@@ -118,9 +110,9 @@ class OmniSettingsGroup extends StatelessWidget {
     this.subtitle,
     this.headerTrailing,
     this.footer,
-    this.dividerIndent = 46,
-    this.dividerEndIndent = 16,
-    this.borderRadius = 16,
+    this.dividerIndent = 54,
+    this.dividerEndIndent = 0,
+    this.borderRadius = 22,
     this.translateTitle = true,
   });
 
@@ -177,7 +169,7 @@ class OmniSettingsGroup extends StatelessWidget {
       children: [
         if (title != null || subtitle != null)
           Padding(
-            padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -186,9 +178,8 @@ class OmniSettingsGroup extends StatelessWidget {
                       ? Text(
                           translateTitle ? context.trLegacy(title!) : title!,
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.3,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
                             color: palette.textTertiary,
                             height: 1.35,
                           ),
@@ -201,9 +192,8 @@ class OmniSettingsGroup extends StatelessWidget {
                                     ? context.trLegacy(title!)
                                     : title!,
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.3,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w400,
                                   color: palette.textTertiary,
                                   height: 1.35,
                                 ),
@@ -264,7 +254,7 @@ class OmniSettingsTile extends StatelessWidget {
     this.bottomNote,
     this.translateText = true,
     this.isDestructive = false,
-    this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 13.5),
+    this.padding = const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
   });
 
   final Key? tileKey;
@@ -310,14 +300,11 @@ class OmniSettingsTile extends StatelessWidget {
         : palette.textPrimary;
     final effectiveIconColor =
         iconColor ??
-        (isDestructive
-            ? const Color(0xFFE05252)
-            : palette.textPrimary.withValues(alpha: 0.78));
+        (isDestructive ? const Color(0xFFE05252) : palette.textPrimary);
     final hasLeading = leading != null || icon != null;
     final effectiveShowChevron =
         showChevron ?? (onTap != null && trailing == null);
-    final effectiveOnTap =
-        onTap != null
+    final effectiveOnTap = onTap != null
         ? () {
             if (trailing is OmniSettingsSwitch) {
               performOmniSelectionHaptic();
@@ -346,15 +333,15 @@ class OmniSettingsTile extends StatelessWidget {
                 children: [
                   if (hasLeading) ...[
                     SizedBox(
-                      width: 20,
-                      height: 20,
+                      width: 22,
+                      height: 24,
                       child: Center(
                         child:
                             leading ??
-                            Icon(icon, size: 19, color: effectiveIconColor),
+                            Icon(icon, size: 20, color: effectiveIconColor),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 14),
                   ],
                   Expanded(
                     child: Column(
@@ -364,8 +351,8 @@ class OmniSettingsTile extends StatelessWidget {
                         Text(
                           translateText ? context.trLegacy(title) : title,
                           style: TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w400,
                             color: effectiveTitleColor,
                             height: 1.38,
                           ),
@@ -417,7 +404,7 @@ class OmniSettingsTile extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w400,
                                 color:
                                     trailingTextColor ?? palette.textSecondary,
@@ -429,7 +416,7 @@ class OmniSettingsTile extends StatelessWidget {
                         if (effectiveShowChevron)
                           Icon(
                             LucideIcons.chevronRight,
-                            size: 16,
+                            size: 18,
                             color: palette.textTertiary,
                           ),
                       ],
@@ -439,7 +426,7 @@ class OmniSettingsTile extends StatelessWidget {
               ),
               if (bottomNote != null && bottomNote!.trim().isNotEmpty) ...[
                 Padding(
-                  padding: EdgeInsets.only(top: 6, left: hasLeading ? 32 : 0),
+                  padding: EdgeInsets.only(top: 6, left: hasLeading ? 36 : 0),
                   child: Text(
                     translateText ? context.trLegacy(bottomNote!) : bottomNote!,
                     style: TextStyle(
@@ -583,9 +570,10 @@ class _OmniSettingsSwitchState extends State<OmniSettingsSwitch>
     final palette = context.omniPalette;
     final isDark = context.isDarkTheme;
     final activeTrackColor = palette.accentPrimary;
-    final inactiveTrackColor = isDark
-        ? palette.borderStrong
-        : const Color(0xFFE1E7F0);
+    final inactiveTrackColor = palette.borderStrong;
+    final thumbColor = widget.value
+        ? Theme.of(context).colorScheme.onPrimary
+        : Colors.white;
     final trackColor = widget.value ? activeTrackColor : inactiveTrackColor;
     final thumbLeft =
         _kInset + (widget.value ? _kMaxTravel : 0.0) + _dragOffset;
@@ -633,7 +621,7 @@ class _OmniSettingsSwitchState extends State<OmniSettingsSwitch>
                       padding: _kInset,
                       activeColor: activeTrackColor,
                       inactiveColor: inactiveTrackColor,
-                      toggleColor: Colors.white,
+                      toggleColor: thumbColor,
                       borderRadius: 999,
                       duration: widget.duration,
                       value: widget.value,
@@ -667,7 +655,7 @@ class _OmniSettingsSwitchState extends State<OmniSettingsSwitch>
                     scale: thumbScale,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: thumbColor,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
@@ -735,12 +723,18 @@ class OmniSettingsOption<T> {
   const OmniSettingsOption({
     required this.value,
     required this.label,
+    this.leading,
+    this.trailingLabel,
     this.subtitle,
+    this.searchText,
   });
 
   final T value;
   final String label;
+  final Widget? leading;
+  final String? trailingLabel;
   final String? subtitle;
+  final String? searchText;
 }
 
 abstract interface class _OmniDropdownTapTarget {
@@ -754,6 +748,12 @@ class OmniSettingsDropdown<T> extends StatefulWidget {
   const OmniSettingsDropdown({
     super.key,
     this.dropdownKey,
+    this.hint,
+    this.selectedLabel,
+    this.onBeforeOpen,
+    this.searchHint,
+    this.decoration,
+    this.style,
     required this.value,
     required this.options,
     required this.onChanged,
@@ -763,6 +763,19 @@ class OmniSettingsDropdown<T> extends StatefulWidget {
   });
 
   final Key? dropdownKey;
+  final String? hint;
+  final String? selectedLabel;
+
+  /// Lets the owning page refresh its options before opening the selector.
+  final Future<void> Function()? onBeforeOpen;
+
+  /// Enables an optional search field without changing ordinary selectors.
+  final String? searchHint;
+
+  /// Optional form-field presentation; the popup and selection owner stay the
+  /// same. Omit this to retain the compact settings trigger.
+  final InputDecoration? decoration;
+  final TextStyle? style;
   final T value;
   final List<OmniSettingsOption<T>> options;
   final ValueChanged<T?>? onChanged;
@@ -777,9 +790,16 @@ class OmniSettingsDropdown<T> extends StatefulWidget {
 
 class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
     implements _OmniDropdownTapTarget {
+  bool _fieldFocused = false;
+  bool _opening = false;
+
   @override
   bool get canOpenPopover =>
-      widget.onChanged != null && widget.options.isNotEmpty;
+      !_opening &&
+      widget.onChanged != null &&
+      (widget.options.isNotEmpty ||
+          widget.onBeforeOpen != null ||
+          widget.searchHint != null);
 
   @override
   void openPopover() {
@@ -787,91 +807,71 @@ class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
   }
 
   Future<void> _openPopover(BuildContext anchorContext) async {
-    final callback = widget.onChanged;
-    if (callback == null || widget.options.isEmpty) return;
+    if (!canOpenPopover) return;
+    _opening = true;
+    try {
+      final beforeOpen = widget.onBeforeOpen;
+      if (beforeOpen != null) {
+        await beforeOpen();
+        if (!mounted || !anchorContext.mounted) return;
+        // A caller may have setState in the async callback. Wait for that
+        // rebuild so this route receives the refreshed options and callback.
+        await WidgetsBinding.instance.endOfFrame;
+      }
+      if (!mounted ||
+          !anchorContext.mounted ||
+          widget.onChanged == null ||
+          (widget.options.isEmpty && widget.searchHint == null)) {
+        return;
+      }
+      await _showPopover(anchorContext);
+    } finally {
+      _opening = false;
+    }
+  }
+
+  Future<void> _showPopover(BuildContext anchorContext) async {
     performOmniSelectionHaptic();
 
-    final box = anchorContext.findRenderObject() as RenderBox?;
-    final overlay =
-        Overlay.maybeOf(anchorContext)?.context.findRenderObject()
-            as RenderBox?;
-    if (box == null || !box.hasSize || overlay == null || !overlay.hasSize) {
+    final anchor = glassPopupAnchorFromContext(anchorContext);
+    if (anchor == null) return;
+
+    final selected = await showGlassPopup<T>(
+      context: anchorContext,
+      anchor: anchor,
+      screenPadding: const EdgeInsets.all(16),
+      child: LayoutBuilder(
+        builder: (popupContext, constraints) {
+          // The shared popup owns live safe-area/keyboard positioning. Keep
+          // the menu as wide as its trigger where possible, without exceeding
+          // either the configured limit or the space currently available.
+          final maxWidth = widget.menuMaxWidth.clamp(0.0, constraints.maxWidth);
+          final minWidth = anchor.width.clamp(
+            widget.menuMinWidth.clamp(0.0, maxWidth),
+            maxWidth,
+          );
+          return _OmniSettingsPopoverCard<T>(
+            options: widget.options,
+            selectedValue: widget.value,
+            searchHint: widget.searchHint,
+            minWidth: minWidth,
+            maxWidth: maxWidth,
+            maxHeight: constraints.maxHeight,
+            onSelected: (picked) => Navigator.of(popupContext).pop(picked),
+          );
+        },
+      ),
+    );
+
+    if (!mounted ||
+        widget.onChanged == null ||
+        selected == null ||
+        !widget.options.any((option) => option.value == selected)) {
       return;
     }
-
-    final triggerTopLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-    final triggerBottomRight = box.localToGlobal(
-      box.size.bottomRight(Offset.zero),
-      ancestor: overlay,
-    );
-    final overlaySize = overlay.size;
-    final hasSubtitles = widget.options.any(
-      (item) => item.subtitle != null && item.subtitle!.trim().isNotEmpty,
-    );
-    final estimatedItemHeight = hasSubtitles ? 58.0 : 40.0;
-    final estimatedMenuHeight =
-        widget.options.length * estimatedItemHeight + 16.0;
-    final mediaPadding = MediaQuery.paddingOf(anchorContext);
-    final spaceBelow =
-        overlaySize.height - mediaPadding.bottom - triggerBottomRight.dy - 16.0;
-    final openUpward =
-        spaceBelow < estimatedMenuHeight &&
-        (triggerTopLeft.dy - mediaPadding.top) > estimatedMenuHeight;
-
-    final rightEdge = (overlaySize.width - triggerBottomRight.dx).clamp(
-      16.0,
-      overlaySize.width - 16.0,
-    );
-
-    final selected = await showGeneralDialog<T>(
-      context: anchorContext,
-      barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(
-        anchorContext,
-      ).modalBarrierDismissLabel,
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 170),
-      pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        return Stack(
-          children: [
-            Positioned(
-              right: rightEdge,
-              top: openUpward ? null : triggerBottomRight.dy + 6,
-              bottom: openUpward
-                  ? overlaySize.height - triggerTopLeft.dy + 6
-                  : null,
-              child: _OmniSettingsPopoverCard<T>(
-                options: widget.options,
-                selectedValue: widget.value,
-                minWidth: widget.menuMinWidth,
-                maxWidth: widget.menuMaxWidth,
-                onSelected: (picked) =>
-                    Navigator.of(dialogContext).pop(picked),
-              ),
-            ),
-          ],
-        );
-      },
-      transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            alignment: openUpward ? Alignment.bottomRight : Alignment.topRight,
-            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
-            child: child,
-          ),
-        );
-      },
-    );
-
-    if (selected != null && selected != widget.value) {
+    if (selected != widget.value) {
       performOmniSwitchHaptic(true);
-      callback(selected);
+      widget.onChanged!(selected);
     }
   }
 
@@ -880,10 +880,88 @@ class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
     final palette = context.omniPalette;
     final isDark = context.isDarkTheme;
     final enabled = widget.onChanged != null;
-    final selectedOption = widget.options.firstWhere(
-      (item) => item.value == widget.value,
-      orElse: () => widget.options.first,
-    );
+    final selectedOption = widget.options
+        .where((item) => item.value == widget.value)
+        .firstOrNull;
+    final selectedLabel =
+        widget.selectedLabel ??
+        selectedOption?.label ??
+        widget.hint ??
+        widget.options.firstOrNull?.label ??
+        '';
+
+    final decoration = widget.decoration;
+    if (decoration != null) {
+      final fieldEnabled =
+          enabled &&
+          (widget.options.isNotEmpty ||
+              widget.onBeforeOpen != null ||
+              widget.searchHint != null);
+      final label =
+          widget.selectedLabel ??
+          selectedOption?.label ??
+          widget.hint ??
+          decoration.hintText ??
+          '';
+      final border = decoration.border;
+      return Shortcuts(
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.arrowDown): ActivateIntent(),
+        },
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: widget.dropdownKey,
+            onTap: fieldEnabled ? () => _openPopover(context) : null,
+            onFocusChange: (focused) {
+              if (_fieldFocused != focused) {
+                setState(() => _fieldFocused = focused);
+              }
+            },
+            borderRadius: border is OutlineInputBorder
+                ? border.borderRadius
+                : BorderRadius.circular(4),
+            child: InputDecorator(
+              decoration: decoration.copyWith(
+                enabled: fieldEnabled,
+                hintText: '',
+              ),
+              isEmpty: label.isEmpty,
+              isFocused: _fieldFocused,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          (widget.style ??
+                                  Theme.of(context).textTheme.titleMedium)
+                              ?.copyWith(
+                                color: fieldEnabled
+                                    ? selectedOption == null
+                                          ? palette.textTertiary
+                                          : widget.style?.color ??
+                                                palette.textPrimary
+                                    : Theme.of(context).disabledColor,
+                              ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    color: fieldEnabled
+                        ? palette.textSecondary
+                        : Theme.of(context).disabledColor,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Opacity(
       opacity: enabled ? 1.0 : 0.5,
@@ -913,7 +991,7 @@ class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
               children: [
                 Flexible(
                   child: Text(
-                    selectedOption.label,
+                    selectedLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -939,155 +1017,144 @@ class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
   }
 }
 
-class _OmniSettingsPopoverCard<T> extends StatelessWidget {
+class _OmniSettingsPopoverCard<T> extends StatefulWidget {
   const _OmniSettingsPopoverCard({
     required this.options,
     required this.selectedValue,
     required this.minWidth,
     required this.maxWidth,
+    required this.maxHeight,
     required this.onSelected,
+    this.searchHint,
   });
 
   final List<OmniSettingsOption<T>> options;
   final T selectedValue;
   final double minWidth;
   final double maxWidth;
+  final double maxHeight;
   final ValueChanged<T> onSelected;
+  final String? searchHint;
 
   @override
-  Widget build(BuildContext context) {
-    final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
+  State<_OmniSettingsPopoverCard<T>> createState() =>
+      _OmniSettingsPopoverCardState<T>();
+}
 
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        constraints: BoxConstraints(minWidth: minWidth, maxWidth: maxWidth),
-        padding: const EdgeInsets.all(5),
-        decoration: BoxDecoration(
-          color: isDark ? palette.surfaceElevated : palette.surfacePrimary,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: palette.borderSubtle.withValues(alpha: isDark ? 0.8 : 0.9),
-            width: 0.75,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: palette.shadowColor.withValues(
-                alpha: isDark ? 0.36 : 0.09,
+class _OmniSettingsPopoverCardState<T>
+    extends State<_OmniSettingsPopoverCard<T>> {
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  Widget _buildOption(OmniSettingsOption<T> option) {
+    return OmniMenuItem(
+      onTap: () => widget.onSelected(option.value),
+      label: option.label,
+      leading: option.leading,
+      subtitle: option.subtitle?.trim().isNotEmpty == true
+          ? option.subtitle
+          : null,
+      selected: option.value == widget.selectedValue,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (option.trailingLabel?.trim().isNotEmpty == true) ...[
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 88),
+              child: Text(
+                option.trailingLabel!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.omniPalette.textTertiary,
+                ),
               ),
-              blurRadius: 22,
-              spreadRadius: -2,
-              offset: const Offset(0, 8),
             ),
-            BoxShadow(
-              color: palette.shadowColor.withValues(
-                alpha: isDark ? 0.18 : 0.04,
-              ),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
+            const SizedBox(width: 8),
           ],
-        ),
-        child: IntrinsicWidth(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < options.length; i++) ...[
-                if (i > 0) const SizedBox(height: 2),
-                _buildOptionTile(context, options[i]),
-              ],
-            ],
+          SizedBox.square(
+            dimension: OmniMenuStyle.iconSize,
+            child: option.value == widget.selectedValue
+                ? const Icon(LucideIcons.check)
+                : null,
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildOptionTile(BuildContext context, OmniSettingsOption<T> option) {
-    final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
-    final selected = option.value == selectedValue;
-    final hasSubtitle =
-        option.subtitle != null && option.subtitle!.trim().isNotEmpty;
-
+  @override
+  Widget build(BuildContext context) {
+    final query = _searchController.text.trim().toLowerCase();
+    final options = widget.options.where(
+      (option) =>
+          query.isEmpty ||
+          option.label.toLowerCase().contains(query) ||
+          (option.trailingLabel?.toLowerCase().contains(query) ?? false) ||
+          (option.subtitle?.toLowerCase().contains(query) ?? false) ||
+          (option.searchText?.toLowerCase().contains(query) ?? false),
+    );
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(9.5),
-        onTap: () => onSelected(option.value),
-        splashColor: palette.accentPrimary.withValues(alpha: 0.08),
-        highlightColor: palette.accentPrimary.withValues(alpha: 0.04),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: selected
-                ? palette.accentPrimary.withValues(alpha: isDark ? 0.16 : 0.09)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(9.5),
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: 11,
-              vertical: hasSubtitle ? 9 : 9.5,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: hasSubtitle
-                  ? CrossAxisAlignment.start
-                  : CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        option.label,
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: selected
-                              ? palette.accentPrimary
-                              : palette.textPrimary,
-                          height: 1.32,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: widget.minWidth,
+          maxWidth: widget.maxWidth,
+          maxHeight: widget.maxHeight,
+        ),
+        child: OmniMenuSurface(
+          padding: EdgeInsets.zero,
+          child: widget.searchHint != null
+              ? SizedBox(
+                  width: widget.maxWidth,
+                  child: SingleChildScrollView(
+                    padding: OmniMenuStyle.panelPadding,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        OmniSettingsSearchField(
+                          controller: _searchController,
+                          focusNode: _searchFocusNode,
+                          hintText: widget.searchHint!,
+                          onChanged: (_) => setState(() {}),
                         ),
-                      ),
-                      if (hasSubtitle) ...[
-                        const SizedBox(height: 2.5),
-                        Text(
-                          option.subtitle!,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w400,
-                            color: palette.textSecondary,
-                            height: 1.38,
+                        const SizedBox(height: 8),
+                        if (options.isEmpty)
+                          Padding(
+                            padding: OmniMenuStyle.contentPadding,
+                            child: Text(
+                              context.trLegacy('没有匹配的选项'),
+                              style: TextStyle(
+                                color: context.omniPalette.textTertiary,
+                              ),
+                            ),
                           ),
-                        ),
+                        for (final option in options) _buildOption(option),
                       ],
-                    ],
+                    ),
+                  ),
+                )
+              : SingleChildScrollView(
+                  padding: OmniMenuStyle.panelPadding,
+                  child: IntrinsicWidth(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final option in options) _buildOption(option),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Padding(
-                  padding: EdgeInsets.only(top: hasSubtitle ? 2 : 0),
-                  child: SizedBox(
-                    width: 15,
-                    height: 15,
-                    child: selected
-                        ? Icon(
-                            LucideIcons.check,
-                            size: 15,
-                            color: palette.accentPrimary,
-                          )
-                        : null,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

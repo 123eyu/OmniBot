@@ -5,7 +5,6 @@ import 'package:ui/l10n/l10n.dart';
 import 'package:ui/services/assists_core_service.dart';
 import 'package:ui/services/device_service.dart';
 import 'package:ui/services/special_permission.dart';
-import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
@@ -158,7 +157,7 @@ class _AlarmSettingPageState extends State<AlarmSettingPage> {
           : SafeArea(
               top: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                padding: const EdgeInsets.fromLTRB(22, 12, 22, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -182,12 +181,10 @@ class _AlarmSettingPageState extends State<AlarmSettingPage> {
                       child: FilledButton(
                         onPressed: _saving ? null : _saveSettings,
                         style: FilledButton.styleFrom(
-                          backgroundColor: context.isDarkTheme
-                              ? palette.accentPrimary
-                              : AppColors.buttonPrimary,
-                          foregroundColor: context.isDarkTheme
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : Colors.white,
+                          backgroundColor: palette.accentPrimary,
+                          foregroundColor: Theme.of(context)
+                              .colorScheme
+                              .onPrimary,
                           minimumSize: const Size.fromHeight(48),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),

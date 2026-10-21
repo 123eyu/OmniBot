@@ -1,7 +1,6 @@
 import 'dart:async';
-import 'dart:ui';
+
 import 'package:flutter/material.dart';
-import 'package:simple_gradient_text/simple_gradient_text.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/core/mixins/page_lifecycle_mixin.dart';
@@ -19,6 +18,7 @@ import 'package:ui/services/assists_core_service.dart';
 import 'package:ui/services/workspace_memory_service.dart' as workspace_memory;
 
 import '../../models/memory_model.dart';
+
 import 'package:ui/utils/ui.dart';
 import 'package:ui/features/memory/pages/memory_center/widgets/memory_card_list.dart';
 import 'package:ui/theme/app_text_styles.dart';
@@ -709,10 +709,8 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
         children: [
           // 主内容区域
           Positioned.fill(
-            child: ImageFiltered(
-              imageFilter: _isBlurred
-                  ? ImageFilter.blur(sigmaX: 10, sigmaY: 10)
-                  : ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+            child: Opacity(
+              opacity: _isBlurred ? 0.4 : 1,
               child: Stack(
                 children: [
                   // Positioned(
@@ -795,7 +793,6 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
     BorderRadius? borderRadius,
   }) {
     final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
     return AnimatedBuilder(
       animation: _shimmerController,
       builder: (context, child) {
@@ -804,25 +801,10 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
           height: height,
           decoration: BoxDecoration(
             borderRadius: borderRadius ?? BorderRadius.circular(4),
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: isDark
-                  ? [
-                      palette.surfaceSecondary,
-                      Color.lerp(
-                        palette.surfaceSecondary,
-                        palette.accentPrimary,
-                        0.18,
-                      )!,
-                      palette.surfaceSecondary,
-                    ]
-                  : [
-                      Color(0xFF2DA5F0).withValues(alpha: 0.1),
-                      Color(0xFF1930D9).withValues(alpha: 0.25),
-                      Color(0xFF2DA5F0).withValues(alpha: 0.1),
-                    ],
-              stops: [0.0, _shimmerController.value, 1.0],
+            color: Color.lerp(
+              palette.surfaceSecondary,
+              palette.surfaceElevated,
+              _shimmerController.value,
             ),
           ),
         );
@@ -865,26 +847,15 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
                 ],
               )
             else
-              context.isDarkTheme
-                  ? Text(
-                      suggestionText,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        height: 1.5,
-                        color: palette.textPrimary,
-                      ),
-                    )
-                  : GradientText(
-                      suggestionText,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        height: 1.5,
-                        color: Colors.black,
-                      ),
-                      colors: [Color(0xFF2DA5F0), Color(0xFF1930D9)],
-                    ),
+              Text(
+                suggestionText,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  height: 1.5,
+                  color: palette.textPrimary,
+                ),
+              ),
           ],
         ),
       ),
@@ -961,7 +932,7 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
-        height: 40,
+        height: 44,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: isDark ? palette.segmentTrack : palette.surfacePrimary,
@@ -982,40 +953,7 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
                   margin: const EdgeInsets.symmetric(horizontal: 1),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(999),
-                    gradient: isDark
-                        ? LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Color.lerp(
-                                palette.surfaceElevated,
-                                palette.accentPrimary,
-                                0.18,
-                              )!,
-                              Color.lerp(
-                                palette.surfaceSecondary,
-                                palette.accentPrimary,
-                                0.30,
-                              )!,
-                            ],
-                          )
-                        : const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xFF2DA5F0), Color(0xFF1930D9)],
-                          ),
-                    boxShadow: isDark
-                        ? null
-                        : const [
-                            BoxShadow(
-                              color: Color(0x1F1930D9),
-                              blurRadius: 10,
-                              offset: Offset(0, 4),
-                            ),
-                          ],
-                    border: isDark
-                        ? Border.all(color: palette.borderSubtle)
-                        : null,
+                    color: palette.textPrimary,
                   ),
                 ),
               ),
@@ -1056,9 +994,9 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
               curve: Curves.easeOutCubic,
               style: TextStyle(
                 color: selected
-                    ? (context.isDarkTheme ? palette.textPrimary : Colors.white)
+                    ? palette.pageBackground
                     : palette.textSecondary,
-                fontSize: AppTextStyles.fontSizeMain,
+                fontSize: 15,
                 fontWeight: selected
                     ? AppTextStyles.fontWeightSemiBold
                     : AppTextStyles.fontWeightMedium,
@@ -1096,7 +1034,7 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
                     LegacyTextLocalizer.localize('短期记忆'),
                     style: TextStyle(
                       color: context.omniPalette.textPrimary,
-                      fontSize: AppTextStyles.fontSizeMain,
+                      fontSize: 15,
                       fontWeight: AppTextStyles.fontWeightSemiBold,
                       height: AppTextStyles.lineHeightH2,
                     ),
@@ -1168,10 +1106,8 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
 
     return Column(
       children: [
-        ImageFiltered(
-          imageFilter: _isSelectionMode
-              ? ImageFilter.blur(sigmaX: 10, sigmaY: 10)
-              : ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+        Opacity(
+          opacity: _isSelectionMode ? 0.4 : 1,
           child: Container(
             width: double.infinity,
             color: context.omniPalette.pageBackground,
@@ -1235,7 +1171,7 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
             context.l10n.memoryNoLongTerm,
             style: TextStyle(
               color: palette.textPrimary,
-              fontSize: AppTextStyles.fontSizeMain,
+              fontSize: 15,
               fontWeight: AppTextStyles.fontWeightMedium,
             ),
           ),
@@ -1279,7 +1215,7 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
             context.l10n.memoryNoShortTerm,
             style: TextStyle(
               color: palette.textPrimary,
-              fontSize: AppTextStyles.fontSizeMain,
+              fontSize: 15,
               fontWeight: AppTextStyles.fontWeightMedium,
             ),
           ),
@@ -1324,7 +1260,7 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
             context.l10n.memoryFilteredNoShortTerm,
             style: TextStyle(
               color: palette.textPrimary,
-              fontSize: AppTextStyles.fontSizeMain,
+              fontSize: 15,
               fontWeight: AppTextStyles.fontWeightMedium,
             ),
           ),
@@ -1413,8 +1349,8 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
                                     await _editMem0Memory(item);
                                   },
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.buttonPrimary,
-                              side: const BorderSide(color: Color(0x332C7FEB)),
+                              foregroundColor: palette.accentPrimary,
+                              side: BorderSide(color: palette.borderStrong),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -1478,7 +1414,7 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
                           context.l10n.memoryAdditionalInfo,
                           style: TextStyle(
                             color: palette.textPrimary,
-                            fontSize: AppTextStyles.fontSizeMain,
+                            fontSize: 15,
                             fontWeight: AppTextStyles.fontWeightSemiBold,
                           ),
                         ),
@@ -1707,7 +1643,7 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
               value,
               style: TextStyle(
                 color: palette.textPrimary,
-                fontSize: AppTextStyles.fontSizeMain,
+                fontSize: 15,
                 height: AppTextStyles.lineHeightH2,
               ),
             ),
@@ -1737,7 +1673,7 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
             style: TextStyle(
               fontSize: AppTextStyles.fontSizeH3,
               fontWeight: AppTextStyles.fontWeightMedium,
-              color: AppColors.primaryBlue,
+              color: context.omniPalette.textPrimary,
               height: AppTextStyles.lineHeightH1,
               letterSpacing: AppTextStyles.letterSpacingWide,
             ),
@@ -1746,7 +1682,7 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
           Text(
             context.l10n.memoryNoMemoriesDesc,
             style: TextStyle(
-              fontSize: AppTextStyles.fontSizeMain,
+              fontSize: 15,
               fontWeight: AppTextStyles.fontWeightRegular,
               color: context.omniPalette.textSecondary,
               height: AppTextStyles.lineHeightH3,

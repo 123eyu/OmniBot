@@ -312,42 +312,21 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: rootContext.isDarkTheme
-                    ? rootContext.omniPalette.surfacePrimary
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: rootContext.isDarkTheme
-                    ? Border.all(color: rootContext.omniPalette.borderSubtle)
-                    : null,
-                boxShadow: rootContext.isDarkTheme
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                color: rootContext.omniPalette.surfacePrimary,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: rootContext.omniPalette.borderSubtle),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: rootContext.isDarkTheme
-                          ? Color.lerp(
-                              rootContext.omniPalette.surfaceSecondary,
-                              rootContext.omniPalette.accentPrimary,
-                              0.14,
-                            )!
-                          : AppColors.primaryBlue.withValues(alpha: 0.1),
+                      color: rootContext.omniPalette.surfaceSecondary,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       Icons.alarm_on,
-                      color: rootContext.isDarkTheme
-                          ? rootContext.omniPalette.accentPrimary
-                          : AppColors.primaryBlue,
+                      color: rootContext.omniPalette.textPrimary,
                       size: 20,
                     ),
                   ),
@@ -364,9 +343,7 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: rootContext.isDarkTheme
-                                ? rootContext.omniPalette.textPrimary
-                                : AppColors.text,
+                            color: rootContext.omniPalette.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -376,9 +353,7 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
                               : '将在 ${task.getDisplayTimeText()} 执行',
                           style: TextStyle(
                             fontSize: 12,
-                            color: rootContext.isDarkTheme
-                                ? rootContext.omniPalette.textSecondary
-                                : AppColors.text70,
+                            color: rootContext.omniPalette.textSecondary,
                           ),
                         ),
                       ],
@@ -561,7 +536,7 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
             curve: Curves.easeOutCubic,
             style: TextStyle(
               color: selected ? palette.textPrimary : palette.textSecondary,
-              fontSize: 13.5,
+              fontSize: 15,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
             ),
             child: Text(label),
@@ -711,11 +686,7 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
               borderRadius: BorderRadius.circular(10),
             ),
             alignment: Alignment.center,
-            child: Icon(
-              Icons.alarm,
-              size: 17,
-              color: palette.accentPrimary,
-            ),
+            child: Icon(Icons.alarm, size: 17, color: palette.accentPrimary),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -727,7 +698,7 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 14.5,
+                    fontSize: 15,
                     fontWeight: FontWeight.w500,
                     color: palette.textPrimary,
                   ),
@@ -748,10 +719,7 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
                 const SizedBox(height: 5),
                 Text(
                   '$timeText  ·  ${alarm.timezone}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: palette.textTertiary,
-                  ),
+                  style: TextStyle(fontSize: 11, color: palette.textTertiary),
                 ),
               ],
             ),
@@ -763,11 +731,7 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
               width: 32,
               height: 32,
               alignment: Alignment.center,
-              child: Icon(
-                Icons.close,
-                size: 16,
-                color: palette.textTertiary,
-              ),
+              child: Icon(Icons.close, size: 16, color: palette.textTertiary),
             ),
           ),
         ],
@@ -802,7 +766,7 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
                     Text(
                       task.title,
                       style: TextStyle(
-                        fontSize: 14.5,
+                        fontSize: 15,
                         fontWeight: FontWeight.w500,
                         color: titleColor,
                         height: 1.45,
@@ -957,9 +921,8 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
     if (nextExecutionTime == null) {
       return false;
     }
-    return DateTime.fromMillisecondsSinceEpoch(
-      nextExecutionTime,
-    ).isBefore(DateTime.now());
+    return DateTime.fromMillisecondsSinceEpoch(nextExecutionTime)
+        .isBefore(DateTime.now());
   }
 
   String _formatDateTime(DateTime dateTime) {

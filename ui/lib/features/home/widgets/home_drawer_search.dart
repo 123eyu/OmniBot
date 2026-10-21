@@ -9,13 +9,16 @@ extension _HomeDrawerSearch on HomeDrawerState {
 
   List<_ConversationSearchResult> get _visibleConversationResults {
     if (_isSearchActive) {
-      return _searchResults;
+      return _searchResults
+          .where((result) => _matchesHomeFilter(result.conversation))
+          .toList(growable: false);
     }
     final reservedThreadKeys = _promotedConversationThreadKeys;
     return _allConversations
         .where(
           (conversation) =>
               !conversation.isArchived &&
+              _matchesHomeFilter(conversation) &&
               !conversation.isPinned &&
               !reservedThreadKeys.contains(conversation.threadKey),
         )
@@ -50,6 +53,7 @@ extension _HomeDrawerSearch on HomeDrawerState {
         .where(
           (conversation) =>
               !conversation.isArchived &&
+              _matchesHomeFilter(conversation) &&
               conversation.isPinned &&
               !reservedThreadKeys.contains(conversation.threadKey),
         )
@@ -220,6 +224,10 @@ extension _HomeDrawerSearch on HomeDrawerState {
   }
 
   Future<void> _loadConversations() async {
+    if (_isBatchConversationActionRunning) {
+      _refreshConversationsAfterBatch = true;
+      return;
+    }
     final generation = ++_conversationLoadGeneration;
     debugPrint('[HomeDrawer] Loading conversations...');
     setState(() {
@@ -247,6 +255,7 @@ extension _HomeDrawerSearch on HomeDrawerState {
       if (!mounted || generation != _conversationLoadGeneration) return;
       setState(() {
         _allConversations = loadedConversations;
+        _reconcileConversationSelection();
         _scheduledTasks = loadedScheduledTasks;
         isLoadingConversations = false;
       });

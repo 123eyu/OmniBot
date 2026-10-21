@@ -293,7 +293,7 @@ class _CodexRemoteFilePreviewPageState
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF2C7FEB)),
+                  borderSide: BorderSide(color: palette.accentPrimary),
                 ),
               ),
             ),

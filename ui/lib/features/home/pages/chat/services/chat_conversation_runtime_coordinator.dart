@@ -7,6 +7,7 @@ import 'package:ui/models/chat_message_model.dart';
 import 'package:ui/models/conversation_model.dart';
 import 'package:ui/services/assists_core_service.dart';
 import 'package:ui/services/agent_event_reducer.dart';
+import 'package:ui/services/agent_runtime_service.dart';
 import 'package:ui/services/agent_identity.dart';
 import 'package:ui/services/agent_message_kinds.dart';
 import 'package:ui/services/conversation_history_service.dart';
@@ -22,6 +23,7 @@ part 'chat_runtime_external_message_support.dart';
 part 'chat_runtime_message_support.dart';
 part 'chat_runtime_streaming_support.dart';
 part 'chat_runtime_thinking_support.dart';
+part 'chat_runtime_agent_event_support.dart';
 
 const String kChatRuntimeModeNormal = 'normal';
 const String kChatRuntimeModeOpenClaw = 'openclaw';
@@ -76,6 +78,13 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
   final Set<int> _hiddenNaHistoryViews = <int>{};
 
   bool _initialized = false;
+  ChatAgentEventProjection? _latestAgentEventProjection;
+
+  /// Presentation of the last event already consumed by the shared reducer.
+  /// Views observe this through the existing ChangeNotifier; they never own
+  /// the ACP subscription or reduce an event a second time.
+  ChatAgentEventProjection? get latestAgentEventProjection =>
+      _latestAgentEventProjection;
 
   bool get _isEnglish => LegacyTextLocalizer.isEnglish;
 
@@ -94,6 +103,9 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     AssistsMessageService.addOnExternalUserMessageAppendedCallback(
       _handleExternalUserMessageAppended,
     );
+    // The coordinator outlives Home and Chat routes. Returning to the list
+    // must not stop projection/persistence of an already admitted ACP turn.
+    AgentRuntimeService.events.listen(_handleAgentRuntimeEvent);
   }
 
   ChatConversationRuntimeState? runtimeFor({
@@ -180,6 +192,16 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
           runtime.lastAgentTurnId == normalizedTurnId ||
           runtime.activeAcpTurnId == normalizedTurnId) {
         return mode;
+      }
+    }
+    // Restored session metadata is a fallback. A cached mode must never
+    // shadow the mode that currently owns the official session or turn.
+    if (normalizedSessionId.isNotEmpty) {
+      for (final runtime in _runtimes.values) {
+        if (runtime.conversationId == conversationId &&
+            runtime.knownAcpSessionIds.contains(normalizedSessionId)) {
+          return runtime.mode;
+        }
       }
     }
     return null;
@@ -592,6 +614,22 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     String mode = kChatRuntimeModeAgent,
     ConversationModel? conversation,
   }) {
+    final result = _applyAgentEvent(
+      conversationId: conversationId,
+      event: event,
+      mode: mode,
+      conversation: conversation,
+    );
+    if (result.handled) notifyListeners();
+    return result;
+  }
+
+  AgentReduceResult _applyAgentEvent({
+    required int conversationId,
+    required Map<String, dynamic> event,
+    required String mode,
+    ConversationModel? conversation,
+  }) {
     ensureInitialized();
     if (_hiddenNaHistoryViews.contains(conversationId)) {
       return const AgentReduceResult(handled: false, affectsActiveTurn: false);
@@ -680,7 +718,6 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
           );
         }
       }
-      notifyListeners();
       if (!isEphemeralRuntime(conversationId: conversationId, mode: mode)) {
         schedulePersistRuntimeConversation(
           conversationId: conversationId,
@@ -1062,6 +1099,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     _taskBindings.clear();
     _ephemeralRuntimeKeys.clear();
     _hiddenNaHistoryViews.clear();
+    _latestAgentEventProjection = null;
   }
 
   void clearConversationRuntimeSession({

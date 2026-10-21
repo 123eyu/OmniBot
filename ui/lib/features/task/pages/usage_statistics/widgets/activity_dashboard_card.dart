@@ -1,29 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:ui/services/conversation_service.dart';
-import 'package:ui/services/token_usage_service.dart';
+import 'package:ui/services/usage_statistics_service.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/omni_theme_palette.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
-
-// ---------------------------------------------------------------------------
-//  Weekly token bucket
-// ---------------------------------------------------------------------------
-
-class _WeeklyTokenData {
-  final DateTime weekStart;
-  final Map<String, int> modelTokens = {};
-  int cachedTokens = 0;
-  int get totalTokens =>
-      modelTokens.values.fold(0, (sum, tokens) => sum + tokens);
-
-  _WeeklyTokenData({required this.weekStart});
-
-  void addModelTokens(String modelId, int tokens) {
-    if (tokens <= 0) return;
-    modelTokens[modelId] = (modelTokens[modelId] ?? 0) + tokens;
-  }
-}
 
 // ---------------------------------------------------------------------------
 //  Month label helper (heatmap)
@@ -62,7 +42,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   int _currentStreak = 0;
 
   // -- token data --
-  List<_WeeklyTokenData> _weeklyData = [];
+  List<WeeklyTokenData> _weeklyData = [];
   bool _isTokenLoading = true;
   int _totalCached = 0;
   Map<String, int> _modelTotals = {};
@@ -99,43 +79,22 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
 
   Future<void> _loadConversationData() async {
     try {
-      final conversations = await ConversationService.getAllConversations(
-        includeArchived: true,
-      );
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final startDate = today.subtract(
         Duration(days: widget.weeksToShow * 7 - 1),
       );
 
-      final Map<String, int> activityMap = {};
-      int totalInRange = 0;
-
-      for (final conv in conversations) {
-        final date = DateTime.fromMillisecondsSinceEpoch(conv.createdAt);
-        final dateOnly = DateTime(date.year, date.month, date.day);
-        if (dateOnly.isBefore(startDate) || dateOnly.isAfter(today)) continue;
-        final key = _dateKey(dateOnly);
-        activityMap[key] = (activityMap[key] ?? 0) + 1;
-        totalInRange++;
-      }
-
-      int streak = 0;
-      var checkDate = today;
-      while (true) {
-        if ((activityMap[_dateKey(checkDate)] ?? 0) > 0) {
-          streak++;
-          checkDate = checkDate.subtract(const Duration(days: 1));
-        } else {
-          break;
-        }
-      }
+      final summary = await UsageStatisticsService.getConversationActivity(
+        startDate: startDate,
+        today: today,
+      );
 
       if (mounted) {
         setState(() {
-          _activityMap = activityMap;
-          _totalConversations = totalInRange;
-          _currentStreak = streak;
+          _activityMap = summary.activityMap;
+          _totalConversations = summary.totalConversations;
+          _currentStreak = summary.currentStreak;
           _isConvLoading = false;
         });
         _tryStartFade();
@@ -164,52 +123,23 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
         alignedStart = alignedStart.subtract(const Duration(days: 1));
       }
 
-      final records = await TokenUsageService.getRecordsSince(
-        alignedStart.millisecondsSinceEpoch,
-      );
-
       final totalDays = today.difference(alignedStart).inDays + 1;
       final totalWeeks = (totalDays / 7).ceil();
-      final weeklyData = List.generate(
+      final weekStarts = List.generate(
         totalWeeks,
-        (i) => _WeeklyTokenData(
-          weekStart: alignedStart.add(Duration(days: i * 7)),
-        ),
+        (i) => alignedStart.add(Duration(days: i * 7)),
       );
-
-      int totalCached = 0;
-      final modelTotals = <String, int>{};
-
-      for (final record in records) {
-        final daysSinceStart = DateTime.fromMillisecondsSinceEpoch(
-          record.createdAt,
-        ).difference(alignedStart).inDays;
-        if (daysSinceStart < 0) continue;
-        final weekIndex = daysSinceStart ~/ 7;
-        if (weekIndex >= totalWeeks) continue;
-        final tokens = record.totalTokens;
-        final modelId = record.modelId;
-
-        weeklyData[weekIndex].cachedTokens += record.cachedTokens;
-        totalCached += record.cachedTokens;
-        weeklyData[weekIndex].addModelTokens(modelId, tokens);
-        if (tokens > 0) {
-          modelTotals[modelId] = (modelTotals[modelId] ?? 0) + tokens;
-        }
-      }
-
-      final modelOrder = modelTotals.keys.toList()
-        ..sort((a, b) {
-          final byTokens = (modelTotals[b] ?? 0).compareTo(modelTotals[a] ?? 0);
-          return byTokens != 0 ? byTokens : a.compareTo(b);
-        });
+      final summary = await UsageStatisticsService.getTokenUsage(
+        alignedStart: alignedStart,
+        weekStarts: weekStarts,
+      );
 
       if (mounted) {
         setState(() {
-          _weeklyData = weeklyData;
-          _totalCached = totalCached;
-          _modelTotals = modelTotals;
-          _modelOrder = modelOrder;
+          _weeklyData = summary.weeklyData;
+          _totalCached = summary.totalCached;
+          _modelTotals = summary.modelTotals;
+          _modelOrder = summary.modelOrder;
           _isTokenLoading = false;
         });
         _tryStartFade();
@@ -258,8 +188,8 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   }
 
   Color _cellColor(int level, bool isDark) {
-    const light = [0xFFEBF0F5, 0xFFBFDBF7, 0xFF7BBCE6, 0xFF3B8FD4, 0xFF1A56A8];
-    const dark = [0xFF242728, 0xFF1A3A5C, 0xFF1B5E94, 0xFF2178BD, 0xFF3B9FE8];
+    const light = [0xFFEBEBEB, 0xFFCCCCCC, 0xFFAAAAAA, 0xFF777777, 0xFF333333];
+    const dark = [0xFF292929, 0xFF444444, 0xFF777777, 0xFFAAAAAA, 0xFFDDDDDD];
     final c = isDark ? dark : light;
     return Color(c[level.clamp(0, 4)]);
   }
@@ -349,7 +279,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   // -----------------------------------------------------------------------
 
   Widget _buildSkeleton(OmniThemePalette palette, bool isDark) {
-    final c = isDark ? palette.surfaceSecondary : const Color(0xFFE8EFF8);
+    final c = palette.surfaceSecondary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -397,9 +327,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   // -----------------------------------------------------------------------
 
   Widget _buildStatsRow(OmniThemePalette palette, bool isDark) {
-    final accentBlue = isDark
-        ? const Color(0xFF7BBCE6)
-        : const Color(0xFF2C7FEB);
+    final accentBlue = palette.textPrimary;
     final streakColor = _currentStreak >= 3
         ? const Color(0xFFF59E0B)
         : accentBlue;
@@ -535,10 +463,10 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
           _switchTab(local.dx >= box.size.width / 2 ? _tokenTab : _convTab);
         },
         child: Container(
-          height: 28,
-          padding: const EdgeInsets.all(2),
+          height: 40,
+          padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
-            color: context.isDarkTheme ? palette.segmentTrack : Colors.white,
+            color: palette.segmentTrack,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: context.isDarkTheme
@@ -560,40 +488,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
                     margin: const EdgeInsets.symmetric(horizontal: 1),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
-                      gradient: context.isDarkTheme
-                          ? LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color.lerp(
-                                  palette.surfaceElevated,
-                                  palette.accentPrimary,
-                                  0.18,
-                                )!,
-                                Color.lerp(
-                                  palette.surfaceSecondary,
-                                  palette.accentPrimary,
-                                  0.30,
-                                )!,
-                              ],
-                            )
-                          : const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [Color(0xFF2DA5F0), Color(0xFF1930D9)],
-                            ),
-                      boxShadow: context.isDarkTheme
-                          ? null
-                          : const [
-                              BoxShadow(
-                                color: Color(0x1F1930D9),
-                                blurRadius: 10,
-                                offset: Offset(0, 4),
-                              ),
-                            ],
-                      border: context.isDarkTheme
-                          ? Border.all(color: palette.borderSubtle)
-                          : null,
+                      color: palette.textPrimary,
                     ),
                   ),
                 ),
@@ -627,12 +522,8 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
             style: TextStyle(
-              color: selected
-                  ? (context.isDarkTheme ? palette.textPrimary : Colors.white)
-                  : (context.isDarkTheme
-                        ? palette.textSecondary
-                        : AppColors.text70),
-              fontSize: 12,
+              color: selected ? palette.pageBackground : palette.textSecondary,
+              fontSize: 14,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
             ),
             child: Text(label),
@@ -666,6 +557,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   }
 
   Widget _buildHeatmapGrid(bool isDark) {
+    final palette = context.omniPalette;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final daysBack = widget.weeksToShow * 7 - 1;
@@ -714,9 +606,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w500,
-                              color: isDark
-                                  ? const Color(0xFF9A9488)
-                                  : const Color(0xFF98A5BB),
+                              color: palette.textTertiary,
                             ),
                           ),
                         ),
@@ -757,9 +647,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
                                     style: TextStyle(
                                       fontSize: 9,
                                       fontWeight: FontWeight.w500,
-                                      color: isDark
-                                          ? const Color(0xFF9A9488)
-                                          : const Color(0xFF98A5BB),
+                                      color: palette.textTertiary,
                                     ),
                                   )
                                 : const SizedBox.shrink(),
@@ -798,14 +686,12 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
                           preferBelow: false,
                           verticalOffset: 12,
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF2D3032)
-                                : const Color(0xFF353E53),
+                            color: palette.textPrimary,
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          textStyle: const TextStyle(
+                          textStyle: TextStyle(
                             fontSize: 11,
-                            color: Colors.white,
+                            color: palette.pageBackground,
                           ),
                           child: Container(
                             width: cellSize,
@@ -1030,12 +916,13 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
                   preferBelow: false,
                   verticalOffset: 12,
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xFF2D3032)
-                        : const Color(0xFF353E53),
+                    color: palette.textPrimary,
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  textStyle: const TextStyle(fontSize: 11, color: Colors.white),
+                  textStyle: TextStyle(
+                    fontSize: 11,
+                    color: palette.pageBackground,
+                  ),
                   child: SizedBox(
                     width: barWidth,
                     height: barAreaHeight,
@@ -1099,7 +986,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
     );
   }
 
-  List<String> _orderedModelsForWeek(_WeeklyTokenData week) {
+  List<String> _orderedModelsForWeek(WeeklyTokenData week) {
     final ordered = _modelOrder
         .where((modelId) => (week.modelTokens[modelId] ?? 0) > 0)
         .toList();
@@ -1111,7 +998,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
     return ordered;
   }
 
-  String _buildWeekTooltip(_WeeklyTokenData week, List<String> modelIds) {
+  String _buildWeekTooltip(WeeklyTokenData week, List<String> modelIds) {
     final range = _formatWeekRange(week.weekStart);
     final lines = <String>[
       '$range · ${_formatTokenCount(week.totalTokens)} tokens',

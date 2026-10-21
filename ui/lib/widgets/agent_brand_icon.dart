@@ -33,7 +33,7 @@ class AgentBrandIcon extends StatelessWidget {
 
   static const Map<String, _AgentBrand> _brands = {
     'xiaowan-acp': _AgentBrand(
-      'assets/home/avatar.svg',
+      AgentAvatarService.defaultAvatarAsset,
       presentation: _AgentBrandPresentation.avatar,
     ),
     'codex-acp': _AgentBrand('assets/agents/codex.svg'),

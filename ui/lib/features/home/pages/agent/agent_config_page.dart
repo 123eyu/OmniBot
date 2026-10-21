@@ -100,7 +100,7 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
         throw StateError('Unknown ACP Agent: ${widget.agentId}');
       }
       Map<String, dynamic> payload = const {};
-      if (agent.builtIn) {
+      if (agent.builtIn && agent.configurationAvailable) {
         payload = await AgentRuntimeService.readAgentConfig(agent.id);
       }
       if (!mounted) return;
@@ -108,11 +108,17 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
       _syncPayload(payload);
       setState(() {
         _agent = agent;
-        _kind = agent.builtIn ? (payload['kind']?.toString() ?? '') : 'profile';
+        _kind = !agent.configurationAvailable
+            ? ''
+            : agent.builtIn
+            ? (payload['kind']?.toString() ?? '')
+            : 'profile';
         _loading = false;
         _error = null;
       });
-      if (agent.builtIn && _kind != 'na-cloud') {
+      if (agent.builtIn &&
+          agent.configurationAvailable &&
+          _kind != 'na-cloud') {
         unawaited(_loadSharedModelSelection());
       }
     } catch (error) {
@@ -137,8 +143,9 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
   }
 
   void _syncPayload(Map<String, dynamic> payload) {
-    _naDevelopment = payload['connectionMode'] == 'development';
     _naDevelopmentAvailable = payload['developmentAvailable'] == true;
+    _naDevelopment =
+        _naDevelopmentAvailable && payload['connectionMode'] == 'development';
     _naSignedIn = payload['signedIn'] == true;
     _configRevision = switch (payload['revision']) {
       int value => value,
@@ -270,7 +277,7 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
   }
 
   Future<void> _save() async {
-    if (_saving || _agent == null) return;
+    if (_saving || _agent == null || !_agent!.configurationAvailable) return;
     setState(() {
       _saving = true;
       _error = null;
@@ -481,10 +488,12 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
               ? const Center(child: CircularProgressIndicator())
               : _error != null && _agent == null
               ? _ErrorState(error: _error!, onRetry: _load)
+              : _agent?.configurationAvailable == false
+              ? _buildManagedAccountNotice()
               : ListView(
                   padding: edgeToEdgeScrollPadding(
                     context,
-                    const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                    const EdgeInsets.fromLTRB(22, 12, 22, 28),
                   ),
                   children: [
                     SettingsSectionTitle(
@@ -534,6 +543,32 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
                     ],
                   ],
                 ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildManagedAccountNotice() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _text(
+                'Na 自动使用当前登录账号，无需配置。',
+                'Na uses your signed-in account automatically. No configuration is needed.',
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              key: const Key('na-account'),
+              onPressed: () => GoRouterManager.push('/my/account'),
+              child: Text(_text('管理账号', 'Manage account')),
+            ),
+          ],
         ),
       ),
     );
@@ -709,45 +744,61 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
           ),
         ),
         const SizedBox(height: 14),
-        DropdownButtonFormField<String>(
-          key: ValueKey('deepseek-harness-reasoning-$_reasoningEffort'),
-          initialValue: _reasoningEffort,
+        InputDecorator(
           decoration: InputDecoration(
             labelText: _text('推理强度', 'Reasoning effort'),
           ),
-          items: const [
-            DropdownMenuItem(value: 'off', child: Text('Off')),
-            DropdownMenuItem(value: 'high', child: Text('High')),
-            DropdownMenuItem(value: 'max', child: Text('Max')),
-          ],
-          onChanged: (value) {
-            if (value != null) setState(() => _reasoningEffort = value);
-          },
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: OmniSettingsDropdown<String?>(
+              hint: _text('选择', 'Select'),
+              dropdownKey: ValueKey(
+                'deepseek-harness-reasoning-$_reasoningEffort',
+              ),
+              value: _reasoningEffort,
+              options: const [
+                OmniSettingsOption(value: 'off', label: 'Off'),
+                OmniSettingsOption(value: 'high', label: 'High'),
+                OmniSettingsOption(value: 'max', label: 'Max'),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _reasoningEffort = value);
+              },
+            ),
+          ),
         ),
         const SizedBox(height: 14),
-        DropdownButtonFormField<String>(
-          key: ValueKey('deepseek-harness-permission-$_permissionMode'),
-          initialValue: _permissionMode,
+        InputDecorator(
           decoration: InputDecoration(
             labelText: _text('权限模式', 'Permission mode'),
           ),
-          items: [
-            DropdownMenuItem(
-              value: 'read-only',
-              child: Text(_text('只读', 'Read-only')),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: OmniSettingsDropdown<String?>(
+              hint: _text('选择', 'Select'),
+              dropdownKey: ValueKey(
+                'deepseek-harness-permission-$_permissionMode',
+              ),
+              value: _permissionMode,
+              options: [
+                OmniSettingsOption(
+                  value: 'read-only',
+                  label: _text('只读', 'Read-only'),
+                ),
+                OmniSettingsOption(
+                  value: 'workspace-write',
+                  label: _text('工作区可写', 'Workspace write'),
+                ),
+                OmniSettingsOption(
+                  value: 'danger-full-access',
+                  label: _text('完全访问', 'Full access'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _permissionMode = value);
+              },
             ),
-            DropdownMenuItem(
-              value: 'workspace-write',
-              child: Text(_text('工作区可写', 'Workspace write')),
-            ),
-            DropdownMenuItem(
-              value: 'danger-full-access',
-              child: Text(_text('完全访问', 'Full access')),
-            ),
-          ],
-          onChanged: (value) {
-            if (value != null) setState(() => _permissionMode = value);
-          },
+          ),
         ),
       ],
     );
@@ -865,7 +916,7 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
               child: Text(
                 _text('启用 Agent', 'Enable Agent'),
                 style: TextStyle(
-                  fontSize: 14.5,
+                  fontSize: 15,
                   fontWeight: FontWeight.w500,
                   color: context.omniPalette.textPrimary,
                 ),

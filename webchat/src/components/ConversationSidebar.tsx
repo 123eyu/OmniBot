@@ -395,7 +395,7 @@ export function ConversationSidebar({
           )}
         </div>
         <div
-          className="archive-popover-anchor"
+          className={`archive-popover-anchor${archivePanelOpen ? " expanded" : ""}`}
           ref={archivePanelAnchorRef}
         >
           <button
@@ -489,7 +489,7 @@ export function ConversationSidebar({
           )}
         </div>
         <div
-          className="new-conversation-anchor"
+          className={`new-conversation-anchor${createMenuOpen ? " expanded" : ""}`}
           ref={createMenuAnchorRef}
           onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {

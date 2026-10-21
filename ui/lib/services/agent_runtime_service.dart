@@ -613,7 +613,8 @@ class AcpAgentProfile {
     this.discoveryCommand,
     this.managedAdapter = false,
     this.packageVersion,
-  });
+    bool? configurationAvailable,
+  }) : configurationAvailable = configurationAvailable ?? id != 'na-cloud';
 
   final String id;
   final String name;
@@ -634,6 +635,10 @@ class AcpAgentProfile {
   final String? discoveryCommand;
   final bool managedAdapter;
   final AgentPackageVersion? packageVersion;
+
+  /// Native build policy owns whether this Agent exposes a configuration page.
+  /// Na is account managed unless the native develop flavor opts in.
+  final bool configurationAvailable;
 
   factory AcpAgentProfile.fromMap(Map<dynamic, dynamic> map) {
     final rawArguments = map['arguments'];
@@ -669,6 +674,9 @@ class AcpAgentProfile {
       managedAdapter: map['managedAdapter'] == true,
       packageVersion: map['packageVersion'] is Map
           ? AgentPackageVersion.fromMap(map['packageVersion'] as Map)
+          : null,
+      configurationAvailable: map['configurationAvailable'] is bool
+          ? map['configurationAvailable'] as bool
           : null,
     );
   }
@@ -1192,6 +1200,7 @@ class AgentRuntimeService {
   // native compatibility adapter and are not exposed as a Dart service API.
   static Future<Map<String, dynamic>> newSession({
     int? conversationId,
+    String? agentId,
     String? cwd,
     String? model,
     String? effort,
@@ -1201,6 +1210,8 @@ class AgentRuntimeService {
   }) {
     return _invokeMap('session/new', {
       if (conversationId != null) 'conversationId': conversationId,
+      if (agentId != null && agentId.trim().isNotEmpty)
+        'agentId': agentId.trim(),
       if (cwd != null && cwd.trim().isNotEmpty) 'cwd': cwd.trim(),
       if (model != null && model.trim().isNotEmpty) 'model': model.trim(),
       if (effort != null && effort.trim().isNotEmpty) 'effort': effort.trim(),
