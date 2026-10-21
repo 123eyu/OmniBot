@@ -403,7 +403,6 @@ extension _HomeDrawerHome on HomeDrawerState {
     // plugin registry again so newly enabled or removed actions are reflected.
     await _loadWebQuickActions();
     if (!mounted || !anchorContext.mounted) return;
-    final english = Localizations.localeOf(context).languageCode == 'en';
     final actions = [
       _DrawerShortcutAction(
         label: context.l10n.homeDrawerArchive,
@@ -413,7 +412,7 @@ extension _HomeDrawerHome on HomeDrawerState {
       ..._shortcutActions,
       if (_webQuickActions.isNotEmpty)
         _DrawerShortcutAction(
-          label: english ? 'Web interfaces' : 'Web 界面',
+          label: 'Agent WebUI',
           icon: LucideIcons.globe,
           onTap: _showHomeWebActions,
         ),

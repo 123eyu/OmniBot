@@ -1363,16 +1363,16 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('home-menu-button')));
     await tester.pumpAndSettle();
-    expect(find.text('Web 界面'), findsNothing);
+    expect(find.text('Agent WebUI'), findsNothing);
     await tester.tapAt(const Offset(4, 4));
     await tester.pumpAndSettle();
 
     installed = true;
     await tester.tap(find.byKey(const ValueKey('home-menu-button')));
     await tester.pumpAndSettle();
-    expect(find.text('Web 界面'), findsOneWidget);
+    expect(find.text('Agent WebUI'), findsOneWidget);
     running = true;
-    await tester.tap(find.text('Web 界面'));
+    await tester.tap(find.text('Agent WebUI'));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('home-drawer-web-kimi-code-acp')),
@@ -1388,7 +1388,7 @@ void main() {
     installed = false;
     await tester.tap(find.byKey(const ValueKey('home-menu-button')));
     await tester.pumpAndSettle();
-    expect(find.text('Web 界面'), findsNothing);
+    expect(find.text('Agent WebUI'), findsNothing);
     expect(tester.state(find.byType(HomeDrawer)), same(homeState));
     expect(tester.takeException(), isNull);
   });

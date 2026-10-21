@@ -681,7 +681,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                   if (_pluginActions.isNotEmpty) ...[
                     const SizedBox(height: 22),
                     OmniSettingsGroup(
-                      title: _text('本地 Web 界面', 'Local Web interfaces'),
+                      title: 'Agent WebUI',
                       translateTitle: false,
                       dividerIndent: 46,
                       children: [

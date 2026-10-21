@@ -606,7 +606,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('本地 Web 界面'), findsOneWidget);
+    expect(find.text('Agent WebUI'), findsOneWidget);
     expect(find.text('OpenCode Web'), findsOneWidget);
     expect(find.text('在系统浏览器中打开本机 Web 界面'), findsOneWidget);
     await tester.tap(
