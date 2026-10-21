@@ -1683,6 +1683,19 @@ void main() {
           if (call.method == 'listActions') {
             return <Map<String, Object?>>[
               <String, Object?>{
+                'id': 'open_opencode_web',
+                'pluginId': 'com.omnimind.agent-web',
+                'displayName': 'OpenCode Web',
+                'description': 'Open OpenCode Web',
+                'presentation': <String, Object?>{
+                  'placements': <String>['home_drawer_quick_launch'],
+                  'agentId': 'opencode-acp',
+                  'quickLaunchOrder': 2,
+                  'label': <String, String>{'zh': 'OpenCode Web', 'en': 'OpenCode Web'},
+                  'shortLabel': <String, String>{'zh': 'OpenCode Web', 'en': 'OpenCode Web'},
+                },
+              },
+              <String, Object?>{
                 'id': 'open_deepseek_harness_web',
                 'pluginId': 'com.omnimind.agent-web',
                 'displayName': 'DeepSeek Harness Web',
@@ -1761,13 +1774,16 @@ void main() {
     expect(deepSeek, findsOneWidget);
     expect(tester.getCenter(kimi).dy, lessThan(tester.getCenter(deepSeek).dy));
 
-    await tester.tap(kimi);
+    final openCode = find.byKey(const ValueKey('home-drawer-web-opencode-acp'));
+    expect(openCode, findsOneWidget);
+    expect(tester.getCenter(deepSeek).dy, lessThan(tester.getCenter(openCode).dy));
+    await tester.tap(openCode);
     await tester.pumpAndSettle();
 
     final invocation = calls.lastWhere((call) => call.method == 'invokeAction');
     expect(invocation.arguments, <String, Object?>{
       'pluginId': 'com.omnimind.agent-web',
-      'actionId': 'open_kimi_web',
+      'actionId': 'open_opencode_web',
       'arguments': <String, dynamic>{},
     });
   });

@@ -1,6 +1,10 @@
 package cn.com.omnimind.bot.plugin.official.agentweb
 
 import cn.com.omnimind.bot.agent.runtime.AgentProviderCredentials
+import cn.com.omnimind.baselib.llm.ProviderModelOption
+import com.google.gson.Gson
+import com.google.gson.JsonParser
+import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -22,6 +26,9 @@ class AgentWebRuntimeTest {
                 "--no-open --host 127.0.0.1 --port 0",
             AgentWebService.DEEPSEEK_HARNESS.command,
         )
+        assertTrue(AgentWebService.OPENCODE.command.contains("opencode serve --hostname 127.0.0.1 --port 0"))
+        assertFalse(AgentWebService.OPENCODE.command.contains("--service"))
+        assertEquals(2, AgentWebService.OPENCODE.minimumMajorVersion)
     }
 
     @Test
@@ -331,6 +338,105 @@ class AgentWebRuntimeTest {
     }
 
     @Test
+    fun `OpenCode waits for matching startup credentials and rejects foreign addresses`() {
+        val password = "p".repeat(43)
+        val transcript = "server listening on http://127.0.0.1:4088\nserver password $password\n"
+        assertEquals("http://127.0.0.1:4088", AgentWebTranscriptParser.findUrl(AgentWebUrlKind.OPENCODE, transcript))
+        assertEquals(password, AgentWebTranscriptParser.findOpenCodeEndpoint(transcript)?.password)
+        assertFalse(AgentWebTranscriptParser.findOpenCodeEndpoint(transcript).toString().contains(password))
+        assertNull(AgentWebTranscriptParser.findUrl(AgentWebUrlKind.OPENCODE, transcript.substringBefore("server password")))
+        assertNull(AgentWebTranscriptParser.findOpenCodeEndpoint(transcript.replace("127.0.0.1", "example.com")))
+        assertNull(AgentWebTranscriptParser.findOpenCodeEndpoint(transcript.replace(":4088", ":4088/path")))
+        assertNull(AgentWebTranscriptParser.findOpenCodeEndpoint(transcript.replace(":4088", ":4088?redirect=external")))
+        // An old process's password must not authenticate a new process.
+        assertNull(AgentWebTranscriptParser.findOpenCodeEndpoint(transcript +
+            "__OMNIBOT_AGENT_WEB_CONFIG__:${"b".repeat(64)}\nserver listening on http://127.0.0.1:4089\n"))
+    }
+
+    @Test
+    fun `OpenCode reuses its process but creates a new pairing link for every open`() = runBlocking {
+        val gateway = FakeGateway()
+        val configuration = FakeConfigurationProvider()
+        val manager = AgentWebRuntimeManager(gateway, configuration, pollIntervalMs = 90_000L, wait = {})
+        assertEquals(AgentWebResultCode.OPENED, manager.open(AgentWebService.OPENCODE).code)
+        assertEquals(AgentWebResultCode.RUNNING, manager.status(AgentWebService.OPENCODE).code)
+        assertEquals(1, gateway.pairCount) // Status checks do not create sign-in links.
+        assertTrue(manager.open(AgentWebService.OPENCODE).reused)
+        assertEquals(1, gateway.launchCount)
+        assertEquals(2, gateway.openedUrls.toSet().size)
+        assertTrue(gateway.openedUrls.all { it.contains("/auth/connect/") })
+        configuration.provider = provider(apiKey = "new-key")
+        assertEquals(AgentWebResultCode.OPENED, manager.open(AgentWebService.OPENCODE).code)
+        assertEquals(2, gateway.launchCount)
+        assertEquals(1, gateway.stopCount)
+        assertEquals(AgentWebResultCode.STOPPED, manager.stop(AgentWebService.OPENCODE).code)
+        assertEquals(AgentWebResultCode.NOT_RUNNING, manager.status(AgentWebService.OPENCODE).code)
+    }
+
+    @Test
+    fun `failed OpenCode pairing preserves the running process and exposes no credentials`() = runBlocking {
+        val gateway = FakeGateway().apply { pairingSucceeds = false }
+        val manager = AgentWebRuntimeManager(gateway, FakeConfigurationProvider(), pollIntervalMs = 90_000L, wait = {})
+        val result = manager.open(AgentWebService.OPENCODE)
+        assertEquals(AgentWebResultCode.PAIRING_FAILED, result.code)
+        assertTrue(result.running)
+        assertTrue(gateway.openedUrls.isEmpty())
+        assertEquals(0, gateway.stopCount)
+        assertFalse(result.toJson().toString().contains("secret"))
+        assertFalse(result.toJson().toString().contains("password"))
+    }
+
+    @Test
+    fun `OpenCode Web reuses the ACP config owner for every Provider wire`() = runBlocking {
+        for ((protocol, wire) in listOf("openai_compatible" to "chat_completions",
+            "openai_compatible" to "responses", "anthropic" to "chat_completions")) {
+            val configuration = FakeConfigurationProvider().apply {
+                provider = provider(baseUrl = "https://fixture.invalid/v1", apiKey = "fixture-key",
+                    protocolType = protocol, wireApi = wire, customHeaders = mapOf("X-Fixture" to "fixture-header"))
+                model = "org/test-model"
+            }
+            val gateway = FakeGateway()
+            val manager = AgentWebRuntimeManager(gateway, configuration, pollIntervalMs = 90_000L, wait = {})
+            assertEquals(AgentWebResultCode.OPENED, manager.open(AgentWebService.OPENCODE).code)
+            val launch = buildAgentWebLaunchConfiguration(AgentWebService.OPENCODE, configuration.provider, configuration.model!!)
+            val content = launch.managedFiles.getValue(OPENCODE_WEB_CONFIG_PATH)
+            val root = JsonParser.parseString(content).asJsonObject
+            val provider = root.getAsJsonObject("providers").getAsJsonObject("omnibot")
+            assertEquals("omnibot/org/test-model", root.get("model").asString)
+            assertEquals(when {
+                protocol == "anthropic" -> "@opencode/ai/providers/anthropic-compatible"
+                wire == "responses" -> "@opencode/ai/providers/openai-compatible/responses"
+                else -> "@opencode/ai/providers/openai-compatible"
+            }, provider.get("package").asString)
+            assertEquals(OPENCODE_WEB_CONFIG_PATH, launch.environment["OPENCODE_CONFIG"])
+            assertEquals(setOf(OPENCODE_WEB_CONFIG_PATH), launch.managedFiles.keys)
+            assertFalse(content.contains("fixture-key"))
+            assertFalse(content.contains("fixture-header"))
+            assertFalse(gateway.lastLaunchCommand.contains("fixture-key"))
+            // Used by the real-CLI HTTP smoke test; no browser automation.
+            File("build/reports/agent-web/opencode-$protocol-$wire.json").apply {
+                parentFile.mkdirs()
+                writeText(Gson().toJson(mapOf("protocol" to protocol, "wire" to wire,
+                    "environment" to launch.environment, "files" to launch.managedFiles,
+                    "command" to gateway.lastLaunchCommand)))
+            }
+        }
+    }
+
+    @Test
+    fun `OpenCode Web forwards the cached Provider catalog and declared capabilities`() {
+        val launch = buildAgentWebLaunchConfiguration(AgentWebService.OPENCODE, provider(), "model-a",
+            providerModels = listOf(ProviderModelOption("model-a", reasoning = true,
+                inputModalities = listOf("text", "image")), ProviderModelOption("model-b", toolCall = true)))
+        val root = JsonParser.parseString(launch.managedFiles.getValue(OPENCODE_WEB_CONFIG_PATH)).asJsonObject
+        val models = root.getAsJsonObject("providers").getAsJsonObject("omnibot").getAsJsonObject("models")
+        assertEquals(setOf("model-a", "model-b"), models.keySet())
+        val capabilities = models.getAsJsonObject("model-a").getAsJsonObject("capabilities")
+        assertEquals(listOf("text", "image"), capabilities.getAsJsonArray("input").map { it.asString })
+        assertTrue(capabilities.getAsJsonObject("reasoning").get("supported").asBoolean)
+    }
+
+    @Test
     fun `manager reuses matching process and restarts after Provider changes`() = runBlocking {
         val gateway = FakeGateway()
         val configuration = FakeConfigurationProvider()
@@ -471,9 +577,20 @@ class AgentWebRuntimeTest {
         var stopSucceeds = true
         var lastLaunchCommand = ""
         var lastLaunchEnvironment = emptyMap<String, String>()
+        var pairCount = 0
+        var pairingSucceeds = true
         val openedUrls = mutableListOf<String>()
 
-        override suspend fun isCommandAvailable(commandName: String): Boolean = commandAvailable
+        override suspend fun isRuntimeAvailable(service: AgentWebService): Boolean = commandAvailable
+
+        override suspend fun prepareBrowserUrl(service: AgentWebService, snapshot: AgentWebRuntimeSnapshot): String? {
+            if (service == AgentWebService.OPENCODE) {
+                if (!pairingSucceeds) error("secret pairing failure")
+                pairCount++
+                return "http://127.0.0.1:4088/auth/connect/${"c".repeat(22)}$pairCount"
+            }
+            return AgentWebTranscriptParser.findUrl(service.urlKind, snapshot.transcript)
+        }
 
         override suspend fun snapshot(sessionId: String): AgentWebRuntimeSnapshot? =
             if (running || transcript.isNotEmpty()) {
@@ -501,6 +618,8 @@ class AgentWebRuntimeTest {
                     appendLine(
                         if (sessionId.contains("kimi")) {
                             "Kimi server: http://127.0.0.1:58627/#token=${"k".repeat(32)}"
+                        } else if (sessionId.contains("opencode")) {
+                            "server listening on http://127.0.0.1:4088\nserver password ${"p".repeat(43)}"
                         } else {
                             "dsh web: http://127.0.0.1:3080/?token=${"d".repeat(32)}"
                         },
