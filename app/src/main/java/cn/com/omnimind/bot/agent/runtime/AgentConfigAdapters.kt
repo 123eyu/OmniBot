@@ -164,6 +164,12 @@ private val PROVIDER_OWNED_ENVIRONMENT_KEYS = setOf(
     "KIMI_MODEL_CAPABILITIES",
     "KIMI_MODEL_THINKING_EFFORT",
     "KIMI_CODE_CUSTOM_HEADERS",
+    "PI_CODING_AGENT_DIR",
+    "OMNIBOT_PI_MODELS_PATH",
+    "OMNIBOT_PI_MODEL",
+    "OMNIBOT_PI_API_KEY",
+    "OMNIBOT_PI_HEADERS",
+    "OMNIBOT_PI_SKILL_PATHS",
 )
 private const val PROVIDER_HEADER_ENV_PREFIX = "OMNIBOT_PROVIDER_HEADER_"
 
@@ -195,6 +201,7 @@ internal object AgentConfigAdapterRegistry {
         "codex" to CodexConfigAdapter,
         "claude-code" to ClaudeCodeConfigAdapter,
         "kimi-code" to KimiCodeConfigAdapter,
+        "pi" to PiConfigAdapter,
         "open-code" to OpenCodeConfigAdapter,
     )
 

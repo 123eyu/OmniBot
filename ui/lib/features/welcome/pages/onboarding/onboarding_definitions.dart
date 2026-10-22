@@ -164,6 +164,13 @@ const List<OptionalTool> optionalTools = <OptionalTool>[
     descriptionEn: 'Open-source coding agent',
   ),
   OptionalTool(
+    id: 'pi',
+    icon: LucideIcons.pi,
+    label: 'Pi',
+    descriptionZh: '可扩展的编程 Agent',
+    descriptionEn: 'Extensible coding agent',
+  ),
+  OptionalTool(
     id: 'ssh_client',
     icon: LucideIcons.server,
     label: 'SSH',

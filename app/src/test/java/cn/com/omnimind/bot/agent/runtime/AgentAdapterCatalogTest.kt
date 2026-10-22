@@ -13,7 +13,7 @@ class AgentAdapterCatalogTest {
         val profiles = AcpAgentCatalog.parse(File("src/main/assets/acp/agents.json").readText()) {
             File("src/main/assets/$it").readText()
         }.agents
-        assertEquals(7, profiles.size)
+        assertEquals(8, profiles.size)
         for (profile in profiles) {
             val runtime = requireNotNull(AcpAgentProfileStore.officialRuntime(profile))
             val adapter = runtime.harnessAdapter
@@ -86,7 +86,7 @@ class AgentAdapterCatalogTest {
                     }
                     "claude-code" -> assertEquals("fixture-key", mapping.environment["ANTHROPIC_API_KEY"])
                     "codex" -> assertEquals("responses", mapping.codexWireApi)
-                    "deepseek-harness" -> assertTrue(files.single().content.contains(when {
+                    "deepseek-harness", "pi" -> assertTrue(files.single().content.contains(when {
                         protocol == "anthropic" -> "anthropic-messages"
                         wire == "responses" -> "openai-responses"
                         else -> "openai-completions"

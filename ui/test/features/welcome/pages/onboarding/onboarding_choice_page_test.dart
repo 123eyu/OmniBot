@@ -205,6 +205,28 @@ void main() {
     messenger.setMockMethodCallHandler(accountChannel, null);
   });
 
+  testWidgets('Pi selection uses the shared terminal installer', (tester) async {
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(buildTestApp());
+    await tester.pump(const Duration(milliseconds: 50));
+    await openToolsPage(tester);
+    final pi = find.byKey(const ValueKey('tutorial-tool-pi'));
+    await showFinder(tester, pi);
+    await tester.tap(pi);
+    await tester.pump();
+    final start = find.byKey(const ValueKey('tutorial-environment-primary'));
+    await showFinder(tester, start);
+    await tester.tap(start);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(requestedPackageIds, contains('pi'));
+    expect(requestedPackageIds, isNot(contains('codex')));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
   testWidgets(
     'environment setup uses short pages and a circular progress page',
     (tester) async {

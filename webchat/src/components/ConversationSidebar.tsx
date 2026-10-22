@@ -57,6 +57,7 @@ const SECTION_ORDER = [
   "deepseek",
   "claude",
   "opencode",
+  "pi",
   "acp",
   "omni",
   "chat",
@@ -70,6 +71,7 @@ const SECTION_LABELS: Record<ConversationSection, string> = {
   deepseek: "DeepSeek Harness",
   claude: "Claude Code",
   opencode: "OpenCode",
+  pi: "Pi",
   acp: "Agent",
   omni: "小万",
   chat: "纯聊天",
@@ -80,6 +82,7 @@ const SECTION_ICONS: Record<Exclude<ConversationSection, "pinned">, IconName> = 
   deepseek: "deepseek",
   claude: "claude",
   opencode: "opencode",
+  pi: "pi",
   acp: "agent",
   omni: "agent",
   chat: "chat",
@@ -89,6 +92,7 @@ const FALLBACK_AGENT_PROFILES: AgentProfile[] = [
   { id: "claude-code-acp", name: "Claude Code", enabled: true, builtIn: true },
   { id: "codex-acp", name: "Codex", enabled: true, builtIn: true },
   { id: "opencode-acp", name: "OpenCode", enabled: true, builtIn: true },
+  { id: "pi-acp", name: "Pi", enabled: true, builtIn: true },
   { id: "deepseek-harness-acp", name: "DeepSeek Harness", enabled: true, builtIn: true },
 ];
 
@@ -96,6 +100,7 @@ function agentIcon(agentId?: string): IconName {
   if (agentId === "codex-acp") return "codex";
   if (agentId === "claude-code-acp") return "claude";
   if (agentId === "opencode-acp") return "opencode";
+  if (agentId === "pi-acp") return "pi";
   if (agentId === "deepseek-harness-acp") return "deepseek";
   return "agent";
 }
@@ -106,6 +111,7 @@ function conversationSection(conversation: Conversation): ConversationSection {
     if (!conversation.agentId || conversation.agentId === "codex-acp") return "codex";
     if (conversation.agentId === "claude-code-acp") return "claude";
     if (conversation.agentId === "opencode-acp") return "opencode";
+    if (conversation.agentId === "pi-acp") return "pi";
     if (conversation.agentId === "deepseek-harness-acp") return "deepseek";
     return "acp";
   }

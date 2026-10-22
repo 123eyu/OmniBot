@@ -1134,6 +1134,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
       'codex-acp' || 'codex-remote' => 'Codex',
       'claude-code-acp' => 'Claude Code',
       'opencode-acp' => 'OpenCode',
+      'pi-acp' => 'Pi',
       'deepseek-harness-acp' => 'DeepSeek',
       _ => _humanizeAgentId(agentId),
     };
