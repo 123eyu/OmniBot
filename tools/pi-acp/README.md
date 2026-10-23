@@ -22,7 +22,13 @@ npm run package:check
 `package:android` embeds compiled adapter JavaScript, package metadata and the
 complete lockfile in `app/src/main/assets/acp/install/pi.sh`, and updates the
 catalog preparation revision. Android builds check that the asset matches the
-source. No adapter source is downloaded at install time. The installer uses
+source. No adapter source is downloaded at install time.
+
+The bundle check compares the decompressed file bytes, installer commands and
+preparation revision. Gzip platform headers and compression differences do not
+invalidate an otherwise identical artifact.
+
+The installer uses
 `npm ci --omit=dev --ignore-scripts` for pinned official dependencies, installs
 each revision in its own directory, checks it before switching the launcher,
 and preserves previous installations and session data.

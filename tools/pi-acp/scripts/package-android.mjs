@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
+import { matchesAndroidInstaller } from "./installer-validation.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const repo = resolve(root, "../..");
@@ -66,7 +67,7 @@ const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
 const entry = catalog.agents.find((entry) => entry.id === "pi-acp");
 const revision = `pi-1.4.0-${digest}`;
 if (process.argv.includes("--check")) {
-  if (readFileSync(asset, "utf8") !== installer || entry.runtime.preparationRevision !== revision) {
+  if (!matchesAndroidInstaller(readFileSync(asset, "utf8"), installer, archive) || entry.runtime.preparationRevision !== revision) {
     throw new Error("Pi Android asset is stale. Run npm run package:android in tools/pi-acp.");
   }
 } else {

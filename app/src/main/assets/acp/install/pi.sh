@@ -12,7 +12,7 @@ if ! command -v bash >/dev/null 2>&1 || ! command -v rg >/dev/null 2>&1; then
   fi
 fi
 PI_ACP_RUNTIME_ROOT="${OMNIBOT_PI_INSTALL_ROOT:-/root/.local/share/omnibot/pi-acp}"
-PI_ACP_PACKAGE_DIR="$PI_ACP_RUNTIME_ROOT/versions/e9e4b8f9c35fc16d2970"
+PI_ACP_PACKAGE_DIR="$PI_ACP_RUNTIME_ROOT/versions/a91684dddddf5916feb1"
 PI_ACP_BIN_DIR="${OMNIBOT_PI_BIN_DIR:-/root/.npm-global/bin}"
 export PI_ACP_PACKAGE_DIR PI_ACP_BIN_DIR
 node <<'OMNIBOT_PI_EXTRACT'
