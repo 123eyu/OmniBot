@@ -114,6 +114,37 @@ class _CodexRemoteFilePreviewPageState
         tempPath = await _writeTempFile(payload);
       }
       if (!mounted) return;
+      if (payload.ok &&
+          OmnibotResourceService.usesNativeHtmlPreview(payload.previewKind)) {
+        // A fetch may finish while this loading route is already sliding out.
+        if (ModalRoute.of(context)?.isCurrent != true) return;
+        if (tempPath == null) {
+          throw StateError(
+            _isEnglish ? 'The HTML file has no content' : 'HTML 文件没有可预览内容',
+          );
+        }
+        final opened = await OmnibotResourceService.openFilePath(
+          tempPath,
+          title: widget.title ?? payload.name,
+          previewKind: payload.previewKind,
+          mimeType: payload.mimeType,
+          shellPath: payload.path,
+        );
+        if (!mounted) return;
+        if (opened) {
+          // This route only fetched the remote file. The native Activity owns
+          // HTML rendering and returning from it should reveal the previous page.
+          if (ModalRoute.of(context)?.isCurrent == true) {
+            Navigator.of(context).pop();
+          }
+        } else {
+          setState(() {
+            _loading = false;
+            _error = _isEnglish ? 'Could not open HTML preview' : 'HTML 预览打开失败';
+          });
+        }
+        return;
+      }
       final keepDraft = _isEditing && _isDirty;
       if (!keepDraft && payload.isTextLike) {
         final text = payload.content ?? '';
