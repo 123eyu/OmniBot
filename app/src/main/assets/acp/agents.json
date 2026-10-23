@@ -133,6 +133,24 @@
       }
     },
     {
+      "id": "pi-acp",
+      "name": "Pi",
+      "description": "Pi official SDK through the OmniBot ACP adapter",
+      "command": "omnibot-pi-acp",
+      "builtIn": true,
+      "runtime": {
+        "discoveryCommand": "omnibot-pi-acp",
+        "managedAdapterPackages": ["@earendil-works/pi-coding-agent@1.4.0"],
+        "configAdapterId": "pi",
+        "usesSharedProvider": true,
+        "terminalPackageId": "pi",
+        "managedInstallScriptPath": "/root/.local/share/omnibot/install-pi-acp.sh",
+        "managedInstallCommandAsset": "acp/install/pi.sh",
+        "managedAdapterHealthCommand": "PATH=/root/.npm-global/bin:$PATH; export PATH; omnibot-pi-acp --health",
+        "preparationRevision": "pi-1.4.0-a91684dddddf5916feb1"
+      }
+    },
+    {
       "id": "kimi-code-acp",
       "name": "Kimi Code",
       "description": "Kimi Code through its official ACP interface",

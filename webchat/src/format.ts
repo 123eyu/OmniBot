@@ -148,6 +148,7 @@ export function modeLabel(mode?: string, agentId?: string): string {
       "codex-acp": "Codex",
       "claude-code-acp": "Claude Code",
       "opencode-acp": "OpenCode",
+      "pi-acp": "Pi",
       "deepseek-harness-acp": "DeepSeek Harness",
     } as Record<string, string>)[agentId ?? ""] ?? "Agent";
   }

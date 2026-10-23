@@ -142,6 +142,11 @@ internal object AcpHarnessAdapters {
         override val supportsHostManagedResponses = true
     }
 
+    val pi: AcpHarnessAdapter = object : AcpHarnessAdapter {
+        override val configAdapterId = "pi"
+        override val supportsHostManagedResponses = true
+    }
+
     val openCode: AcpHarnessAdapter = object : AcpHarnessAdapter {
         override val configAdapterId = "open-code"
         override val supportsHostManagedResponses = true
@@ -231,6 +236,7 @@ internal object AcpHarnessAdapters {
         "codex" -> codex
         "claude-code" -> claudeCode
         "kimi-code" -> kimiCode
+        "pi" -> pi
         "open-code" -> openCode
         "deepseek-harness" -> deepSeekHarness
         else -> standard

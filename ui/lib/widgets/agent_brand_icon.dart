@@ -65,6 +65,7 @@ class AgentBrandIcon extends StatelessWidget {
       'kimi' || 'kimi-code' || 'kimi-code-acp' => 'kimi-code-acp',
       'claude' || 'claude-code' || 'claude-code-acp' => 'claude-code-acp',
       'opencode' || 'open-code' || 'opencode-acp' => 'opencode-acp',
+      'pi' || 'pi-acp' || 'omnibot-pi-acp' => 'pi-acp',
       'deepseek' ||
       'deepseek-acp' ||
       'deepseek-harness' ||
@@ -82,6 +83,7 @@ class AgentBrandIcon extends StatelessWidget {
   /// such as Codex. Unknown custom Harnesses still use the generic host badge.
   static bool hasKnownBrand(String agentId) {
     return normalizeAgentId(agentId) == 'na-cloud' ||
+        normalizeAgentId(agentId) == 'pi-acp' ||
         _brands.containsKey(normalizeAgentId(agentId));
   }
 
@@ -90,12 +92,13 @@ class AgentBrandIcon extends StatelessWidget {
     final palette = context.omniPalette;
     final normalizedAgentId = normalizeAgentId(agentId);
     final brand = _brands[normalizedAgentId];
-    if (normalizedAgentId == 'na-cloud') {
+    if (normalizedAgentId == 'na-cloud' || normalizedAgentId == 'pi-acp') {
+      final isPi = normalizedAgentId == 'pi-acp';
       return Semantics(
-        label: 'Na',
+        label: isPi ? 'Pi' : 'Na',
         excludeSemantics: true,
         child: Text(
-          'N',
+          isPi ? 'π' : 'N',
           style: TextStyle(
             fontSize: size,
             height: 1,

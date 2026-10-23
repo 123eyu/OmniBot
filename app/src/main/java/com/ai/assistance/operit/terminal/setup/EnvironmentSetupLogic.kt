@@ -4,6 +4,7 @@ import android.content.Context
 import cn.com.omnimind.bot.agent.runtime.AcpAgentCatalog
 import cn.com.omnimind.bot.agent.runtime.KIMI_CODE_NATIVE_HEALTH_COMMAND
 import cn.com.omnimind.bot.agent.runtime.KIMI_CODE_NPM_INSTALL_COMMAND
+import cn.com.omnimind.bot.agent.runtime.PI_RUNTIME_HEALTH_COMMAND
 import com.ai.assistance.operit.terminal.utils.SourceManager
 import com.rk.terminal.runtime.UbuntuRepositoryManager
 import com.rk.terminal.ui.screens.settings.WorkingMode
@@ -46,6 +47,7 @@ object EnvironmentSetupLogic {
         PackageDefinition("opencode", "opencode --version", "ai"),
         PackageDefinition("deepseek_harness", DEEPSEEK_HARNESS_CHECK_COMMAND, "ai"),
         PackageDefinition("kimi", KIMI_CODE_NATIVE_HEALTH_COMMAND, "ai"),
+        PackageDefinition("pi", PI_RUNTIME_HEALTH_COMMAND, "ai"),
         PackageDefinition("ssh_client", "ssh -V 2>&1", "ssh"),
         PackageDefinition("sshpass", "sshpass -V 2>&1", "ssh"),
         PackageDefinition("openssh_server", "sshd -V 2>&1", "ssh")
@@ -86,6 +88,7 @@ object EnvironmentSetupLogic {
             "util-linux-dev"
         ),
         "kimi" to listOf("nodejs", "npm", "git", "bash", "curl", "ripgrep"),
+        "pi" to listOf("nodejs", "npm", "git", "bash", "curl", "ripgrep"),
         "python" to listOf("python3"),
         "pip" to listOf("py3-pip"),
         "uv" to listOf("python3", "py3-pip"),
@@ -116,6 +119,7 @@ object EnvironmentSetupLogic {
             "python3"
         ),
         "kimi" to listOf("nodejs", "git", "bash", "curl", "ripgrep"),
+        "pi" to listOf("nodejs", "git", "bash", "curl", "ripgrep"),
         "python" to listOf("python3"),
         "pip" to listOf("python3-pip"),
         "uv" to listOf("python3", "python3-pip"),
@@ -221,6 +225,11 @@ object EnvironmentSetupLogic {
         if ("kimi" in requested) {
             commands += KIMI_CODE_NPM_INSTALL_COMMAND
             commands += "ln -sf /root/.npm-global/bin/kimi /usr/local/bin/kimi || true"
+        }
+        if ("pi" in requested) {
+            commands += harnessInstallCommands["pi"]
+                ?: throw IllegalStateException("The ACP Harness catalog is required to install Pi.")
+            commands += "ln -sf /root/.npm-global/bin/omnibot-pi-acp /usr/local/bin/omnibot-pi-acp || true"
         }
         if ("openssh_server" in requested) {
             commands += "mkdir -p /var/run/sshd /etc/ssh"
@@ -357,6 +366,11 @@ object EnvironmentSetupLogic {
                     commandCheck = DEEPSEEK_HARNESS_CHECK_COMMAND,
                     versionCommand = DEEPSEEK_HARNESS_VERSION_COMMAND
                 )
+                "pi" -> buildProbeSnippet(
+                    packageId = packageId,
+                    commandCheck = PI_RUNTIME_HEALTH_COMMAND,
+                    versionCommand = "omnibot-pi-acp --version",
+                )
                 "kimi" -> buildProbeSnippet(
                     packageId = packageId,
                     commandCheck = KIMI_CODE_NATIVE_HEALTH_COMMAND,
@@ -423,6 +437,7 @@ object EnvironmentSetupLogic {
             "opencode" -> "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v opencode && opencode --version"
             "deepseek_harness" -> DEEPSEEK_HARNESS_CHECK_COMMAND
             "kimi" -> KIMI_CODE_NATIVE_HEALTH_COMMAND
+            "pi" -> PI_RUNTIME_HEALTH_COMMAND
             "ripgrep" -> "command -v rg"
             "tmux" -> "command -v tmux"
             "xz" -> "command -v xz"
@@ -450,6 +465,7 @@ object EnvironmentSetupLogic {
             "claude", "claude-code" -> "claude_code"
             "dsh", "deepseek-harness", "deepseek_harness_acp" -> "deepseek_harness"
             "kimi-code", "kimi_code" -> "kimi"
+            "pi-acp", "omnibot-pi-acp" -> "pi"
             else -> packageId.trim()
         }
     }
@@ -524,6 +540,9 @@ object EnvironmentSetupLogic {
         if ("kimi" in requested) {
             add("Kimi Code", KIMI_CODE_NATIVE_HEALTH_COMMAND)
         }
+        if ("pi" in requested) {
+            add("Pi ACP adapter", PI_RUNTIME_HEALTH_COMMAND)
+        }
         if ("ssh_client" in requested) {
             add("SSH client", "ssh -V >/dev/null 2>&1")
         }
@@ -577,5 +596,6 @@ object EnvironmentSetupLogic {
         "opencode",
         "deepseek_harness",
         "kimi",
+        "pi",
     )
 }

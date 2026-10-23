@@ -1568,6 +1568,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alpineKimiCode => 'Kimi Code official CLI and local Web UI';
 
   @override
+  String get alpinePi => 'Pi Agent with MCP tool support';
+
+  @override
   String get alpineSshClient => 'SSH Client';
 
   @override

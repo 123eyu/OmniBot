@@ -11,6 +11,20 @@ import java.nio.file.Files
 
 class EnvironmentSetupLogicTest {
     @Test
+    fun piInstallsFromTheCatalogOnBothDistributionsAndUsesItsHealthCommand() {
+        for (mode in listOf(WorkingMode.ALPINE, WorkingMode.UBUNTU)) {
+            val commands = EnvironmentSetupLogic.buildInstallCommands(
+                selectedPackageIds = listOf("pi"), repositorySetupCommand = "", workingMode = mode,
+                harnessInstallCommands = mapOf("pi" to "catalog-pi-installer"),
+            )
+            assertTrue(commands.contains("catalog-pi-installer"))
+            assertTrue(commands.any { it.contains("bash") && it.contains("ripgrep") })
+        }
+        assertTrue(EnvironmentSetupLogic.buildInventoryProbeCommand(listOf("pi")).contains("omnibot-pi-acp --health"))
+        assertTrue(EnvironmentSetupLogic.buildValidationCommands(listOf("pi")).any { it.contains("omnibot-pi-acp --health") })
+    }
+
+    @Test
     fun inventoryParsing_preservesEmptyVersionsAndUnknownStatus() {
         val parsed = EnvironmentSetupLogic.parseInventoryProbeOutput(
             "noise\n__OMNI_ENV__\tnpm\tMISSING\t\n" +
@@ -443,6 +457,7 @@ class EnvironmentSetupLogicTest {
                         harnessInstallCommands = mapOf(
                             "deepseek_harness" to File("src/main/assets/acp/install/deepseek-harness.sh").readText(),
                             "opencode" to File("src/main/assets/acp/install/opencode.sh").readText(),
+                            "pi" to File("src/main/assets/acp/install/pi.sh").readText(),
                         ),
                     )
                     val script = EnvironmentSetupLogic.buildSetupScript(

@@ -124,6 +124,39 @@ val syncWebChatBundle by tasks.registering(Copy::class) {
     }
 }
 
+val piAcpSourceDir = rootProject.file("tools/pi-acp")
+fun piAcpNpmCommand(arguments: String): List<String> = when {
+    hostOs.contains("windows") -> listOf("cmd", "/c", "npm $arguments")
+    hostOs.contains("mac") -> listOf("zsh", "-lc", "npm $arguments")
+    else -> listOf("npm") + arguments.split(" ")
+}
+val installPiAcpDependencies by tasks.registering(Exec::class) {
+    group = "agent runtime"
+    description = "Install locked Pi adapter build dependencies without lifecycle scripts."
+    workingDir(piAcpSourceDir)
+    commandLine(piAcpNpmCommand("ci --ignore-scripts --no-audit --no-fund"))
+    inputs.files(File(piAcpSourceDir, "package.json"), File(piAcpSourceDir, "package-lock.json"))
+    outputs.file(File(piAcpSourceDir, "node_modules/.package-lock.json"))
+}
+val verifyPiAcpBundle by tasks.registering(Exec::class) {
+    group = "agent runtime"
+    description = "Reject an APK whose bundled Pi adapter differs from its source or lockfile."
+    dependsOn(installPiAcpDependencies)
+    workingDir(piAcpSourceDir)
+    commandLine(piAcpNpmCommand("run package:check"))
+    inputs.dir(File(piAcpSourceDir, "src"))
+    inputs.dir(File(piAcpSourceDir, "scripts"))
+    inputs.files(
+        File(piAcpSourceDir, "package.json"), File(piAcpSourceDir, "package-lock.json"),
+        File(piAcpSourceDir, "LICENSE"),
+        File(piAcpSourceDir, "tsconfig.json"),
+        file("src/main/assets/acp/install/pi.sh"), file("src/main/assets/acp/agents.json"),
+    )
+    val marker = layout.buildDirectory.file("pi-acp/verified").get().asFile
+    outputs.file(marker)
+    doLast { marker.parentFile.mkdirs(); marker.writeText("verified\n") }
+}
+
 val syncPluginAssets by tasks.registering(Sync::class) {
     group = "plugin packaging"
     description = "Generate the packaged plugin catalog for the selected build profile."
@@ -359,7 +392,7 @@ kotlin {
 }
 
 tasks.named("preBuild").configure {
-    dependsOn(syncWebChatBundle, syncPluginAssets)
+    dependsOn(syncWebChatBundle, syncPluginAssets, verifyPiAcpBundle)
 }
 dependencies {
     implementation(libs.agent.client.protocol)

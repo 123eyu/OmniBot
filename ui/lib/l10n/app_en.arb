@@ -510,6 +510,7 @@
   "alpineOpenCode": "OpenCode CLI with built-in ACP support",
   "alpineDeepSeekHarness": "DeepSeek Harness (dsh) official ACP runtime",
   "alpineKimiCode": "Kimi Code official CLI and local Web UI",
+  "alpinePi": "Pi Agent with MCP tool support",
   "alpineSshClient": "SSH Client",
   "alpineSshpass": "SSH Password Helper",
   "alpineOpenSshServer": "OpenSSH Server",

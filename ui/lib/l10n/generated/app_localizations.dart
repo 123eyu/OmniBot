@@ -2810,6 +2810,12 @@ abstract class AppLocalizations {
   /// **'Kimi Code 官方 CLI 与本地 Web 界面'**
   String get alpineKimiCode;
 
+  /// No description provided for @alpinePi.
+  ///
+  /// In zh, this message translates to:
+  /// **'Pi Agent 与 MCP 工具支持'**
+  String get alpinePi;
+
   /// No description provided for @alpineSshClient.
   ///
   /// In zh, this message translates to:
