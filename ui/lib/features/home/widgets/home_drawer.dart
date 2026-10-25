@@ -23,6 +23,7 @@ import 'package:ui/models/scheduled_task.dart';
 import 'package:ui/services/agent_web_action_presenter.dart';
 import 'package:ui/services/agent_runtime_service.dart';
 import 'package:ui/services/agent_web_status_service.dart';
+import 'package:ui/services/app_update_service.dart';
 import 'package:ui/services/assists_core_service.dart';
 import 'package:ui/services/conversation_history_service.dart';
 import 'package:ui/services/conversation_service.dart';
@@ -35,6 +36,7 @@ import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/cache_util.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
+import 'package:ui/widgets/app_update_dialog.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:ui/widgets/omni_menu.dart';
@@ -189,6 +191,7 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
   _HomeConversationFilter _homeFilter = _HomeConversationFilter.xiaowan;
   AcpAgentCatalog? _homeAgentCatalog;
   bool _homeRouteWasCurrent = false;
+  AppLifecycleListener? _homeAppLifecycleListener;
   int _homeCatalogRequest = 0;
   int _conversationLoadGeneration = 0;
   int _searchGeneration = 0;
@@ -218,6 +221,12 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
   @override
   void initState() {
     super.initState();
+    if (widget.homePage) {
+      unawaited(AppUpdateService.initialize());
+      _homeAppLifecycleListener = AppLifecycleListener(
+        onResume: () => unawaited(AppUpdateService.refreshIfNeeded()),
+      );
+    }
     _runtimeCoordinator.ensureInitialized();
     _activeConversationIds = _runtimeCoordinator.activeAgentConversationIds;
     _runtimeCoordinator.addListener(_handleRuntimeCoordinatorChanged);
@@ -284,6 +293,7 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
 
   @override
   void dispose() {
+    _homeAppLifecycleListener?.dispose();
     _searchDebounceTimer?.cancel();
     _settledReloadTimer?.cancel();
     _conversationListChangedSubscription?.cancel();

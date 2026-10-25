@@ -130,6 +130,7 @@ extension _HomeDrawerHome on HomeDrawerState {
                           ),
                         ),
                         const SizedBox(width: 4),
+                        _buildHomeAppUpdateIndicator(),
                         OmniCircleButton(
                           key: const ValueKey('home-search-button'),
                           size: 40,
@@ -165,6 +166,7 @@ extension _HomeDrawerHome on HomeDrawerState {
                   padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
                   child: Row(
                     children: [
+                      _buildHomeAppUpdateIndicator(),
                       Expanded(
                         child: HomeDrawerSearchField(
                           key: widget.searchFieldKey,
@@ -241,6 +243,40 @@ extension _HomeDrawerHome on HomeDrawerState {
     });
   }
 
+  Widget _buildHomeAppUpdateIndicator() {
+    return ValueListenableBuilder<AppUpdateStatus?>(
+      valueListenable: AppUpdateService.statusNotifier,
+      builder: (context, status, _) {
+        if (!AppUpdateService.shouldShowBanner(status)) {
+          return const SizedBox.shrink();
+        }
+        final updateStatus = status!;
+        final english = Localizations.localeOf(context).languageCode == 'en';
+        return Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: IconButton(
+            key: const ValueKey('home-app-update-button'),
+            tooltip: english
+                ? 'New version ${updateStatus.latestVersionLabel} available'
+                : '发现新版本 ${updateStatus.latestVersionLabel}',
+            onPressed: () => showAppUpdateDialog(context, updateStatus),
+            padding: const EdgeInsets.all(15),
+            constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+            icon: SvgPicture.asset(
+              'assets/home/chat/update_sparkles.svg',
+              width: 18,
+              height: 18,
+              colorFilter: const ColorFilter.mode(
+                Color(0xFFD4A017),
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _closeHomeSearch() {
     _searchController.clear();
     _searchFocusNode.unfocus();
@@ -277,97 +313,163 @@ extension _HomeDrawerHome on HomeDrawerState {
   Widget _buildHomeAgentSwitcher({bool compact = false}) {
     final palette = context.omniPalette;
     final english = Localizations.localeOf(context).languageCode == 'en';
+    // Match the popup reveal's initial 24dp corners so the trigger's ink stays
+    // within the menu throughout its expansion.
+    const triggerRadius = BorderRadius.all(Radius.circular(24));
     // Keep the header's overflow glyph fully visible beside the overlay.
     final menuWidth = (MediaQuery.sizeOf(context).width - 84).clamp(0.0, 340.0);
     return Builder(
       builder: (anchorContext) => Tooltip(
         message: english ? 'Switch Agent' : '切换 Agent',
-        child: InkWell(
-          key: const ValueKey('home-agent-switcher'),
-          borderRadius: BorderRadius.circular(14),
-          onTap: _isBatchConversationActionRunning
-              ? null
-              : () async {
-                  final anchor = glassPopupAnchorFromContext(anchorContext);
-                  if (anchor == null) return;
-                  performOmniSelectionHaptic();
-                  final id = await showOmniMenu<String>(
-                    context: anchorContext,
-                    anchor: anchor,
-                    width: menuWidth,
-                    items: [
-                      for (final filter in _homeFilters)
-                        OmniPopupMenuItem<String>(
-                          key: ValueKey('home-agent-option-${filter.id}'),
-                          value: filter.id,
-                          selected: _homeFilter.id == filter.id,
-                          child: Row(
-                            children: [
-                              SizedBox.square(
-                                dimension: 18,
-                                child: _homeFilter.id == filter.id
-                                    ? const Icon(LucideIcons.check, size: 18)
-                                    : null,
-                              ),
-                              const SizedBox(width: 12),
-                              ExcludeSemantics(
-                                child: _buildHomeFilterIcon(
-                                  filter,
-                                  OmniMenuStyle.iconSize,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: triggerRadius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: const ValueKey('home-agent-switcher'),
+            borderRadius: triggerRadius,
+            onTap: _isBatchConversationActionRunning
+                ? null
+                : () async {
+                    final anchor = glassPopupAnchorFromContext(anchorContext);
+                    if (anchor == null) return;
+                    performOmniSelectionHaptic();
+                    final id = await showOmniMenu<String>(
+                      context: anchorContext,
+                      anchor: anchor,
+                      width: menuWidth,
+                      items: [
+                        for (final filter in _homeFilters)
+                          OmniPopupMenuItem<String>(
+                            key: ValueKey('home-agent-option-${filter.id}'),
+                            value: filter.id,
+                            selected: _homeFilter.id == filter.id,
+                            child: Row(
+                              children: [
+                                SizedBox.square(
+                                  dimension: 18,
+                                  child: _homeFilter.id == filter.id
+                                      ? const Icon(LucideIcons.check, size: 18)
+                                      : null,
                                 ),
-                              ),
-                              const SizedBox(width: OmniMenuStyle.iconGap),
-                              Expanded(
-                                child: Text(
-                                  _homeFilterLabel(filter),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                const SizedBox(width: 12),
+                                ExcludeSemantics(
+                                  child: _buildHomeFilterIcon(
+                                    filter,
+                                    OmniMenuStyle.iconSize,
+                                  ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: OmniMenuStyle.iconGap),
+                                Expanded(
+                                  child: Text(
+                                    _homeFilterLabel(filter),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
+                      ],
+                    );
+                    // The catalog can change while the menu is open. Select only
+                    // a current entry using the existing conversation filter.
+                    if (!mounted || _isBatchConversationActionRunning) return;
+                    final filter = _homeFilters
+                        .where((item) => item.id == id)
+                        .firstOrNull;
+                    if (filter != null) _selectHomeFilter(filter);
+                  },
+            child: Semantics(
+              button: true,
+              enabled: !_isBatchConversationActionRunning,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ExcludeSemantics(
+                        child: _buildHomeFilterIcon(
+                          _homeFilter,
+                          compact ? 24 : 28,
                         ),
-                    ],
-                  );
-                  // The catalog can change while the menu is open. Select only
-                  // a current entry using the existing conversation filter.
-                  if (!mounted || _isBatchConversationActionRunning) return;
-                  final filter = _homeFilters
-                      .where((item) => item.id == id)
-                      .firstOrNull;
-                  if (filter != null) _selectHomeFilter(filter);
-                },
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ExcludeSemantics(
-                    child: _buildHomeFilterIcon(_homeFilter, compact ? 24 : 30),
-                  ),
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Text(
-                      _homeFilterLabel(_homeFilter),
-                      key: const ValueKey('home-agent-name'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: compact ? 17 : 22,
-                        fontWeight: FontWeight.w600,
-                        color: palette.textPrimary,
                       ),
-                    ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final name = Text(
+                              _homeFilterLabel(_homeFilter),
+                              key: const ValueKey('home-agent-name'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: compact ? 17 : 22,
+                                fontWeight: FontWeight.w600,
+                                color: palette.textPrimary,
+                                height: 1.2,
+                              ),
+                            );
+                            final badge = DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: palette.brandSurface,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 2,
+                                ),
+                                child: Text(
+                                  english ? 'Switch' : '切换',
+                                  key: const ValueKey(
+                                    'home-agent-switch-action',
+                                  ),
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    fontSize: compact ? 10 : 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: palette.brandPrimary,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ),
+                            );
+                            final inlineWidth = MediaQuery.textScalerOf(context)
+                                .scale(english ? 92 : 78);
+                            if (constraints.maxWidth < inlineWidth) {
+                              // Keep the badge above-right of a readable name
+                              // when large text cannot share the same line.
+                              return Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: badge,
+                                  ),
+                                  name,
+                                ],
+                              );
+                            }
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Flexible(child: name),
+                                const SizedBox(width: 4),
+                                badge,
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    LucideIcons.chevronDown,
-                    size: 18,
-                    color: palette.textSecondary,
-                  ),
-                ],
+                ),
               ),
             ),
           ),

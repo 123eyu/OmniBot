@@ -15,6 +15,7 @@ import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/models/conversation_model.dart';
 import 'package:ui/models/conversation_thread_target.dart';
 import 'package:ui/models/habitual_hand.dart';
+import 'package:ui/services/app_update_service.dart';
 import 'package:ui/services/scheduled_task_storage_service.dart';
 import 'package:ui/services/assists_core_service.dart';
 import 'package:ui/services/storage_service.dart';
@@ -65,15 +66,39 @@ void main() {
   const agentEventsChannel = MethodChannel(
     'cn.com.omnimind.bot/AgentRuntimeEvents',
   );
+  const appUpdateChannel = MethodChannel('cn.com.omnimind.bot/app_update');
   late List<Map<String, Object?>> nativeConversations;
   late List<Map<String, Object?>> nativeAgents;
   late List<String> agentMethods;
+  Map<String, Object?>? nativeUpdateStatus;
+  late List<MethodCall> updateCalls;
 
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await StorageService.init();
+    AppUpdateService.statusNotifier.value = null;
+    AppUpdateService.betaOptInNotifier.value = false;
+    AppUpdateService.downloadSourceNotifier.value =
+        AppUpdateDownloadSource.worker;
+    nativeUpdateStatus = null;
+    updateCalls = [];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(appUpdateChannel, (call) async {
+          updateCalls.add(call);
+          switch (call.method) {
+            case 'getCachedStatus':
+            case 'checkNow':
+              return nativeUpdateStatus;
+            case 'getBetaOptIn':
+              return false;
+            case 'getApkDownloadSource':
+              return 'worker';
+            default:
+              return null;
+          }
+        });
     nativeConversations = <Map<String, Object?>>[];
     nativeAgents = [
       {
@@ -132,6 +157,9 @@ void main() {
   });
 
   tearDown(() {
+    AppUpdateService.statusNotifier.value = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(appUpdateChannel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(assistCoreChannel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -141,6 +169,21 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(agentRuntimeChannel, null);
   });
+
+  Map<String, Object?> updateStatus({
+    String version = '1.0.1',
+    bool hasUpdate = true,
+  }) => {
+    'currentVersion': '1.0.0',
+    'latestVersion': version,
+    'hasUpdate': hasUpdate,
+    'checkedAt': 1,
+    'publishedAt': 0,
+    'releaseUrl': 'https://example.com/release',
+    'releaseNotes': 'Home update regression test',
+    'apkName': 'OpenOmniBot-v$version.apk',
+    'apkDownloadUrl': 'https://example.com/app.apk',
+  };
 
   Map<String, Object?> selectionRow(
     int id,
@@ -1137,6 +1180,123 @@ void main() {
     },
   );
 
+  testWidgets(
+    'home update uses cached status, refreshes and opens the shared dialog',
+    (tester) async {
+      final refreshedStatus = Completer<Map<String, Object?>>();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(appUpdateChannel, (call) async {
+            updateCalls.add(call);
+            switch (call.method) {
+              case 'getCachedStatus':
+                return updateStatus();
+              case 'checkNow':
+                return refreshedStatus.future;
+              case 'getBetaOptIn':
+                return false;
+              case 'getApkDownloadSource':
+                return 'worker';
+              default:
+                return null;
+            }
+          });
+      await pumpSelectionHome(tester);
+      final update = find.byKey(const ValueKey('home-app-update-button'));
+      expect(update, findsOneWidget);
+      expect(find.byTooltip('发现新版本 v1.0.1'), findsOneWidget);
+      expect(
+        tester.getRect(update).right,
+        lessThanOrEqualTo(
+          tester.getRect(find.byKey(const ValueKey('home-search-button'))).left,
+        ),
+      );
+
+      refreshedStatus.complete(updateStatus(version: '1.0.2'));
+      await tester.pumpAndSettle();
+      await tester.tap(update);
+      await tester.pumpAndSettle();
+      expect(find.text('发现新版本'), findsOneWidget);
+      expect(find.text('v1.0.2'), findsOneWidget);
+      expect(find.text('Home update regression test'), findsOneWidget);
+      expect(find.text('立即更新'), findsOneWidget);
+      await tester.tap(find.text('稍后'));
+      await tester.pumpAndSettle();
+      expect(update, findsOneWidget);
+      expect(
+        updateCalls.where((call) => call.method == 'installLatestApk'),
+        isEmpty,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('home-search-button')));
+      await tester.pumpAndSettle();
+      expect(update, findsOneWidget);
+      expect(
+        tester.getRect(update).right,
+        lessThanOrEqualTo(tester.getRect(find.byType(TextField)).left),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'home update follows missing, current and dismissed version status',
+    (tester) async {
+      await pumpSelectionHome(tester);
+      final update = find.byKey(const ValueKey('home-app-update-button'));
+      expect(update, findsNothing);
+
+      final dismissed = AppUpdateStatus.fromMap(updateStatus());
+      await AppUpdateService.dismissBanner(dismissed);
+      nativeUpdateStatus = updateStatus();
+      await AppUpdateService.refreshIfNeeded();
+      await tester.pumpAndSettle();
+      expect(update, findsNothing);
+
+      nativeUpdateStatus = updateStatus(version: '1.0.2');
+      await AppUpdateService.refreshIfNeeded();
+      await tester.pumpAndSettle();
+      expect(update, findsOneWidget);
+
+      nativeUpdateStatus = updateStatus(version: '1.0.2', hasUpdate: false);
+      await AppUpdateService.refreshIfNeeded();
+      await tester.pumpAndSettle();
+      expect(update, findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'home resumes with a non-forced update refresh and disposes its listener',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await pumpSelectionHome(tester);
+      updateCalls.clear();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      nativeUpdateStatus = updateStatus();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(updateCalls, hasLength(1));
+      expect(updateCalls.single.method, 'checkNow');
+      expect(updateCalls.single.arguments, {'force': false});
+      expect(
+        find.byKey(const ValueKey('home-app-update-button')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(const SizedBox());
+      updateCalls.clear();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(updateCalls, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('long Agent names fit the narrow home and selection headers', (
     tester,
   ) async {
@@ -1155,6 +1315,7 @@ void main() {
     nativeConversations = [
       {...selectionRow(1, '长名称Agent对话'), 'agentId': 'long-agent-acp'},
     ];
+    nativeUpdateStatus = updateStatus();
     await pumpSelectionHome(tester, textScale: 1.5);
     await selectHomeCategory(tester, 'long-agent-acp');
     final name = find.byKey(const ValueKey('home-agent-name'));
@@ -1164,7 +1325,7 @@ void main() {
     expect(
       tester.getRect(name).right,
       lessThanOrEqualTo(
-        tester.getRect(find.byKey(const ValueKey('home-search-button'))).left,
+        tester.getRect(find.byKey(const ValueKey('home-app-update-button'))).left,
       ),
     );
     expect(tester.takeException(), isNull);
