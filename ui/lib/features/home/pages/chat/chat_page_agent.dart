@@ -282,7 +282,13 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
         fallbackConversation: conversation,
         status: status,
       );
-      this._startRemoteCodexSessionSync(resolvedThreadId);
+      final historySync = _startRemoteCodexSessionSync(resolvedThreadId);
+      if (_messages.isEmpty) {
+        await historySync;
+        if (!_isConversationTargetRequestCurrent(targetRequestId)) return;
+      } else {
+        unawaited(historySync);
+      }
       _rememberRuntimeUiSnapshot(ChatPageMode.agent);
     } catch (error) {
       if (!_isConversationTargetRequestCurrent(targetRequestId)) return;

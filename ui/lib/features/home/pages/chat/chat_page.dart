@@ -85,6 +85,7 @@ import 'mixins/conversation_manager.dart';
 import 'chat_page_models.dart';
 import 'widgets/chat_widgets.dart';
 import 'widgets/chat_browser_overlay.dart';
+import 'widgets/chat_history_loading_transition.dart';
 import 'widgets/chat_message_anchor_bar.dart';
 import 'widgets/pet_overlay_permission_sheet.dart';
 import 'widgets/chat_tool_activity_strip.dart';
@@ -193,6 +194,9 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   SharedOpenDraftPayload? _stagedSharedOpenDraft;
   int? _stagedSharedOpenDraftExpiresAt;
   int _conversationTargetRequestId = 0;
+  // Presentation only: target resolution/history hydration is distinct from
+  // an empty new conversation and from the ACP prompt lifecycle.
+  bool _isConversationHistoryLoading = false;
   // Conversation bootstrap restores the last target asynchronously. Keep the
   // future so a send started from the first rendered frame cannot race that
   // restore and get cleared by _resetLocalConversationState().
@@ -274,7 +278,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   StreamSubscription<Map<String, dynamic>>? _omniLinkEventSubscription;
   final Set<String> _pendingManualAgentRetryTaskIds = <String>{};
   bool _pendingAgentInputResponseInFlight = false;
-  bool _remoteCodexSessionSyncInFlight = false;
+  Future<void>? _remoteCodexSessionSyncFuture;
   String? _remoteCodexSessionSyncThreadId;
   AgentRuntimeStatus _agentRuntimeStatus = AgentRuntimeStatus.disconnected;
   AcpAgentCatalog? _agentCatalog;
@@ -568,7 +572,20 @@ abstract class _ChatPageStateBase extends State<ChatPage>
 
   ChatConversationRuntimeState? get _activeRuntime =>
       _runtimeForMode(_activeMode);
-  int _beginConversationTargetRequest() => ++_conversationTargetRequestId;
+  int _beginConversationTargetRequest({bool isHistoryLoading = false}) {
+    final requestId = ++_conversationTargetRequestId;
+    setState(() => _isConversationHistoryLoading = isHistoryLoading);
+    return requestId;
+  }
+
+  void _finishConversationHistoryLoad(int requestId) {
+    if (!_isConversationTargetRequestCurrent(requestId) ||
+        !_isConversationHistoryLoading) {
+      return;
+    }
+    setState(() => _isConversationHistoryLoading = false);
+  }
+
   bool _isConversationTargetRequestCurrent(int requestId) =>
       mounted && requestId == _conversationTargetRequestId;
   @override

@@ -18,7 +18,7 @@ void main() {
       expect(ui, isNot(contains('resolveAgentToolActivitySnapshot(')));
       expect(ui, contains('ChatCommandActivityStrip('));
       expect(ui, contains('_slashCommandPanelOccupiedHeight'));
-      expect(ui, contains('return ChatMessageList('));
+      expect(ui, contains('ChatMessageList('));
       expect(ui, contains('onCancelTask: _onCancelTask'));
       for (final source in [ui, page, outsideTap, mode]) {
         expect(source, isNot(contains('toolActivityOccupiedHeight')));
@@ -188,7 +188,9 @@ void main() {
           .first;
       expect(
         bootstrap,
-        contains('_resolveConversationThreadTarget(widget.threadTarget)'),
+        matches(
+          RegExp(r'_resolveConversationThreadTarget\(\s*widget.threadTarget,?\s*\)'),
+        ),
       );
       expect(bootstrap, contains('_applyConversationThreadTarget('));
       final apply = lifecycle

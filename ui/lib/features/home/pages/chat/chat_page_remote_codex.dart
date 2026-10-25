@@ -1,30 +1,30 @@
 part of 'chat_page.dart';
 
 extension _ChatPageRemoteCodexSupport on _ChatPageStateBase {
-  void _startRemoteCodexSessionSync(String threadId) {
+  Future<void> _startRemoteCodexSessionSync(String threadId) {
     final normalizedThreadId = threadId.trim();
     if (normalizedThreadId.isEmpty) {
-      return;
+      return Future<void>.value();
     }
     // A session snapshot is for initial history hydration only. Live state is
     // owned by the ACP event subscription; polling thread/read here used to
     // race those updates and repeatedly rewrite the visible turn.
     if (_remoteCodexSessionSyncThreadId == normalizedThreadId) {
-      return;
+      // ACP updates can start hydration before session/load returns. The
+      // loading presentation must await that same read, never a second one.
+      return _remoteCodexSessionSyncFuture ?? Future<void>.value();
     }
     _remoteCodexSessionSyncThreadId = normalizedThreadId;
-    unawaited(_syncRemoteCodexSessionSnapshot());
+    return _remoteCodexSessionSyncFuture = _syncRemoteCodexSessionSnapshot();
   }
 
   void _stopRemoteCodexSessionSync() {
-    _remoteCodexSessionSyncInFlight = false;
+    _remoteCodexSessionSyncFuture = null;
     _remoteCodexSessionSyncThreadId = null;
   }
 
   Future<void> _syncRemoteCodexSessionSnapshot() async {
-    if (_remoteCodexSessionSyncInFlight) {
-      return;
-    }
+    final requestId = _conversationTargetRequestId;
     final threadId = _remoteCodexSessionSyncThreadId?.trim() ?? '';
     if (threadId.isEmpty ||
         !mounted ||
@@ -33,10 +33,9 @@ extension _ChatPageRemoteCodexSupport on _ChatPageStateBase {
         _activeAgentThreadId?.trim() != threadId) {
       return;
     }
-    _remoteCodexSessionSyncInFlight = true;
     try {
       final response = await _readRemoteCodexThreadSnapshot(threadId);
-      if (!mounted ||
+      if (!_isConversationTargetRequestCurrent(requestId) ||
           _remoteCodexSessionSyncThreadId != threadId ||
           _activeAgentThreadId?.trim() != threadId) {
         return;
@@ -46,16 +45,14 @@ extension _ChatPageRemoteCodexSupport on _ChatPageStateBase {
         fallbackThreadId: threadId,
       );
     } catch (error) {
-      if (_remoteCodexSessionSyncThreadId == threadId) {
+      if (_isConversationTargetRequestCurrent(requestId) &&
+          _remoteCodexSessionSyncThreadId == threadId) {
         // Allow the next explicit session open/reconnect to retry hydration;
         // there is intentionally no background polling fallback.
         _remoteCodexSessionSyncThreadId = null;
+        _remoteCodexSessionSyncFuture = null;
       }
       debugPrint('Remote Agent session sync failed: $error');
-    } finally {
-      if (_remoteCodexSessionSyncThreadId == threadId) {
-        _remoteCodexSessionSyncInFlight = false;
-      }
     }
   }
 
@@ -315,7 +312,7 @@ extension _ChatPageRemoteCodexSupport on _ChatPageStateBase {
     _activeRemoteCodexRuntimeId = runtimeId;
     _activeAgentThreadId = normalizedThreadId;
     _modeState(ChatPageMode.agent).currentConversationId = runtimeId;
-    _startRemoteCodexSessionSync(normalizedThreadId);
+    unawaited(_startRemoteCodexSessionSync(normalizedThreadId));
     return runtimeId;
   }
 

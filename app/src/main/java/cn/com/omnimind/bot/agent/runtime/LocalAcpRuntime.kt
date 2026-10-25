@@ -12,6 +12,7 @@ import cn.com.omnimind.bot.agent.AgentWorkspaceManager
 import cn.com.omnimind.bot.agent.AgentWorkspaceAttachmentSupport
 import cn.com.omnimind.bot.agent.AgentScheduleToolBridge
 import cn.com.omnimind.baselib.database.DatabaseHelper
+import cn.com.omnimind.baselib.database.TokenUsageRecord
 import cn.com.omnimind.baselib.llm.ChatCompletionMessage
 import cn.com.omnimind.bot.mcp.McpServerManager
 import cn.com.omnimind.bot.omniflow.OmniVlmPlugin
@@ -72,6 +73,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.TimeoutCancellationException
@@ -489,6 +491,9 @@ internal class LocalAcpRuntime(
     private val serverRequestOwners: AcpServerRequestOwnerRegistry =
         AcpServerRequestOwnerRegistry(),
     private val turnOwnership: AcpTurnOwnershipRegistry = AcpTurnOwnershipRegistry(),
+    private val recordTokenUsage: suspend (TokenUsageRecord) -> Unit = {
+        DatabaseHelper.insertTokenUsageRecord(it)
+    },
     private val onMessage: suspend (Map<String, Any?>) -> Unit
 ) {
     private val appContext = context.applicationContext
@@ -2636,6 +2641,7 @@ internal class LocalAcpRuntime(
         // that, the idle session is changed through config/set; do not
         // overwrite Harness-owned state on every turn. Older ACP adapters
         // without configOptions keep the legacy per-turn compatibility path.
+        val usageAttribution: AcpPromptUsageAttribution?
         try {
             if (sessionConfigOptions(session).isEmpty()) {
                 applyRunConfig(session, args)
@@ -2649,6 +2655,25 @@ internal class LocalAcpRuntime(
                     threadId,
                     AcpPermissionBehavior.ALLOW_WITHOUT_PROMPT
                 )
+            }
+            // Snapshot the prompt's owner and model before dispatch. Reading
+            // the selected profile or binding at completion could attribute a
+            // late response to another conversation or model.
+            usageAttribution = try {
+                val modelOption = sessionConfigOptions(session).firstOrNull {
+                    it.id.value == "model" || it.category == SessionConfigOptionCategory.MODEL
+                } as? SessionConfigOption.Select
+                AcpPromptUsageAttribution(
+                    agentId = activeAgentId(),
+                    conversationId = bindingRepository.getBindingByThreadId(threadId)?.conversationId,
+                    model = modelOption?.currentValue?.value
+                        ?: if (session.modelsSupported) session.currentModel.value.value else "",
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(TAG, "Unable to snapshot ACP token usage attribution", error)
+                null
             }
         } catch (error: Throwable) {
             promptExecutions.remove(threadId, execution)
@@ -2742,6 +2767,23 @@ internal class LocalAcpRuntime(
                                 // the same canonical prompt completion handles it.
                                 stopReason = "error"
                                 failure = IllegalStateException(it)
+                            }
+                            // This is the one owning PromptResponse, consumed
+                            // once by takeWhile and fenced by the prompt request
+                            // reservation. Session replay/context occupancy never
+                            // creates usage records. Xiaowan already records each
+                            // model call in its HTTP transport.
+                            usageAttribution?.record(event.response.usage)?.let { record ->
+                                withContext(NonCancellable + Dispatchers.IO) {
+                                    try {
+                                        recordTokenUsage(record)
+                                    } catch (error: Exception) {
+                                        // Accounting is not the prompt owner. In
+                                        // particular a cancelled database write
+                                        // cannot replace this official response.
+                                        Log.w(TAG, "Unable to persist ACP token usage", error)
+                                    }
+                                }
                             }
                             event.response.toAcpTurnUsageUpdate(
                                 lastAssistantMessageIds[turnIdentity]

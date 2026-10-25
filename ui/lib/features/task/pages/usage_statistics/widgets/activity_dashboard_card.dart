@@ -28,7 +28,7 @@ class ActivityDashboardCard extends StatefulWidget {
 }
 
 class _ActivityDashboardCardState extends State<ActivityDashboardCard>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   // -- tab --
   static const int _convTab = 0;
   static const int _tokenTab = 1;
@@ -38,12 +38,16 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   // -- conversation data --
   Map<String, int> _activityMap = {};
   bool _isConvLoading = true;
+  bool _hasConvError = false;
+  int _convLoadGeneration = 0;
   int _totalConversations = 0;
   int _currentStreak = 0;
 
   // -- token data --
   List<WeeklyTokenData> _weeklyData = [];
   bool _isTokenLoading = true;
+  bool _hasTokenError = false;
+  int _tokenLoadGeneration = 0;
   int _totalCached = 0;
   Map<String, int> _modelTotals = {};
   List<String> _modelOrder = [];
@@ -55,6 +59,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -69,8 +74,17 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _fadeController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadConversationData();
+      _loadTokenData();
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -78,6 +92,11 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   // -----------------------------------------------------------------------
 
   Future<void> _loadConversationData() async {
+    final generation = ++_convLoadGeneration;
+    setState(() {
+      _isConvLoading = true;
+      _hasConvError = false;
+    });
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
@@ -90,7 +109,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
         today: today,
       );
 
-      if (mounted) {
+      if (mounted && generation == _convLoadGeneration) {
         setState(() {
           _activityMap = summary.activityMap;
           _totalConversations = summary.totalConversations;
@@ -101,8 +120,11 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
       }
     } catch (e) {
       debugPrint('[ActivityDashboard] conv load failed: $e');
-      if (mounted) {
-        setState(() => _isConvLoading = false);
+      if (mounted && generation == _convLoadGeneration) {
+        setState(() {
+          _isConvLoading = false;
+          _hasConvError = true;
+        });
         _tryStartFade();
       }
     }
@@ -113,6 +135,11 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   // -----------------------------------------------------------------------
 
   Future<void> _loadTokenData() async {
+    final generation = ++_tokenLoadGeneration;
+    setState(() {
+      _isTokenLoading = true;
+      _hasTokenError = false;
+    });
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
@@ -134,7 +161,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
         weekStarts: weekStarts,
       );
 
-      if (mounted) {
+      if (mounted && generation == _tokenLoadGeneration) {
         setState(() {
           _weeklyData = summary.weeklyData;
           _totalCached = summary.totalCached;
@@ -146,8 +173,11 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
       }
     } catch (e) {
       debugPrint('[ActivityDashboard] token load failed: $e');
-      if (mounted) {
-        setState(() => _isTokenLoading = false);
+      if (mounted && generation == _tokenLoadGeneration) {
+        setState(() {
+          _isTokenLoading = false;
+          _hasTokenError = true;
+        });
         _tryStartFade();
       }
     }
@@ -337,7 +367,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
         // 对话次数
         _buildStatPill(
           Icons.chat_bubble_outline_rounded,
-          '$_totalConversations',
+          _isConvLoading || _hasConvError ? '—' : '$_totalConversations',
           LegacyTextLocalizer.localize('次对话'),
           accentBlue,
           palette,
@@ -346,7 +376,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
         // 连续天数
         _buildStatPill(
           Icons.local_fire_department_rounded,
-          '$_currentStreak',
+          _isConvLoading || _hasConvError ? '—' : '$_currentStreak',
           LegacyTextLocalizer.localize('天连续'),
           streakColor,
           palette,
@@ -364,12 +394,16 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
                 // Token 总量
                 _buildStatPill(
                   Icons.bolt_rounded,
-                  _formatTokenCount(_totalTokens),
+                  _isTokenLoading || _hasTokenError
+                      ? '—'
+                      : _formatTokenCount(_totalTokens),
                   'tokens',
                   accentBlue,
                   palette,
                 ),
-                if (_modelTotals.isNotEmpty)
+                if (!_isTokenLoading &&
+                    !_hasTokenError &&
+                    _modelTotals.isNotEmpty)
                   _buildStatPill(
                     Icons.hub_outlined,
                     '${_modelTotals.length}',
@@ -377,7 +411,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
                     _modelColor(_modelOrder.first, isDark),
                     palette,
                   ),
-                if (_totalCached > 0)
+                if (!_isTokenLoading && !_hasTokenError && _totalCached > 0)
                   _buildStatPill(
                     Icons.cached_rounded,
                     _formatTokenCount(_totalCached),
@@ -548,6 +582,14 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
         ),
+      );
+    }
+    if (_hasConvError) {
+      return _buildLoadError(
+        LegacyTextLocalizer.isEnglish
+            ? 'Could not load conversations. Tap to retry.'
+            : '对话统计加载失败，点击重试',
+        _loadConversationData,
       );
     }
     return Column(
@@ -777,6 +819,14 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
         ),
       );
     }
+    if (_hasTokenError) {
+      return _buildLoadError(
+        LegacyTextLocalizer.isEnglish
+            ? 'Could not load token usage. Tap to retry.'
+            : 'Token 统计加载失败，点击重试',
+        _loadTokenData,
+      );
+    }
     if (_totalTokens == 0) {
       return SizedBox(
         height: 70,
@@ -795,6 +845,23 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
         const SizedBox(height: 10),
         _buildStackedBars(isDark, palette),
       ],
+    );
+  }
+
+  Widget _buildLoadError(String message, VoidCallback onRetry) {
+    return SizedBox(
+      height: 100,
+      child: Center(
+        child: TextButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded, size: 16),
+          label: Text(message),
+          style: TextButton.styleFrom(
+            foregroundColor: context.omniPalette.textSecondary,
+            textStyle: const TextStyle(fontSize: 11),
+          ),
+        ),
+      ),
     );
   }
 

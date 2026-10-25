@@ -346,13 +346,6 @@ extension _HomeDrawerHome on HomeDrawerState {
                             selected: _homeFilter.id == filter.id,
                             child: Row(
                               children: [
-                                SizedBox.square(
-                                  dimension: 18,
-                                  child: _homeFilter.id == filter.id
-                                      ? const Icon(LucideIcons.check, size: 18)
-                                      : null,
-                                ),
-                                const SizedBox(width: 12),
                                 ExcludeSemantics(
                                   child: _buildHomeFilterIcon(
                                     filter,
@@ -366,6 +359,13 @@ extension _HomeDrawerHome on HomeDrawerState {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
+                                ),
+                                const SizedBox(width: 12),
+                                SizedBox.square(
+                                  dimension: 18,
+                                  child: _homeFilter.id == filter.id
+                                      ? const Icon(LucideIcons.check, size: 18)
+                                      : null,
                                 ),
                               ],
                             ),

@@ -1028,52 +1028,67 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     // Harness changes the provider identity and capabilities, not the event
     // or card layout. Pure chat is simply an ACP run with no tool cards.
     final useAcpPresentation = true;
-    return ChatMessageList(
-      messages: visibleMessages,
-      activeAgentTurnIds: activeAgentTurnIds,
-      useAcpPresentation: useAcpPresentation,
-      activeAcpAgentId: activeAcpAgentId,
-      onRetryAgentMessage: this._retryFailedAgentTurn,
-      showEmptyGreeting: homeGreetingSettings.greetingEnabled,
-      liftEmptyGreeting: liftEmptyGreeting,
-      emptyGreetingQuickPrompts: homeGreetingSettings.quickPrompts,
-      emptyGreetingPinnedQuickPromptIds:
-          homeGreetingSettings.pinnedQuickPromptIds,
-      onQuickPromptSelected: _applyHomeQuickPrompt,
-      emptyGreetingAgentName: mode == ChatPageMode.agent
-          ? _activeAcpAgentDisplayName
-          : null,
-      emptyGreetingAgentWorkspaceName: mode == ChatPageMode.agent
-          ? _remoteCodexWorkspaceNameForGreeting()
-          : null,
-      onEmptyGreetingAgentWorkspaceTap: mode == ChatPageMode.agent
-          ? () => unawaited(_openRemoteCodexWorkspacePicker())
-          : null,
-      scrollController: _scrollControllerForMode(mode),
-      navigator: _modeState(mode).messageListNavigator,
-      bottomOverlayInset:
+    return ChatHistoryLoadingTransition(
+      isLoading: _isConversationHistoryLoading,
+      bottomInset:
           reservedBottomOverlayInset +
           (mode == _activeMode ? _slashCommandPanelOccupiedHeight : 0),
-      onInternalInputFocusChanged: (hasFocus) {
-        _handleMessageListInputFocusChanged(mode, hasFocus);
-      },
-      onBeforeTaskExecute: handleBeforeTaskExecute,
-      onCancelTask: _onCancelTaskFromCard,
-      onRequestAuthorize: mode == ChatPageMode.openclaw
-          ? null
-          : _requestAuthorizeForExecution,
-      onUserMessageLongPressStart: switch (mode) {
-        ChatPageMode.normal => this._handleUserMessageLongPressStart,
-        ChatPageMode.agent => this._handleUserMessageLongPressStart,
-        ChatPageMode.openclaw => null,
-      },
-      onLatestUserMessageEditTap: mode == ChatPageMode.openclaw
-          ? null
-          : this._startEditingLatestUserMessage,
-      onLoadMore: loadMoreMessages,
-      hasMore: hasMoreMessages,
-      visualProfile: visualProfile,
-      appearanceConfig: appearanceConfig,
+      textColor:
+          !appearanceConfig.isActive &&
+              appearanceConfig.chatTextColorMode !=
+                  AppBackgroundTextColorMode.custom
+          ? context.omniPalette.textSecondary
+          : visualProfile.secondaryTextColor,
+      child: ChatMessageList(
+        messages: visibleMessages,
+        activeAgentTurnIds: activeAgentTurnIds,
+        useAcpPresentation: useAcpPresentation,
+        activeAcpAgentId: activeAcpAgentId,
+        onRetryAgentMessage: this._retryFailedAgentTurn,
+        showEmptyGreeting:
+            homeGreetingSettings.greetingEnabled &&
+            (_resolvedThreadTarget ?? widget.threadTarget)?.isNewConversation ==
+                true,
+        liftEmptyGreeting: liftEmptyGreeting,
+        emptyGreetingQuickPrompts: homeGreetingSettings.quickPrompts,
+        emptyGreetingPinnedQuickPromptIds:
+            homeGreetingSettings.pinnedQuickPromptIds,
+        onQuickPromptSelected: _applyHomeQuickPrompt,
+        emptyGreetingAgentName: mode == ChatPageMode.agent
+            ? _activeAcpAgentDisplayName
+            : null,
+        emptyGreetingAgentWorkspaceName: mode == ChatPageMode.agent
+            ? _remoteCodexWorkspaceNameForGreeting()
+            : null,
+        onEmptyGreetingAgentWorkspaceTap: mode == ChatPageMode.agent
+            ? () => unawaited(_openRemoteCodexWorkspacePicker())
+            : null,
+        scrollController: _scrollControllerForMode(mode),
+        navigator: _modeState(mode).messageListNavigator,
+        bottomOverlayInset:
+            reservedBottomOverlayInset +
+            (mode == _activeMode ? _slashCommandPanelOccupiedHeight : 0),
+        onInternalInputFocusChanged: (hasFocus) {
+          _handleMessageListInputFocusChanged(mode, hasFocus);
+        },
+        onBeforeTaskExecute: handleBeforeTaskExecute,
+        onCancelTask: _onCancelTaskFromCard,
+        onRequestAuthorize: mode == ChatPageMode.openclaw
+            ? null
+            : _requestAuthorizeForExecution,
+        onUserMessageLongPressStart: switch (mode) {
+          ChatPageMode.normal => this._handleUserMessageLongPressStart,
+          ChatPageMode.agent => this._handleUserMessageLongPressStart,
+          ChatPageMode.openclaw => null,
+        },
+        onLatestUserMessageEditTap: mode == ChatPageMode.openclaw
+            ? null
+            : this._startEditingLatestUserMessage,
+        onLoadMore: loadMoreMessages,
+        hasMore: hasMoreMessages,
+        visualProfile: visualProfile,
+        appearanceConfig: appearanceConfig,
+      ),
     );
   }
 

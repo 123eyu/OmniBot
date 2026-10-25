@@ -258,30 +258,46 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
 
   @override
   Future<void> _bootstrapConversationThread() async {
-    final requestId = _beginConversationTargetRequest();
-    await _loadOpenClawConfig();
-    if (!_isConversationTargetRequestCurrent(requestId)) return;
-    await _loadTerminalEnvironmentVariables();
-    if (!_isConversationTargetRequestCurrent(requestId)) return;
-    final target = await _resolveConversationThreadTarget(widget.threadTarget);
-    if (!_isConversationTargetRequestCurrent(requestId)) return;
-    await _applyConversationThreadTarget(
-      target,
-      syncPage: false,
-      requestId: requestId,
+    final requestId = _beginConversationTargetRequest(
+      isHistoryLoading: widget.threadTarget?.isNewConversation != true,
     );
-    if (!_isConversationTargetRequestCurrent(requestId)) return;
-    unawaited(_loadNormalChatModelContext());
-    unawaited(_refreshLiveBrowserSessionSnapshot(syncRuntime: true));
+    try {
+      await _loadOpenClawConfig();
+      if (!_isConversationTargetRequestCurrent(requestId)) return;
+      await _loadTerminalEnvironmentVariables();
+      if (!_isConversationTargetRequestCurrent(requestId)) return;
+      final target = await _resolveConversationThreadTarget(
+        widget.threadTarget,
+      );
+      if (!_isConversationTargetRequestCurrent(requestId)) return;
+      await _applyConversationThreadTarget(
+        target,
+        syncPage: false,
+        requestId: requestId,
+      );
+      if (!_isConversationTargetRequestCurrent(requestId)) return;
+      unawaited(_loadNormalChatModelContext());
+      unawaited(_refreshLiveBrowserSessionSnapshot(syncRuntime: true));
+    } finally {
+      _finishConversationHistoryLoad(requestId);
+    }
   }
 
   @override
   Future<void> _reloadConversationForCurrentTarget() async {
-    final requestId = _beginConversationTargetRequest();
-    final target = await _resolveConversationThreadTarget(widget.threadTarget);
-    if (!_isConversationTargetRequestCurrent(requestId)) return;
-    await _applyConversationThreadTarget(target, requestId: requestId);
-    if (!_isConversationTargetRequestCurrent(requestId)) return;
+    final requestId = _beginConversationTargetRequest(
+      isHistoryLoading: widget.threadTarget?.isNewConversation != true,
+    );
+    try {
+      final target = await _resolveConversationThreadTarget(
+        widget.threadTarget,
+      );
+      if (!_isConversationTargetRequestCurrent(requestId)) return;
+      await _applyConversationThreadTarget(target, requestId: requestId);
+      if (!_isConversationTargetRequestCurrent(requestId)) return;
+    } finally {
+      _finishConversationHistoryLoad(requestId);
+    }
   }
 
   @override
@@ -291,105 +307,119 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     bool preserveComposer = false,
     int? requestId,
   }) async {
-    final activeRequestId = requestId ?? _beginConversationTargetRequest();
+    final activeRequestId =
+        requestId ??
+        _beginConversationTargetRequest(
+          isHistoryLoading: !target.isNewConversation,
+        );
     bool isStaleRequest() =>
         !_isConversationTargetRequestCurrent(activeRequestId);
-    invalidateConversationLifecycle();
-    final lifecycleToken = captureConversationLifecycleToken();
-    final effectiveTarget = await _overrideTargetWithSharedDraftIfNeeded(
-      target,
-    );
-    if (isStaleRequest()) return;
-    final targetMode = _pageModeForConversationMode(effectiveTarget.mode);
-    // Carry the current composer across the first synchronous target reset.
-    // onConversationReset preserves newer edits made during initialization.
-    final composerValue = preserveComposer ? _messageController.value : null;
-    final composerAttachments = preserveComposer
-        ? List<ChatInputAttachment>.of(_pendingAttachments)
-        : null;
-    _storeDraftForActiveConversationMode();
-    if (effectiveTarget.isNewConversation && !preserveComposer) {
-      _modeState(targetMode).draftMessage = '';
-      _modeState(targetMode).pendingAttachments.clear();
-    }
-    if (isStaleRequest()) return;
-    setState(() {
-      _resolvedThreadTarget = effectiveTarget;
-      _activeConversationMode = targetMode;
-      _activeSurfaceMode = _surfaceForConversationMode(effectiveTarget.mode);
-      _showSlashCommandPanel = false;
-      _showModelMentionPanel = false;
-      _activeModelMentionToken = null;
-      _openClawPanelExpanded = false;
-      _isBrowserOverlayVisible = false;
-      _isSurfacePageScrolling = false;
-    });
-    // A new Harness target without a conversationId is a new conversation.
-    // The previous conversation remains persisted in history and is not
-    // implicitly inherited by the new Harness.
-    _resetLocalConversationState(targetMode);
-    if (composerValue != null) {
-      _modeState(targetMode).draftMessage = composerValue.text;
-      _modeState(targetMode).pendingAttachments.addAll(composerAttachments!);
-    }
-    _restoreLocalAgentThreadIdFromTarget(effectiveTarget);
-    if (_shouldSyncExistingLocalAgentTarget(effectiveTarget)) {
-      unawaited(
-        _syncExistingLocalAgentTarget(effectiveTarget, activeRequestId),
-      );
-    }
-    if (!preserveComposer) {
-      _applyDraftForConversationMode(targetMode);
-    }
-    if (preserveComposer) {
-      _composerPreservationRequestId = activeRequestId;
-    }
     try {
-      if (effectiveTarget.isRemoteCodexSessionTarget) {
-        await _prepareRemoteCodexSessionTarget(effectiveTarget);
-      } else {
-        await initializeConversation(lifecycleToken: lifecycleToken);
+      invalidateConversationLifecycle();
+      final lifecycleToken = captureConversationLifecycleToken();
+      final effectiveTarget = await _overrideTargetWithSharedDraftIfNeeded(
+        target,
+      );
+      if (isStaleRequest()) return;
+      final targetMode = _pageModeForConversationMode(effectiveTarget.mode);
+      // Carry the current composer across the first synchronous target reset.
+      // onConversationReset preserves newer edits made during initialization.
+      final composerValue = preserveComposer ? _messageController.value : null;
+      final composerAttachments = preserveComposer
+          ? List<ChatInputAttachment>.of(_pendingAttachments)
+          : null;
+      _storeDraftForActiveConversationMode();
+      if (effectiveTarget.isNewConversation && !preserveComposer) {
+        _modeState(targetMode).draftMessage = '';
+        _modeState(targetMode).pendingAttachments.clear();
+      }
+      if (isStaleRequest()) return;
+      setState(() {
+        _resolvedThreadTarget = effectiveTarget;
+        _activeConversationMode = targetMode;
+        _activeSurfaceMode = _surfaceForConversationMode(effectiveTarget.mode);
+        _showSlashCommandPanel = false;
+        _showModelMentionPanel = false;
+        _activeModelMentionToken = null;
+        _openClawPanelExpanded = false;
+        _isBrowserOverlayVisible = false;
+        _isSurfacePageScrolling = false;
+      });
+      // A new Harness target without a conversationId is a new conversation.
+      // The previous conversation remains persisted in history and is not
+      // implicitly inherited by the new Harness.
+      _resetLocalConversationState(targetMode);
+      if (composerValue != null) {
+        _modeState(targetMode).draftMessage = composerValue.text;
+        _modeState(targetMode).pendingAttachments.addAll(composerAttachments!);
+      }
+      _restoreLocalAgentThreadIdFromTarget(effectiveTarget);
+      final agentHistorySync =
+          _shouldSyncExistingLocalAgentTarget(effectiveTarget)
+          ? _syncExistingLocalAgentTarget(effectiveTarget, activeRequestId)
+          : null;
+      if (!preserveComposer) {
+        _applyDraftForConversationMode(targetMode);
+      }
+      if (preserveComposer) {
+        _composerPreservationRequestId = activeRequestId;
+      }
+      try {
+        if (effectiveTarget.isRemoteCodexSessionTarget) {
+          await _prepareRemoteCodexSessionTarget(effectiveTarget);
+        } else {
+          await initializeConversation(lifecycleToken: lifecycleToken);
+        }
+      } finally {
+        if (_composerPreservationRequestId == activeRequestId) {
+          _composerPreservationRequestId = null;
+        }
+      }
+      if (isStaleRequest()) return;
+      // Local history can be empty while an existing cloud session is hydrating.
+      // Already available messages can be shown without waiting for metadata sync.
+      if (agentHistorySync != null && _messages.isEmpty) {
+        await agentHistorySync;
+        if (isStaleRequest()) return;
+      }
+      _finishConversationHistoryLoad(activeRequestId);
+      if (_activeConversationMode == ChatPageMode.agent) {
+        await _refreshAgentCommandPreferences();
+        if (isStaleRequest()) return;
+      }
+      await _applyStagedSharedDraftIfNeeded(effectiveTarget);
+      if (isStaleRequest()) return;
+      await _sendInitialMessageIfNeeded(effectiveTarget);
+      if (isStaleRequest()) return;
+      await _persistVisibleThreadTargetIfNeeded();
+      unawaited(_syncVisibleChatConversation());
+      if (isStaleRequest()) return;
+      if (syncPage) {
+        _jumpToCurrentModePage(animate: false);
+      }
+      if (effectiveTarget.isNewConversation &&
+          (effectiveTarget.initialMessage?.trim().isEmpty ?? true) &&
+          !widget.showFirstUseTour) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!_isConversationTargetRequestCurrent(activeRequestId) ||
+              ModalRoute.of(context)?.isCurrent != true ||
+              widget.showFirstUseTour ||
+              _resolvedThreadTarget?.isNewConversation != true ||
+              _currentConversationId != null ||
+              _messages.isNotEmpty ||
+              _isAiResponding ||
+              _sendMessageInFlightTargetIds.contains(activeRequestId) ||
+              _isWorkspaceSurface ||
+              _isBrowserOverlayVisible ||
+              _isPopupVisible) {
+            return;
+          }
+          _requestComposerFocus(showKeyboard: true);
+        });
+        WidgetsBinding.instance.ensureVisualUpdate();
       }
     } finally {
-      if (_composerPreservationRequestId == activeRequestId) {
-        _composerPreservationRequestId = null;
-      }
-    }
-    if (isStaleRequest()) return;
-    if (_activeConversationMode == ChatPageMode.agent) {
-      await _refreshAgentCommandPreferences();
-      if (isStaleRequest()) return;
-    }
-    await _applyStagedSharedDraftIfNeeded(effectiveTarget);
-    if (isStaleRequest()) return;
-    await _sendInitialMessageIfNeeded(effectiveTarget);
-    if (isStaleRequest()) return;
-    await _persistVisibleThreadTargetIfNeeded();
-    unawaited(_syncVisibleChatConversation());
-    if (isStaleRequest()) return;
-    if (syncPage) {
-      _jumpToCurrentModePage(animate: false);
-    }
-    if (effectiveTarget.isNewConversation &&
-        (effectiveTarget.initialMessage?.trim().isEmpty ?? true) &&
-        !widget.showFirstUseTour) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!_isConversationTargetRequestCurrent(activeRequestId) ||
-            ModalRoute.of(context)?.isCurrent != true ||
-            widget.showFirstUseTour ||
-            _resolvedThreadTarget?.isNewConversation != true ||
-            _currentConversationId != null ||
-            _messages.isNotEmpty ||
-            _isAiResponding ||
-            _sendMessageInFlightTargetIds.contains(activeRequestId) ||
-            _isWorkspaceSurface ||
-            _isBrowserOverlayVisible ||
-            _isPopupVisible) {
-          return;
-        }
-        _requestComposerFocus(showKeyboard: true);
-      });
-      WidgetsBinding.instance.ensureVisualUpdate();
+      _finishConversationHistoryLoad(activeRequestId);
     }
   }
 

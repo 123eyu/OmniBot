@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/features/home/pages/chat/chat_page.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
 import 'package:ui/features/home/pages/chat/widgets/acp_config_button.dart';
+import 'package:ui/features/home/pages/chat/widgets/chat_empty_greeting.dart';
 import 'package:ui/features/home/pages/chat/widgets/chat_widgets.dart';
 import 'package:ui/features/home/pages/chat/widgets/new_conversation_mode_selector.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/chat_input_area.dart';
@@ -67,6 +68,17 @@ void main() {
   Completer<void>? initializeGate;
   Completer<void>? sessionNewGate;
   Completer<void>? sessionLoadGate;
+  Completer<void>? historyMetadataGate;
+  Completer<void>? historySessionGate;
+  Map<String, Object?>? historySessionResponse;
+  Completer<void>? remoteSessionLoadGate;
+  Completer<void>? remoteHistoryReadGate;
+  var useRemoteRuntime = false;
+  Completer<void>? restoredTargetGate;
+  ConversationThreadTarget? restoredTarget;
+  late Map<int, Completer<void>> historyPageGates;
+  late Map<int, List<Map<String, Object?>>> historyPages;
+  late Set<int> failedHistoryPages;
   var allowConversationCreation = false;
   var failAgentStatus = false;
   var nextSessionNumber = 0;
@@ -131,6 +143,17 @@ void main() {
     initializeGate = null;
     sessionNewGate = null;
     sessionLoadGate = null;
+    historyMetadataGate = null;
+    historySessionGate = null;
+    historySessionResponse = null;
+    remoteSessionLoadGate = null;
+    remoteHistoryReadGate = null;
+    useRemoteRuntime = false;
+    restoredTargetGate = null;
+    restoredTarget = null;
+    historyPageGates = {};
+    historyPages = {};
+    failedHistoryPages = {};
     allowConversationCreation = false;
     failAgentStatus = false;
     messagesBeforeStatusFailure = null;
@@ -151,9 +174,25 @@ void main() {
       assistCalls.add(call);
       switch (call.method) {
         case 'getConversations':
+          await historyMetadataGate?.future;
           return conversations;
         case 'getConversationMessagesPaged':
-          return {'messages': <Object?>[], 'hasMore': false};
+          final conversationId =
+              (call.arguments as Map)['conversationId'] as int;
+          await historyPageGates[conversationId]?.future;
+          if (failedHistoryPages.contains(conversationId)) {
+            throw PlatformException(code: 'HISTORY_UNAVAILABLE');
+          }
+          return {
+            'messages': historyPages[conversationId] ?? <Object?>[],
+            'hasMore': false,
+          };
+        case 'conversationSelection':
+          if ((call.arguments as Map)['operation'] == 'getLast') {
+            await restoredTargetGate?.future;
+            return restoredTarget?.toJson();
+          }
+          return null;
         case 'listModelProviderProfiles':
           return {'profiles': <Object?>[], 'editingProfileId': ''};
         case 'getSceneCatalog':
@@ -212,10 +251,23 @@ void main() {
           }
           return {
             'ready': false,
-            'connected': false,
-            'activeAgentId': 'xiaowan-acp',
+            'connected': useRemoteRuntime,
+            if (useRemoteRuntime) 'runtime': 'remote',
+            'remoteEnabled': useRemoteRuntime,
+            'activeAgentId': useRemoteRuntime ? 'codex-acp' : 'xiaowan-acp',
             'activeAgentName': '小万',
           };
+        case 'connect':
+          if (useRemoteRuntime) {
+            return {
+              'ready': false,
+              'connected': true,
+              'runtime': 'remote',
+              'remoteEnabled': true,
+              'activeAgentId': 'codex-acp',
+            };
+          }
+          return <String, Object?>{};
         case 'session/new':
           final number = ++nextSessionNumber;
           final sessionId = number == 1
@@ -229,7 +281,42 @@ void main() {
           return sessionResponse(sessionId);
         case 'session/load':
           final arguments = call.arguments as Map;
+          if (useRemoteRuntime &&
+              arguments['sessionId'] == 'remote-history-session') {
+            if (arguments['includeHistory'] == true) {
+              await remoteHistoryReadGate?.future;
+              return {
+                'threadId': 'remote-history-session',
+                'thread': {
+                  'id': 'remote-history-session',
+                  'turns': [
+                    {
+                      'id': 'remote-history-turn',
+                      'stopReason': 'end_turn',
+                      'items': [
+                        {
+                          'id': 'remote-history-message',
+                          'type': 'userMessage',
+                          'content': '远程会话恢复的历史消息',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              };
+            }
+            await remoteSessionLoadGate?.future;
+            return {
+              'threadId': 'remote-history-session',
+              'thread': {'id': 'remote-history-session'},
+            };
+          }
           if (arguments['refreshConfig'] == true) await sessionLoadGate?.future;
+          if (arguments['conversationId'] != null &&
+              arguments['includeHistory'] == false) {
+            await historySessionGate?.future;
+            if (historySessionResponse != null) return historySessionResponse;
+          }
           return sessionResponse(
             (arguments['sessionId'] ??
                     'existing-session-${arguments['conversationId']}')
@@ -250,6 +337,10 @@ void main() {
       }
       return <String, Object?>{};
     });
+    // Keep the process-wide event subscription outside a widget test's fake
+    // async zone so later tests can deliver native ACP updates to it as well.
+    coordinator.ensureInitialized();
+    await Future<void>.delayed(Duration.zero);
   });
 
   tearDown(() {
@@ -265,8 +356,9 @@ void main() {
 
   Future<void> pumpChat(
     WidgetTester tester,
-    ConversationThreadTarget target, {
+    ConversationThreadTarget? target, {
     bool tour = false,
+    bool settle = true,
     GlobalKey<NavigatorState>? navigatorKey,
   }) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -285,7 +377,46 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    if (settle) await tester.pumpAndSettle();
+  }
+
+  Future<void> pumpHistoryFrames(WidgetTester tester) async {
+    // The loading label animates continuously, so a pending read must never
+    // use pumpAndSettle. Allow I/O microtasks and several actual frames instead.
+    for (var frame = 0; frame < 6; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+  }
+
+  Map<String, Object?> historyConversation(
+    int id,
+    ConversationMode mode, {
+    int messageCount = 1,
+  }) => {
+    'id': id,
+    'title': '历史对话 $id',
+    'mode': mode.storageValue,
+    'agentId': mode == ConversationMode.agent ? 'xiaowan-acp' : null,
+    'status': 1,
+    'messageCount': messageCount,
+    'createdAt': 1000,
+    'updatedAt': 2000,
+  };
+
+  List<Map<String, Object?>> historyMessage(int conversationId) => [
+    {
+      'id': 'history-message-$conversationId',
+      'type': 1,
+      'user': 1,
+      'content': {'text': '已加载历史消息 $conversationId'},
+      'createAt': 1000,
+    },
+  ];
+
+  void expectHistoryLoading() {
+    expect(find.text('OmniBot'), findsOneWidget);
+    expect(find.byType(ChatEmptyGreeting), findsNothing);
+    expect(find.byType(ChatMessageList), findsNothing);
   }
 
   ChatInputArea composer(WidgetTester tester) =>
@@ -371,6 +502,345 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   }
+
+  for (final mode in [ConversationMode.chatOnly, ConversationMode.agent]) {
+    testWidgets(
+      '${mode.storageValue} history shows OmniBot from its first frame through metadata and message reads',
+      (tester) async {
+        const conversationId = 801;
+        historyMetadataGate = Completer<void>();
+        historyPageGates[conversationId] = Completer<void>();
+        conversations = [historyConversation(conversationId, mode)];
+        historyPages[conversationId] = historyMessage(conversationId);
+
+        await pumpChat(
+          tester,
+          ConversationThreadTarget.existing(
+            conversationId: conversationId,
+            mode: mode,
+          ),
+          settle: false,
+        );
+        expectHistoryLoading();
+        await pumpHistoryFrames(tester);
+        expectHistoryLoading();
+        expect(
+          assistCalls.where((call) => call.method == 'getConversations'),
+          isNotEmpty,
+        );
+        expect(
+          assistCalls.where(
+            (call) => call.method == 'getConversationMessagesPaged',
+          ),
+          isEmpty,
+        );
+
+        historyMetadataGate!.complete();
+        await pumpHistoryFrames(tester);
+        expectHistoryLoading();
+        expect(
+          assistCalls.where(
+            (call) => call.method == 'getConversationMessagesPaged',
+          ),
+          isNotEmpty,
+        );
+
+        historyPageGates[conversationId]!.complete();
+        await tester.pumpAndSettle();
+        expect(find.text('已加载历史消息 $conversationId'), findsOneWidget);
+        expect(find.text('OmniBot'), findsNothing);
+        expect(find.byType(ChatEmptyGreeting), findsNothing);
+        expect(tester.takeException(), isNull);
+        await disposeChat(tester);
+      },
+    );
+  }
+
+  for (final eventBeforeLoad in [false, true]) {
+    testWidgets(
+      'remote history awaits its single hydration read with early ACP update: $eventBeforeLoad',
+      (tester) async {
+        useRemoteRuntime = true;
+        remoteSessionLoadGate = Completer<void>();
+        remoteHistoryReadGate = Completer<void>();
+        await pumpChat(
+          tester,
+          const ConversationThreadTarget.agentSession(
+            sessionId: 'remote-history-session',
+            agentId: 'codex-acp',
+          ),
+          settle: false,
+        );
+        await pumpHistoryFrames(tester);
+        expectHistoryLoading();
+        expect(
+          agentCalls.where((call) => call.method == 'session/load'),
+          hasLength(1),
+        );
+
+        if (eventBeforeLoad) {
+          // Session-scoped command metadata can arrive during session/load.
+          // It selects the already reserved remote runtime without admitting
+          // a turn or installing any message, and starts history hydration.
+          await tester.runAsync(() async {
+            await messenger.handlePlatformMessage(
+              'cn.com.omnimind.bot/AgentRuntimeEvents',
+              const StandardMethodCodec().encodeSuccessEnvelope({
+                'method': 'session/update',
+                'threadId': 'remote-history-session',
+                'params': {
+                  'sessionId': 'remote-history-session',
+                  'update': {
+                    'sessionUpdate': 'available_commands_update',
+                    'availableCommands': <Object?>[],
+                  },
+                },
+              }),
+              (_) {},
+            );
+            await Future<void>.delayed(Duration.zero);
+          });
+          await pumpHistoryFrames(tester);
+          expect(
+            agentCalls.where(
+              (call) =>
+                  call.method == 'session/load' &&
+                  (call.arguments as Map)['includeHistory'] == true,
+            ),
+            hasLength(1),
+          );
+          expectHistoryLoading();
+        }
+
+        // A metadata-only load response must await the same pending read
+        // whether hydration started above or starts after this response.
+        remoteSessionLoadGate!.complete();
+        await pumpHistoryFrames(tester);
+        expectHistoryLoading();
+        expect(
+          agentCalls.where(
+            (call) =>
+                call.method == 'session/load' &&
+                (call.arguments as Map)['includeHistory'] == true,
+          ),
+          hasLength(1),
+        );
+
+        remoteHistoryReadGate!.complete();
+        await tester.pumpAndSettle();
+        expect(find.text('远程会话恢复的历史消息'), findsOneWidget);
+        expect(find.text('OmniBot'), findsNothing);
+        expect(find.byType(ChatEmptyGreeting), findsNothing);
+        expect(
+          agentCalls.where((call) => call.method == 'session/load'),
+          hasLength(2),
+        );
+        await disposeChat(tester);
+      },
+    );
+  }
+
+  testWidgets('empty local history waits for its existing cloud session', (
+    tester,
+  ) async {
+    const conversationId = 806;
+    historySessionGate = Completer<void>();
+    conversations = [
+      {
+        ...historyConversation(conversationId, ConversationMode.agent),
+        'agentId': 'na-cloud',
+      },
+    ];
+    historySessionResponse = {
+      'threadId': 'na-existing-session',
+      'agentId': 'na-cloud',
+      'thread': {
+        'id': 'na-existing-session',
+        'agentId': 'na-cloud',
+        'turns': [
+          {
+            'id': 'cloud-history-turn',
+            'stopReason': 'end_turn',
+            'items': [
+              {
+                'id': 'cloud-history-message',
+                'type': 'userMessage',
+                'content': '云端恢复的历史消息',
+              },
+            ],
+          },
+        ],
+      },
+    };
+    await pumpChat(
+      tester,
+      const ConversationThreadTarget.existing(
+        conversationId: conversationId,
+        mode: ConversationMode.agent,
+        agentId: 'na-cloud',
+      ),
+      settle: false,
+    );
+    await pumpHistoryFrames(tester);
+    expect(
+      assistCalls.where(
+        (call) => call.method == 'getConversationMessagesPaged',
+      ),
+      isNotEmpty,
+    );
+    expect(
+      agentCalls.where(
+        (call) =>
+            call.method == 'session/load' &&
+            (call.arguments as Map)['conversationId'] == conversationId,
+      ),
+      hasLength(1),
+    );
+    expectHistoryLoading();
+
+    historySessionGate!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('云端恢复的历史消息'), findsOneWidget);
+    expect(find.text('OmniBot'), findsNothing);
+    expect(find.byType(ChatEmptyGreeting), findsNothing);
+    await disposeChat(tester);
+  });
+
+  testWidgets(
+    'restoring an unresolved target keeps the welcome screen hidden',
+    (tester) async {
+      const conversationId = 802;
+      restoredTargetGate = Completer<void>();
+      restoredTarget = const ConversationThreadTarget.existing(
+        conversationId: conversationId,
+        mode: ConversationMode.chatOnly,
+      );
+      conversations = [
+        historyConversation(conversationId, ConversationMode.chatOnly),
+      ];
+      historyPages[conversationId] = historyMessage(conversationId);
+
+      await pumpChat(tester, null, settle: false);
+      expectHistoryLoading();
+      await pumpHistoryFrames(tester);
+      expectHistoryLoading();
+      expect(
+        assistCalls.where(
+          (call) =>
+              call.method == 'conversationSelection' &&
+              (call.arguments as Map)['operation'] == 'getLast',
+        ),
+        isNotEmpty,
+      );
+
+      restoredTargetGate!.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('已加载历史消息 $conversationId'), findsOneWidget);
+      expect(find.byType(ChatEmptyGreeting), findsNothing);
+      await disposeChat(tester);
+    },
+  );
+
+  testWidgets('late history completion cannot dismiss the next target loader', (
+    tester,
+  ) async {
+    const firstId = 803;
+    const secondId = 804;
+    for (final id in [firstId, secondId]) {
+      conversations.add(historyConversation(id, ConversationMode.chatOnly));
+      historyPages[id] = historyMessage(id);
+      historyPageGates[id] = Completer<void>();
+    }
+    await pumpChat(
+      tester,
+      const ConversationThreadTarget.existing(
+        conversationId: firstId,
+        mode: ConversationMode.chatOnly,
+      ),
+      settle: false,
+    );
+    await pumpHistoryFrames(tester);
+    expectHistoryLoading();
+    final originalPageState = tester.state(find.byType(ChatPage));
+
+    await pumpChat(
+      tester,
+      const ConversationThreadTarget.existing(
+        conversationId: secondId,
+        mode: ConversationMode.chatOnly,
+      ),
+      settle: false,
+    );
+    expect(tester.state(find.byType(ChatPage)), same(originalPageState));
+    await pumpHistoryFrames(tester);
+    expectHistoryLoading();
+    expect(
+      assistCalls
+          .where((call) => call.method == 'getConversationMessagesPaged')
+          .map((call) => (call.arguments as Map)['conversationId']),
+      containsAll([firstId, secondId]),
+    );
+
+    historyPageGates[firstId]!.complete();
+    await pumpHistoryFrames(tester);
+    expectHistoryLoading();
+    expect(find.text('已加载历史消息 $firstId'), findsNothing);
+
+    historyPageGates[secondId]!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('已加载历史消息 $secondId'), findsOneWidget);
+    expect(find.text('已加载历史消息 $firstId'), findsNothing);
+    expect(find.byType(ChatEmptyGreeting), findsNothing);
+    await disposeChat(tester);
+  });
+
+  for (final failHistory in [false, true]) {
+    testWidgets(
+      '${failHistory ? 'failed' : 'empty'} existing history finishes loading without a new-chat greeting',
+      (tester) async {
+        const conversationId = 805;
+        conversations = [
+          historyConversation(
+            conversationId,
+            ConversationMode.chatOnly,
+            messageCount: failHistory ? 1 : 0,
+          ),
+        ];
+        historyPageGates[conversationId] = Completer<void>();
+        if (failHistory) failedHistoryPages.add(conversationId);
+        await pumpChat(
+          tester,
+          const ConversationThreadTarget.existing(
+            conversationId: conversationId,
+            mode: ConversationMode.chatOnly,
+          ),
+          settle: false,
+        );
+        await pumpHistoryFrames(tester);
+        expectHistoryLoading();
+        historyPageGates[conversationId]!.complete();
+        await tester.pumpAndSettle();
+        expect(find.text('OmniBot'), findsNothing);
+        expect(find.byType(ChatEmptyGreeting), findsNothing);
+        expect(find.byType(ChatMessageList), findsOneWidget);
+        await disposeChat(tester);
+      },
+    );
+  }
+
+  testWidgets('a new conversation keeps its greeting and composer', (
+    tester,
+  ) async {
+    await pumpChat(
+      tester,
+      const ConversationThreadTarget.newConversation(agentId: 'xiaowan-acp'),
+    );
+    expect(find.byType(ChatEmptyGreeting), findsOneWidget);
+    expect(find.text('OmniBot'), findsNothing);
+    expect(find.byType(ChatInputArea), findsOneWidget);
+    expectNoSessionAdmission();
+    await disposeChat(tester);
+  });
 
   testWidgets(
     'existing history has no new-conversation selector or autofocus',
