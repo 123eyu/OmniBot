@@ -1,17 +1,22 @@
-package cn.com.omnimind.baselib.shizuku
+package cn.com.omnimind.baselib.privileged
 
-import android.os.Process
 import cn.com.omnimind.baselib.util.OmniLog
-import java.io.ByteArrayOutputStream
-import java.util.concurrent.TimeUnit
-import kotlin.concurrent.thread
+import java.util.concurrent.ConcurrentHashMap
 
-internal object PrivilegedCommandExecutor {
+internal class PrivilegedCommandExecutor(
+    private val backend: PrivilegedBackend,
+    private val provider: PrivilegedProvider,
+    private val runner: PrivilegedProcessRunner,
+) {
+    private val sessions = PrivilegedShellSessionManager(runner)
+    private val requests = ConcurrentHashMap<String, Thread>()
+    private val requestLock = Any()
+    private val cancelled = linkedSetOf<String>()
 
-    private const val TAG = "PrivilegedCommandExec"
-    private const val OUTPUT_LIMIT = 16_000
-    private const val DEFAULT_TYPED_TIMEOUT_SECONDS = 8L
-    private const val DEFAULT_SHELL_TIMEOUT_SECONDS = 60L
+    private val TAG = "PrivilegedCommandExec"
+    private val OUTPUT_LIMIT = 16_000
+    private val DEFAULT_TYPED_TIMEOUT_SECONDS = 8L
+    private val DEFAULT_SHELL_TIMEOUT_SECONDS = 60L
 
     private val allowedSettingsNamespaces = setOf("system", "secure", "global")
     private val allowedDumpsysServices = setOf(
@@ -33,12 +38,35 @@ internal object PrivilegedCommandExecutor {
     private val allowedAppOpsModes = setOf("allow", "ignore", "deny", "default", "foreground")
     private val envKeyPattern = Regex("^[A-Za-z_][A-Za-z0-9_]*$")
 
-    fun currentBackend(): ShizukuBackend {
-        return if (Process.myUid() == 0) ShizukuBackend.ROOT else ShizukuBackend.ADB
+    fun execute(request: PrivilegedRequest, admission: () -> Boolean = { true }): PrivilegedResult {
+        require(request.userId >= 0) { "Invalid Android user." }
+        synchronized(requestLock) {
+            if (cancelled.remove(request.requestId)) {
+                return failure(request, backend, "cancelled", "The request was cancelled before execution.")
+            }
+            check(requests.putIfAbsent(request.requestId, Thread.currentThread()) == null) { "request_already_running" }
+        }
+        return try {
+            executeRequest(request, admission).copy(provider = provider)
+        } finally {
+            synchronized(requestLock) { requests.remove(request.requestId) }
+        }
     }
 
-    fun execute(request: PrivilegedRequest): PrivilegedResult {
-        val backend = currentBackend()
+    fun cancel(requestId: String) {
+        synchronized(requestLock) {
+            val active = requests[requestId]
+            if (active != null) active.interrupt() else {
+                cancelled += requestId
+                while (cancelled.size > 256) cancelled.remove(cancelled.first())
+            }
+        }
+        runner.cancel(requestId)
+    }
+
+    private fun executeRequest(request: PrivilegedRequest, admission: () -> Boolean): PrivilegedResult {
+        if (!admission()) return failure(request, backend, "privileged_access_changed", "Privileged access changed before execution.")
+        if (backend == PrivilegedBackend.NONE) return failure(request, backend, "permission_denied", "No privileged process identity.")
         val action = PrivilegedActionPolicy.normalizeAction(request.action)
         val arguments = request.arguments
 
@@ -47,7 +75,7 @@ internal object PrivilegedCommandExecutor {
                 request = request,
                 backend = backend,
                 code = "unsupported_action",
-                message = "Action is not available for the current Shizuku backend."
+                message = "Action is not available for the selected privileged backend."
             ).also { audit(request, it) }
         }
 
@@ -78,37 +106,40 @@ internal object PrivilegedCommandExecutor {
         }
 
         val result = when (action) {
-            PrivilegedActionPolicy.ACTION_SHELL_EXEC -> executeRawShell(request, backend)
+            PrivilegedActionPolicy.ACTION_SHELL_EXEC -> executeRawShell(request, backend, admission)
             PrivilegedActionPolicy.ACTION_SESSION_START ->
-                PrivilegedShellSessionManager.startSession(request, backend)
+                sessions.startSession(request, backend, admission)
 
             PrivilegedActionPolicy.ACTION_SESSION_EXEC ->
-                PrivilegedShellSessionManager.execSession(request, backend)
+                sessions.execSession(request, backend, admission)
 
             PrivilegedActionPolicy.ACTION_SESSION_READ ->
-                PrivilegedShellSessionManager.readSession(request, backend)
+                sessions.readSession(request, backend)
 
             PrivilegedActionPolicy.ACTION_SESSION_STOP ->
-                PrivilegedShellSessionManager.stopSession(request, backend)
+                sessions.stopSession(request, backend)
 
-            else -> executeTypedAction(request, backend, action, arguments)
+            PrivilegedActionPolicy.ACTION_DEVICE_COMMAND -> executeRawShell(request, backend, admission)
+            else -> executeTypedAction(request, backend, action, arguments, admission)
         }
         audit(request, result)
         return result
     }
 
     fun shutdown() {
-        PrivilegedShellSessionManager.shutdown()
+        runner.cancelAll()
+        sessions.shutdown()
     }
 
     private fun executeTypedAction(
         request: PrivilegedRequest,
-        backend: ShizukuBackend,
+        backend: PrivilegedBackend,
         action: String,
         arguments: Map<String, String>,
+        admission: () -> Boolean,
     ): PrivilegedResult {
         val command = runCatching {
-            buildCommand(action, arguments, backend)
+            buildCommand(action, arguments, backend, request.userId)
         }.getOrElse { error ->
             return failure(
                 request = request,
@@ -118,7 +149,9 @@ internal object PrivilegedCommandExecutor {
             )
         }
 
-        val result = exec(
+        val result = runner.execute(
+            requestId = request.requestId,
+            requestAdmission = admission,
             command = command,
             timeoutSeconds = DEFAULT_TYPED_TIMEOUT_SECONDS
         )
@@ -152,7 +185,7 @@ internal object PrivilegedCommandExecutor {
                 stderr = stderr,
                 exitCode = result.exitCode,
                 availableActions = PrivilegedActionPolicy.visibleAgentActions(backend),
-                data = data,
+                data = data + ("truncated" to (result.truncated || result.stdout.length > OUTPUT_LIMIT || result.stderr.length > OUTPUT_LIMIT).toString()),
                 command = command.joinToString(" "),
                 timeoutSeconds = DEFAULT_TYPED_TIMEOUT_SECONDS.toInt()
             )
@@ -160,7 +193,7 @@ internal object PrivilegedCommandExecutor {
             failure(
                 request = request,
                 backend = backend,
-                code = if (result.timedOut) "timeout" else "command_failed",
+                code = result.errorCode ?: if (result.timedOut) "timeout" else "command_failed",
                 message = if (result.timedOut) {
                     "Privileged action timed out."
                 } else {
@@ -177,7 +210,8 @@ internal object PrivilegedCommandExecutor {
 
     private fun executeRawShell(
         request: PrivilegedRequest,
-        backend: ShizukuBackend,
+        backend: PrivilegedBackend,
+        admission: () -> Boolean,
     ): PrivilegedResult {
         val command = request.command?.trim().orEmpty()
         if (command.isEmpty()) {
@@ -205,7 +239,9 @@ internal object PrivilegedCommandExecutor {
             )
         }
 
-        val result = exec(
+        val result = runner.execute(
+            requestId = request.requestId,
+            requestAdmission = admission,
             command = listOf("/system/bin/sh", "-lc", script),
             timeoutSeconds = timeoutSeconds
         )
@@ -224,6 +260,7 @@ internal object PrivilegedCommandExecutor {
                 stderr = stderr,
                 exitCode = result.exitCode,
                 availableActions = PrivilegedActionPolicy.visibleAgentActions(backend),
+                data = mapOf("truncated" to (result.truncated || result.stdout.length > OUTPUT_LIMIT || result.stderr.length > OUTPUT_LIMIT).toString()),
                 command = command,
                 timeoutSeconds = timeoutSeconds.toInt(),
                 workingDirectory = request.workingDirectory,
@@ -233,7 +270,7 @@ internal object PrivilegedCommandExecutor {
             failure(
                 request = request,
                 backend = backend,
-                code = if (result.timedOut) "timeout" else "command_failed",
+                code = result.errorCode ?: if (result.timedOut) "timeout" else "command_failed",
                 message = if (result.timedOut) {
                     "Privileged shell command timed out."
                 } else {
@@ -251,7 +288,8 @@ internal object PrivilegedCommandExecutor {
     private fun buildCommand(
         action: String,
         arguments: Map<String, String>,
-        backend: ShizukuBackend,
+        backend: PrivilegedBackend,
+        userId: Int,
     ): List<String> {
         return when (action) {
             PrivilegedActionPolicy.ACTION_PACKAGE_LAUNCH -> {
@@ -259,15 +297,12 @@ internal object PrivilegedCommandExecutor {
                 val activityName = arguments["activityName"]?.trim().orEmpty()
                 if (activityName.isNotEmpty()) {
                     requireSafeComponent(activityName)
-                    listOf("am", "start", "-n", "$packageName/$activityName")
+                    listOf("am", "start", "--user", userId.toString(), "-n", "$packageName/$activityName")
                 } else {
                     listOf(
-                        "monkey",
-                        "-p",
-                        packageName,
-                        "-c",
-                        "android.intent.category.LAUNCHER",
-                        "1"
+                        "am", "start", "--user", userId.toString(),
+                        "-a", "android.intent.action.MAIN",
+                        "-c", "android.intent.category.LAUNCHER", "-p", packageName
                     )
                 }
             }
@@ -276,12 +311,12 @@ internal object PrivilegedCommandExecutor {
                 require(!PrivilegedActionPolicy.isHostPackage(packageName)) {
                     "Force-stopping the host app is blocked."
                 }
-                listOf("am", "force-stop", packageName)
+                listOf("am", "force-stop", "--user", userId.toString(), packageName)
             }
             PrivilegedActionPolicy.ACTION_PACKAGE_GRANT_PERMISSION -> {
                 listOf(
                     "pm",
-                    "grant",
+                    "grant", "--user", userId.toString(),
                     requirePackageName(arguments["packageName"]),
                     requirePermissionName(arguments["permission"])
                 )
@@ -289,7 +324,7 @@ internal object PrivilegedCommandExecutor {
             PrivilegedActionPolicy.ACTION_PACKAGE_REVOKE_PERMISSION -> {
                 listOf(
                     "pm",
-                    "revoke",
+                    "revoke", "--user", userId.toString(),
                     requirePackageName(arguments["packageName"]),
                     requirePermissionName(arguments["permission"])
                 )
@@ -299,7 +334,7 @@ internal object PrivilegedCommandExecutor {
                 require(allowedAppOpsModes.contains(mode)) { "Unsupported appops mode." }
                 listOf(
                     "appops",
-                    "set",
+                    "set", "--user", userId.toString(),
                     requirePackageName(arguments["packageName"]),
                     requireSimpleToken(arguments["op"], "op"),
                     mode
@@ -307,7 +342,7 @@ internal object PrivilegedCommandExecutor {
             }
             PrivilegedActionPolicy.ACTION_SETTINGS_GET -> {
                 listOf(
-                    "settings",
+                    "settings", "--user", userId.toString(),
                     "get",
                     requireSettingsNamespace(arguments["namespace"]),
                     requireSimpleToken(arguments["key"], "key")
@@ -315,7 +350,7 @@ internal object PrivilegedCommandExecutor {
             }
             PrivilegedActionPolicy.ACTION_SETTINGS_PUT -> {
                 listOf(
-                    "settings",
+                    "settings", "--user", userId.toString(),
                     "put",
                     requireSettingsNamespace(arguments["namespace"]),
                     requireSimpleToken(arguments["key"], "key"),
@@ -335,7 +370,7 @@ internal object PrivilegedCommandExecutor {
                 listOf("svc", "wifi", if (isEnabled(arguments)) "enable" else "disable")
             }
             PrivilegedActionPolicy.ACTION_DEVICE_SET_MOBILE_DATA_ENABLED -> {
-                require(backend == ShizukuBackend.ROOT) { "Mobile data control requires root backend." }
+                require(backend == PrivilegedBackend.ROOT) { "Mobile data control requires root backend." }
                 listOf("svc", "data", if (isEnabled(arguments)) "enable" else "disable")
             }
             PrivilegedActionPolicy.ACTION_DEVICE_INPUT_TEXT -> {
@@ -357,13 +392,13 @@ internal object PrivilegedCommandExecutor {
                 listOf("dumpsys", service)
             }
             PrivilegedActionPolicy.ACTION_DIAGNOSTICS_LIST_PACKAGES -> {
-                listOf("pm", "list", "packages")
+                listOf("pm", "list", "packages", "--user", userId.toString())
             }
             PrivilegedActionPolicy.ACTION_DIAGNOSTICS_LOGCAT_TAIL -> {
                 val buffer = arguments["buffer"]?.trim()?.lowercase()?.ifEmpty { "main" } ?: "main"
                 require(allowedLogcatBuffers.contains(buffer)) { "Unsupported logcat buffer." }
                 if (buffer == "kernel") {
-                    require(backend == ShizukuBackend.ROOT) { "Kernel logcat requires root backend." }
+                    require(backend == PrivilegedBackend.ROOT) { "Kernel logcat requires root backend." }
                 }
                 val lines = arguments["lines"]?.trim()?.toIntOrNull()?.coerceIn(1, 200) ?: 80
                 listOf("logcat", "-d", "-b", buffer, "-t", lines.toString())
@@ -379,7 +414,7 @@ internal object PrivilegedCommandExecutor {
     ): String {
         val lines = mutableListOf<String>()
         workingDirectory?.trim()?.takeIf { it.isNotEmpty() }?.let { directory ->
-            lines += "cd ${shellQuote(directory)}"
+            lines += "cd ${shellQuote(directory)} || exit"
         }
         environment.forEach { (key, value) ->
             require(envKeyPattern.matches(key)) { "Invalid environment variable name: $key" }
@@ -389,51 +424,8 @@ internal object PrivilegedCommandExecutor {
         return lines.joinToString(separator = "\n")
     }
 
-    private fun exec(
-        command: List<String>,
-        timeoutSeconds: Long,
-    ): ExecResult {
-        val process = ProcessBuilder(command)
-            .redirectErrorStream(false)
-            .start()
-        val stdoutBuffer = ByteArrayOutputStream()
-        val stderrBuffer = ByteArrayOutputStream()
-        val stdoutReader = thread(start = true, isDaemon = true) {
-            process.inputStream.use { input ->
-                input.copyTo(stdoutBuffer)
-            }
-        }
-        val stderrReader = thread(start = true, isDaemon = true) {
-            process.errorStream.use { input ->
-                input.copyTo(stderrBuffer)
-            }
-        }
-        val finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
-        if (!finished) {
-            process.destroyForcibly()
-            stdoutReader.join(500)
-            stderrReader.join(500)
-            return ExecResult(
-                success = false,
-                timedOut = true,
-                exitCode = null,
-                stdout = stdoutBuffer.toString(),
-                stderr = stderrBuffer.toString()
-            )
-        }
-        stdoutReader.join(500)
-        stderrReader.join(500)
-        return ExecResult(
-            success = process.exitValue() == 0,
-            timedOut = false,
-            exitCode = process.exitValue(),
-            stdout = stdoutBuffer.toString(),
-            stderr = stderrBuffer.toString()
-        )
-    }
-
     private fun trimOutput(value: String): String {
-        val normalized = value.trim()
+        val normalized = value
         if (normalized.length <= OUTPUT_LIMIT) {
             return normalized
         }
@@ -450,7 +442,7 @@ internal object PrivilegedCommandExecutor {
 
     private fun failure(
         request: PrivilegedRequest,
-        backend: ShizukuBackend,
+        backend: PrivilegedBackend,
         code: String,
         message: String,
         output: String = "",
@@ -491,10 +483,6 @@ internal object PrivilegedCommandExecutor {
         val summary = buildString {
             append("action=${request.action}")
             request.sessionId?.takeIf { it.isNotBlank() }?.let { append(", sessionId=$it") }
-            request.command?.takeIf { it.isNotBlank() }?.let {
-                append(", command=")
-                append(it.take(200))
-            }
             append(", success=${result.success}")
             append(", code=${result.code}")
             result.exitCode?.let { append(", exit=$it") }
@@ -502,7 +490,7 @@ internal object PrivilegedCommandExecutor {
                 append(", blockedByPolicy=true")
             }
         }
-        OmniLog.i(TAG, "Shizuku privileged audit: $summary")
+        OmniLog.i(TAG, "Privileged audit: $summary")
     }
 
     private fun requirePackageName(value: String?): String {
@@ -564,11 +552,4 @@ internal object PrivilegedCommandExecutor {
         return "'${value.replace("'", "'\"'\"'")}'"
     }
 
-    private data class ExecResult(
-        val success: Boolean,
-        val timedOut: Boolean,
-        val exitCode: Int?,
-        val stdout: String,
-        val stderr: String,
-    )
 }

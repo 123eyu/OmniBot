@@ -62,7 +62,6 @@ class BuiltInAgentCapabilityModule(
     private val privilegedHandler = PrivilegedToolHandler(
         helper,
         workspaceManager,
-        terminalHandler,
     )
 
     override val handlers: List<ToolHandler> = PersonalContextCapabilityModule(context).handlers + listOfNotNull(
