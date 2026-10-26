@@ -651,7 +651,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     final childCount = group.children.length;
     final countText = childCount > 0 ? '$childCount' : '${group.taskCount}';
     final isEditing = _editingThreadKey == group.parent.threadKey;
-    return Builder(
+    final row = Builder(
       builder: (rowContext) => Semantics(
         selected: _isSelectingConversations
             ? _selectedConversationKeys.contains(group.parent.threadKey)
@@ -750,6 +750,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
         ),
       ),
     );
+    return _wrapHomeConversationSwipe(group.parent, child: row);
   }
 
   Widget _buildScheduledChildConversationItem(
@@ -973,7 +974,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     final isContextMenuOpen =
         _activeContextMenuThreadKey == conversation.threadKey;
 
-    return Semantics(
+    final row = Semantics(
       selected: _isSelectingConversations
           ? _selectedConversationKeys.contains(conversation.threadKey)
           : null,
@@ -982,7 +983,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
         ignoring: isBusy,
         child: AnimatedOpacity(
           duration: const Duration(milliseconds: 180),
-          opacity: isBusy ? 0.72 : 1,
+          opacity: isBusy && !widget.homePage ? 0.72 : 1,
           child: Column(
             children: [
               Builder(
@@ -1116,6 +1117,87 @@ extension _HomeDrawerConversationList on HomeDrawerState {
           ),
         ),
       ),
+    );
+    return _wrapHomeConversationSwipe(conversation, child: row);
+  }
+
+  Widget _wrapHomeConversationSwipe(
+    ConversationModel conversation, {
+    required Widget child,
+  }) {
+    if (!widget.homePage ||
+        _isSelectingConversations ||
+        _editingThreadKey == conversation.threadKey) {
+      return child;
+    }
+
+    final palette = context.omniPalette;
+    void toggleArchive() => conversation.isArchived
+        ? _unarchiveConversation(conversation)
+        : _archiveConversation(conversation);
+
+    return ConversationSlidable(
+      key: ValueKey('home-swipe-${conversation.threadKey}'),
+      itemKey: conversation.threadKey,
+      groupTag: 'home-conversations',
+      isBusy: _busyConversationKeys.contains(conversation.threadKey),
+      followHabitualHand: false,
+      resetAfterFullSwipe: true,
+      onDismissed: toggleArchive,
+      onFullSwipe: toggleArchive,
+      actions: [
+        ConversationSlideAction(
+          onPressed: () => _deleteConversation(conversation),
+          backgroundColor: AppColors.alertRed,
+          child: Tooltip(
+            message: context.trLegacy('删除对话'),
+            child: Center(
+              child: SvgPicture.asset(
+                'assets/memory/memory_delete.svg',
+                width: 18,
+                height: 18,
+                colorFilter: const ColorFilter.mode(
+                  Colors.white,
+                  BlendMode.srcIn,
+                ),
+              ),
+            ),
+          ),
+        ),
+        ConversationSlideAction(
+          onPressed: toggleArchive,
+          backgroundColor: context.isDarkTheme
+              ? Color.lerp(palette.surfaceElevated, palette.accentPrimary, 0.3)!
+              : AppColors.buttonPrimary,
+          borderRadius: const BorderRadius.only(
+            topRight: Radius.circular(4),
+            bottomRight: Radius.circular(4),
+          ),
+          child: Tooltip(
+            message: conversation.isArchived
+                ? (LegacyTextLocalizer.isEnglish ? 'Unarchive' : '取消归档')
+                : (LegacyTextLocalizer.isEnglish ? 'Archive' : '归档'),
+            child: Center(
+              child: conversation.isArchived
+                  ? const Icon(
+                      Icons.unarchive_outlined,
+                      size: 18,
+                      color: Colors.white,
+                    )
+                  : SvgPicture.asset(
+                      'assets/home/archive_icon.svg',
+                      width: 18,
+                      height: 18,
+                      colorFilter: const ColorFilter.mode(
+                        Colors.white,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ],
+      child: child,
     );
   }
 

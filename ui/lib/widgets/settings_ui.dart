@@ -969,16 +969,19 @@ class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
         color: Colors.transparent,
         child: InkWell(
           key: widget.dropdownKey,
-          borderRadius: BorderRadius.circular(9.5),
+          borderRadius: OmniMenuStyle.panelRadius,
           onTap: enabled ? () => _openPopover(context) : null,
           child: Container(
-            constraints: BoxConstraints(maxWidth: widget.maxWidth),
+            constraints: BoxConstraints(
+              minHeight: OmniMenuStyle.panelRadius.topLeft.x * 2,
+              maxWidth: widget.maxWidth,
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: palette.surfaceSecondary.withValues(
                 alpha: isDark ? 0.72 : 0.8,
               ),
-              borderRadius: BorderRadius.circular(9.5),
+              borderRadius: OmniMenuStyle.panelRadius,
               border: Border.all(
                 color: palette.borderSubtle.withValues(
                   alpha: isDark ? 0.55 : 0.75,

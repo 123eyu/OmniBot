@@ -48,8 +48,8 @@ class GlassPopupOverlayContent extends StatefulWidget {
     this.screenPadding = const EdgeInsets.all(8),
     this.unfoldAlignment,
     this.horizontalPlacement = GlassPopupHorizontalPlacement.edgeAlign,
-    this.duration = const Duration(milliseconds: 280),
-    this.reverseDuration = const Duration(milliseconds: 180),
+    this.duration = const Duration(milliseconds: 240),
+    this.reverseDuration = const Duration(milliseconds: 160),
     this.curve = Curves.easeOutCubic,
     this.reverseCurve = Curves.easeInCubic,
   });
@@ -169,8 +169,8 @@ Future<T?> showGlassPopup<T>({
   double verticalGap = 6,
   bool overlapAnchor = true,
   EdgeInsets screenPadding = const EdgeInsets.all(8),
-  Duration transitionDuration = const Duration(milliseconds: 280),
-  Duration reverseTransitionDuration = const Duration(milliseconds: 180),
+  Duration transitionDuration = const Duration(milliseconds: 240),
+  Duration reverseTransitionDuration = const Duration(milliseconds: 160),
   Curve curve = Curves.easeOutCubic,
   Curve reverseCurve = Curves.easeInCubic,
   Alignment? unfoldAlignment,
@@ -377,8 +377,8 @@ class _GlassPopupAnimatedFrameState extends State<_GlassPopupAnimatedFrame> {
   );
   late final CurvedAnimation _fade = CurvedAnimation(
     parent: widget.animation,
-    curve: const Interval(0, 0.25, curve: Curves.easeOut),
-    reverseCurve: const Interval(0, 0.7, curve: Curves.easeOut),
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
   );
 
   @override
@@ -393,7 +393,7 @@ class _GlassPopupAnimatedFrameState extends State<_GlassPopupAnimatedFrame> {
     if (MediaQuery.disableAnimationsOf(context)) return widget.child;
     return ValueListenableBuilder<_GlassPopupOrigin>(
       valueListenable: widget.originNotifier,
-      child: widget.child,
+      child: RepaintBoundary(child: widget.child),
       builder: (context, origin, innerChild) => AnimatedBuilder(
         animation: widget.animation,
         child: innerChild,
@@ -404,6 +404,11 @@ class _GlassPopupAnimatedFrameState extends State<_GlassPopupAnimatedFrame> {
             child: ClipRRect(
               clipper: _PopupRevealClipper(
                 progress: _reveal.value,
+                shadowProgress: const Interval(
+                  0.85,
+                  1,
+                  curve: Curves.easeInOut,
+                ).transform(widget.animation.value),
                 origin: origin,
               ),
               child: child,
@@ -560,9 +565,14 @@ class _GlassPopupLayoutDelegate extends SingleChildLayoutDelegate {
 
 /// Rounded reveal grows from the covered trigger to include the panel's shadow.
 class _PopupRevealClipper extends CustomClipper<RRect> {
-  const _PopupRevealClipper({required this.progress, required this.origin});
+  const _PopupRevealClipper({
+    required this.progress,
+    required this.shadowProgress,
+    required this.origin,
+  });
 
   final double progress;
+  final double shadowProgress;
   final _GlassPopupOrigin origin;
 
   @override
@@ -576,17 +586,27 @@ class _PopupRevealClipper extends CustomClipper<RRect> {
             width: 0,
             height: 0,
           );
-    final rect = Rect.lerp(start, panel.inflate(64), progress)!;
-    final radius = (start.shortestSide / 2).clamp(0.0, 24.0);
+    // Reveal the panel itself first. Interpolating straight to an inflated
+    // shadow rect exposes the whole menu too early, leaving an idle tail on
+    // open and an idle lead-in on close. Release shadow clipping only near the
+    // fully open endpoint, independently of the eased content reveal.
+    final rect = Rect.lerp(
+      start,
+      panel,
+      progress,
+    )!.inflate(64 * shadowProgress);
+    final radius = (start.shortestSide / 2).clamp(0.0, 20.0);
     return RRect.fromRectAndRadius(
       rect,
-      Radius.circular(radius + (24 - radius) * progress),
+      Radius.circular(radius + (20 - radius) * progress),
     );
   }
 
   @override
   bool shouldReclip(_PopupRevealClipper old) =>
-      progress != old.progress || origin != old.origin;
+      progress != old.progress ||
+      shadowProgress != old.shadowProgress ||
+      origin != old.origin;
 }
 
 /// 读取仍处于活动树中的 context 对应的 render object。
@@ -772,8 +792,8 @@ OverlayGlassPopupHandle<T> showOverlayGlassPopup<T>({
   Alignment? unfoldAlignment,
   GlassPopupHorizontalPlacement horizontalPlacement =
       GlassPopupHorizontalPlacement.edgeAlign,
-  Duration transitionDuration = const Duration(milliseconds: 280),
-  Duration reverseTransitionDuration = const Duration(milliseconds: 180),
+  Duration transitionDuration = const Duration(milliseconds: 240),
+  Duration reverseTransitionDuration = const Duration(milliseconds: 160),
   Curve curve = Curves.easeOutCubic,
   Curve reverseCurve = Curves.easeInCubic,
   bool useRootOverlay = true,

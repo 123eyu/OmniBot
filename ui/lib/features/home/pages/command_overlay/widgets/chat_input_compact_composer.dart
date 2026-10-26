@@ -16,7 +16,7 @@ extension _ChatInputCompactComposer on _ChatInputAreaComposerMixin {
           key: const ValueKey('chat-minimal-composer'),
           decoration: BoxDecoration(
             color: palette.surfacePrimary,
-            borderRadius: BorderRadius.circular(25),
+            borderRadius: OmniMenuStyle.panelRadius,
             boxShadow: [
               BoxShadow(
                 color: palette.shadowColor.withValues(
@@ -28,6 +28,7 @@ extension _ChatInputCompactComposer on _ChatInputAreaComposerMixin {
             ],
           ),
           child: Padding(
+            key: _compactComposerSurfaceKey,
             padding: const EdgeInsets.all(7),
             child: Column(
               mainAxisSize: MainAxisSize.min,

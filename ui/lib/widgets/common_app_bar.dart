@@ -98,7 +98,6 @@ class CommonAppBar extends StatelessWidget implements PreferredSizeWidget {
                   onPressed: onBackPressed ?? () => GoRouterManager.pop(),
                   foregroundColor: resolvedBackIconColor,
                   size: height < 56 ? 36 : 40,
-                  iconSize: 24,
                 ),
               )
             : null);

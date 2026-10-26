@@ -3,16 +3,21 @@ import 'package:ui/theme/theme_context.dart';
 
 /// Shared round navigation control for the home, chat, and settings headers.
 class OmniCircleButton extends StatelessWidget {
+  /// Shared with the chat header, including animated replacement icons.
+  static const defaultIconSize = 20.0;
+
   const OmniCircleButton({
     super.key,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
     this.size = 44,
-    this.iconSize = 22,
+    this.iconSize = defaultIconSize,
     this.foregroundColor,
     this.tapTargetSize = MaterialTapTargetSize.shrinkWrap,
-  });
+    this.iconWidget,
+    this.surfaceOpacity = 1,
+  }) : assert(surfaceOpacity >= 0 && surfaceOpacity <= 1);
 
   final IconData icon;
   final String tooltip;
@@ -22,15 +27,27 @@ class OmniCircleButton extends StatelessWidget {
   final Color? foregroundColor;
   final MaterialTapTargetSize tapTargetSize;
 
+  /// Allows an icon to morph without replacing the shared button or hit target.
+  final Widget? iconWidget;
+
+  /// Cross-fades the standard surface with a temporary transition shape.
+  /// Ordinary buttons retain their original fill, shadow and press feedback.
+  final double surfaceOpacity;
+
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
+    final surface = palette.surfacePrimary.withValues(
+      alpha: palette.surfacePrimary.a * surfaceOpacity,
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: palette.shadowColor,
+            color: palette.shadowColor.withValues(
+              alpha: palette.shadowColor.a * surfaceOpacity,
+            ),
             blurRadius: 18,
             offset: const Offset(0, 5),
           ),
@@ -39,11 +56,12 @@ class OmniCircleButton extends StatelessWidget {
       child: IconButton(
         onPressed: onPressed,
         tooltip: tooltip,
-        icon: Icon(icon, size: iconSize),
+        iconSize: iconSize,
+        icon: iconWidget ?? Icon(icon),
         style: IconButton.styleFrom(
           foregroundColor: foregroundColor ?? palette.textPrimary,
-          backgroundColor: palette.surfacePrimary,
-          disabledBackgroundColor: palette.surfacePrimary,
+          backgroundColor: surface,
+          disabledBackgroundColor: surface,
           disabledForegroundColor: palette.textTertiary,
           fixedSize: Size.square(size),
           minimumSize: Size.square(size),
@@ -51,6 +69,7 @@ class OmniCircleButton extends StatelessWidget {
           padding: EdgeInsets.zero,
           shape: const CircleBorder(),
           tapTargetSize: tapTargetSize,
+          splashFactory: surfaceOpacity < 1 ? NoSplash.splashFactory : null,
         ),
       ),
     );

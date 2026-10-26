@@ -238,6 +238,9 @@ abstract class _ChatInputAreaStateBase extends State<ChatInputArea>
   final GlobalKey _agentPermissionButtonKey = GlobalKey(
     debugLabel: 'agent-permission-button',
   );
+  final GlobalKey _compactComposerSurfaceKey = GlobalKey(
+    debugLabel: 'compact-composer-surface',
+  );
   OverlayGlassPopupHandle<_AgentRunSettingsMenuAction>?
   _agentRunSettingsMenuHandle;
   OverlayGlassPopupHandle<AgentPermissionMode>? _agentPermissionMenuHandle;

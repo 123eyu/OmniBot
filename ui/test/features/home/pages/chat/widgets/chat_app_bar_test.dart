@@ -140,6 +140,25 @@ void main() {
       expect(circle.foregroundColor, isNot(context.omniPalette.surfacePrimary));
       expect(circle.size, 40);
       expect(circle.tapTargetSize, MaterialTapTargetSize.padded);
+      final button = find.byWidget(circle);
+      expect(tester.getSize(button), const Size.square(48));
+      expect(
+        tester.getSize(
+          find.descendant(
+            of: button,
+            matching: find.byWidgetPredicate(
+              (widget) => widget is Material && widget.shape is CircleBorder,
+            ),
+          ),
+        ),
+        const Size.square(40),
+      );
+      expect(
+        tester.getSize(
+          find.descendant(of: button, matching: find.byType(Icon)),
+        ),
+        const Size.square(20),
+      );
     }
     expect(find.byTooltip('Switch chat mode'), findsNothing);
   });

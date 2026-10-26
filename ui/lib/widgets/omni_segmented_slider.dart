@@ -134,6 +134,8 @@ class OmniSegmentedSlider<T> extends StatelessWidget {
                                 '$keyPrefix-${option.id ?? option.value.toString()}',
                               ),
                               borderRadius: BorderRadius.circular(thumbRadius),
+                              splashFactory: NoSplash.splashFactory,
+                              highlightColor: Colors.transparent,
                               onTap: () {
                                 if (option.value != value) {
                                   HapticFeedback.selectionClick();

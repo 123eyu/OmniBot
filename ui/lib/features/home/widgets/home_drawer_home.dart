@@ -117,92 +117,37 @@ extension _HomeDrawerHome on HomeDrawerState {
             children: [
               if (_isSelectingConversations)
                 _buildConversationSelectionHeader(),
-              if (!_homeSearchVisible) ...[
-                if (!_isSelectingConversations)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: _buildHomeAgentSwitcher(),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        _buildHomeAppUpdateIndicator(),
-                        OmniCircleButton(
-                          key: const ValueKey('home-search-button'),
-                          size: 40,
-                          iconSize: 20,
-                          tapTargetSize: MaterialTapTargetSize.padded,
-                          icon: LucideIcons.search,
-                          tooltip:
-                              Localizations.localeOf(context).languageCode ==
-                                  'en'
-                              ? 'Search conversations'
-                              : '搜索对话',
-                          onPressed: _openHomeSearch,
-                        ),
-                        const SizedBox(width: 4),
-                        Builder(
-                          builder: (anchorContext) => OmniCircleButton(
-                            key: const ValueKey('home-menu-button'),
-                            size: 40,
-                            iconSize: 20,
-                            tapTargetSize: MaterialTapTargetSize.padded,
-                            icon: LucideIcons.ellipsis,
-                            tooltip: MaterialLocalizations.of(context)
-                                .showMenuTooltip,
-                            onPressed: () => _showHomeMenu(anchorContext),
-                          ),
-                        ),
-                      ],
-                    ),
+              if (!_isSelectingConversations || _homeSearchVisible)
+                HomeSearchHeader(
+                  searching: _homeSearchVisible,
+                  title: _buildHomeAgentSwitcher(),
+                  updateIndicator: _buildHomeAppUpdateIndicator(),
+                  searchField: HomeDrawerSearchField(
+                    key: widget.searchFieldKey,
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    isSearching: _isSearching,
+                    textColor: palette.textPrimary,
                   ),
-              ],
-              if (_homeSearchVisible)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
-                  child: Row(
-                    children: [
-                      _buildHomeAppUpdateIndicator(),
-                      Expanded(
-                        child: HomeDrawerSearchField(
-                          key: widget.searchFieldKey,
-                          controller: _searchController,
-                          focusNode: _searchFocusNode,
-                          isSearching: _isSearching,
-                          textColor: palette.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      OmniCircleButton(
-                        key: const ValueKey('home-close-search'),
-                        size: 40,
-                        iconSize: 20,
-                        tapTargetSize: MaterialTapTargetSize.padded,
-                        icon: LucideIcons.x,
-                        tooltip: MaterialLocalizations.of(context)
-                            .closeButtonTooltip,
-                        onPressed: _closeHomeSearch,
-                      ),
-                    ],
-                  ),
+                  onSearch: _openHomeSearch,
+                  onClose: _closeHomeSearch,
+                  onMenu: _showHomeMenu,
                 ),
               const SizedBox(height: 16),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 22),
-                  child: isLoadingConversations
-                      ? _buildConversationLoadingState()
-                      : _isSearchActive
-                      ? _buildSearchConversationBody(
-                          _visibleConversationResults,
-                        )
-                      : _buildConversationTimelineBody(
-                          _visibleConversationResults,
-                        ),
+                  child: SlidableAutoCloseBehavior(
+                    child: isLoadingConversations
+                        ? _buildConversationLoadingState()
+                        : _isSearchActive
+                        ? _buildSearchConversationBody(
+                            _visibleConversationResults,
+                          )
+                        : _buildConversationTimelineBody(
+                            _visibleConversationResults,
+                          ),
+                  ),
                 ),
               ),
             ],
@@ -438,8 +383,9 @@ extension _HomeDrawerHome on HomeDrawerState {
                                 ),
                               ),
                             );
-                            final inlineWidth = MediaQuery.textScalerOf(context)
-                                .scale(english ? 92 : 78);
+                            final inlineWidth = MediaQuery.textScalerOf(
+                              context,
+                            ).scale(english ? 92 : 78);
                             if (constraints.maxWidth < inlineWidth) {
                               // Keep the badge above-right of a readable name
                               // when large text cannot share the same line.

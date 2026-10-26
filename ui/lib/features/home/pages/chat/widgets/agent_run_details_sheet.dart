@@ -252,7 +252,6 @@ class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet> {
                                       ),
                                       icon: LucideIcons.chevronLeft,
                                       size: 40,
-                                      iconSize: 20,
                                       tapTargetSize:
                                           MaterialTapTargetSize.padded,
                                       tooltip: isEnglish

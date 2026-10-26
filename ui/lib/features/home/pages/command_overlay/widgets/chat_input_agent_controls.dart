@@ -341,6 +341,7 @@ extension _ChatInputAgentControls on _ChatInputAreaStateBase {
   Future<void> _openAgentPermissionMenu(
     BuildContext anchorContext, {
     bool? preferBelow,
+    Rect? anchorOverride,
   }) async {
     final selected =
         widget.agentPermissionMode ?? AgentPermissionMode.fullAccess;
@@ -353,7 +354,7 @@ extension _ChatInputAgentControls on _ChatInputAreaStateBase {
         )) {
       return;
     }
-    final anchor = glassPopupAnchorFromContext(anchorContext);
+    final anchor = anchorOverride ?? glassPopupAnchorFromContext(anchorContext);
     if (anchor == null) {
       _composerStateMachine.popupClosed(ChatComposerPopup.agentPermission);
       return;

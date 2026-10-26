@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ui/features/home/pages/chat/widgets/acp_config_button.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/chat_input_area.dart';
 import 'package:ui/theme/app_theme.dart';
+import 'package:ui/widgets/omni_menu.dart';
 
 void main() {
   final shell = find.byKey(const ValueKey('chat-minimal-composer'));
@@ -284,6 +285,81 @@ void main() {
     expect(tester.getSize(shell).height, 50);
   });
 
+  for (final keyboardOpen in [false, true]) {
+    testWidgets(
+      'attachment and permission menus align with the composer outline '
+      '(keyboard=$keyboardOpen)',
+      (tester) async {
+        const viewport = Size(390, 858);
+        final keyboard = keyboardOpen ? 300.0 : 0.0;
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = viewport;
+        tester.view.viewInsets = FakeViewPadding(bottom: keyboard);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetViewInsets);
+
+        final fixture = _ComposerFixture(tester);
+        AgentPermissionMode? selectedMode;
+        await fixture.pump(
+          keyboard: keyboard,
+          bottomPadding: 16,
+          onPickImages: () async {},
+          onPickAttachment: () async {},
+          onPermission: (mode) => selectedMode = mode,
+        );
+        const draft = TextEditingValue(
+          text: 'Keep this unsent draft',
+          selection: TextSelection.collapsed(offset: 9),
+        );
+        fixture.controller.value = draft;
+        if (keyboardOpen) fixture.focus.requestFocus();
+        await tester.pumpAndSettle();
+        final composer = tester.getRect(shell);
+        final editor = tester.state<EditableTextState>(
+          find.byType(EditableText),
+        );
+        expect(composer.bottom, viewport.height - keyboard - 16);
+
+        void expectAlignedMenu() {
+          final panel = tester.getRect(find.byType(OmniMenuSurface));
+          expect(panel.left, closeTo(composer.left, 0.01));
+          expect(panel.bottom, closeTo(composer.bottom, 0.01));
+          expect(tester.getRect(shell), composer);
+          expect(fixture.focus.hasFocus, keyboardOpen);
+          expect(fixture.controller.value, draft);
+          expect(
+            tester.state<EditableTextState>(find.byType(EditableText)),
+            same(editor),
+          );
+        }
+
+        await tester.tap(plus);
+        await tester.pumpAndSettle();
+        expectAlignedMenu();
+
+        await tester.tap(
+          find.byKey(const ValueKey('chat-input-add-permissions')),
+        );
+        await tester.pumpAndSettle();
+        expectAlignedMenu();
+
+        await tester.tap(
+          find.byKey(
+            const ValueKey('chat-input-agent-permission-option-readOnly'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(selectedMode, AgentPermissionMode.readOnly);
+        expect(find.byType(OmniMenuSurface), findsNothing);
+        expect(tester.getRect(shell), composer);
+        expect(fixture.focus.hasFocus, keyboardOpen);
+        expect(fixture.controller.value, draft);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'model popup and shared selector handoff keep the layout stable',
     (tester) async {
@@ -413,6 +489,8 @@ class _ComposerFixture {
     bool dark = false,
     double textScale = 1,
     double width = 342,
+    double keyboard = 0,
+    double bottomPadding = 0,
     Future<void> Function()? onPickImages,
     Future<void> Function()? onPickAttachment,
     ValueChanged<AgentPermissionMode>? onPermission,
@@ -432,39 +510,43 @@ class _ComposerFixture {
         home: MediaQuery(
           data: MediaQueryData(
             size: const Size(390, 858),
+            viewInsets: EdgeInsets.only(bottom: keyboard),
             disableAnimations: disableAnimations,
             textScaler: TextScaler.linear(textScale),
           ),
           child: Scaffold(
-            body: Align(
-              alignment: Alignment.bottomCenter,
-              child: SizedBox(
-                width: width,
-                child: ChatInputArea(
-                  key: key,
-                  controller: controller,
-                  focusNode: focus,
-                  minimalComposer: true,
-                  isProcessing: isProcessing,
-                  hasExternalSendPayload: hasExternalPayload,
-                  isEditingUserMessage: isEditing,
-                  onCancelUserMessageEditing: onCancelEditing,
-                  onSendMessage: onSend ?? () {},
-                  onCancelTask: onCancel ?? () {},
-                  onPickImages: onPickImages,
-                  onPickAttachment: onPickAttachment,
-                  agentPermissionMode: onPermission == null
-                      ? null
-                      : AgentPermissionMode.defaultMode,
-                  agentPermissionModes: const [
-                    AgentPermissionMode.readOnly,
-                    AgentPermissionMode.defaultMode,
-                    AgentPermissionMode.fullAccess,
-                  ],
-                  onAgentPermissionModeChanged: onPermission,
-                  runtimeConfigButton: runtimeConfigButton,
-                  selectedModelOverrideId: selectedModelOverrideId,
-                  onClearSelectedModelOverride: onClearSelectedModelOverride,
+            body: Padding(
+              padding: EdgeInsets.only(bottom: bottomPadding),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: SizedBox(
+                  width: width,
+                  child: ChatInputArea(
+                    key: key,
+                    controller: controller,
+                    focusNode: focus,
+                    minimalComposer: true,
+                    isProcessing: isProcessing,
+                    hasExternalSendPayload: hasExternalPayload,
+                    isEditingUserMessage: isEditing,
+                    onCancelUserMessageEditing: onCancelEditing,
+                    onSendMessage: onSend ?? () {},
+                    onCancelTask: onCancel ?? () {},
+                    onPickImages: onPickImages,
+                    onPickAttachment: onPickAttachment,
+                    agentPermissionMode: onPermission == null
+                        ? null
+                        : AgentPermissionMode.defaultMode,
+                    agentPermissionModes: const [
+                      AgentPermissionMode.readOnly,
+                      AgentPermissionMode.defaultMode,
+                      AgentPermissionMode.fullAccess,
+                    ],
+                    onAgentPermissionModeChanged: onPermission,
+                    runtimeConfigButton: runtimeConfigButton,
+                    selectedModelOverrideId: selectedModelOverrideId,
+                    onClearSelectedModelOverride: onClearSelectedModelOverride,
+                  ),
                 ),
               ),
             ),

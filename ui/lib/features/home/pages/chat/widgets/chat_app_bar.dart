@@ -35,6 +35,8 @@ class ChatAcpAgentModeOption {
 
 /// 聊天页面 AppBar
 class ChatAppBar extends StatelessWidget {
+  static const _navigationButtonSize = 40.0;
+
   final VoidCallback onMenuTap;
   final String? title;
   final List<ChatAppBarAction> actions;
@@ -188,8 +190,15 @@ class ChatAppBar extends StatelessWidget {
           onSelected: (_) => onAppUpdateTap!(),
         ),
     ];
-    final anchor = glassPopupAnchorFromContext(anchorContext);
-    if (anchor == null) return;
+    final tapTarget = glassPopupAnchorFromContext(anchorContext);
+    if (tapTarget == null) return;
+    // Preserve the padded touch target, but align the menu to the visible
+    // circle rather than its extra invisible hit area.
+    final anchor = Rect.fromCenter(
+      center: tapTarget.center,
+      width: _navigationButtonSize,
+      height: _navigationButtonSize,
+    );
     final selected = await showOmniMenu<int>(
       context: anchorContext,
       anchor: anchor,
@@ -235,8 +244,7 @@ class ChatAppBar extends StatelessWidget {
                   child: OmniCircleButton(
                     key: const ValueKey('chat-app-bar-menu-button'),
                     icon: LucideIcons.chevronLeft,
-                    size: 40,
-                    iconSize: 20,
+                    size: _navigationButtonSize,
                     tapTargetSize: MaterialTapTargetSize.padded,
                     tooltip: english ? 'Back to conversations' : '返回会话列表',
                     foregroundColor: palette.textPrimary,
@@ -307,8 +315,7 @@ class ChatAppBar extends StatelessWidget {
                       builder: (anchorContext) => OmniCircleButton(
                         key: const ValueKey('chat-app-bar-more-button'),
                         icon: LucideIcons.ellipsis,
-                        size: 40,
-                        iconSize: 20,
+                        size: _navigationButtonSize,
                         tapTargetSize: MaterialTapTargetSize.padded,
                         tooltip: english ? 'Conversation options' : '对话选项',
                         foregroundColor: palette.textPrimary,

@@ -3,6 +3,24 @@ part of 'chat_input_area.dart';
 enum _CompactComposerAction { images, files, permissions }
 
 extension _CompactComposerActions on _ChatInputAreaStateBase {
+  Rect? _compactActionsAnchor(BuildContext buttonContext) {
+    final surfaceContext = _compactComposerSurfaceKey.currentContext;
+    final surface = surfaceContext == null
+        ? null
+        : glassPopupAnchorFromContext(surfaceContext);
+    if (surface == null) return glassPopupAnchorFromContext(buttonContext);
+
+    // The button is inset inside the composer. Both menus grow from the
+    // composer's outside corner, so their left/bottom edges share its outline.
+    final diameter = OmniMenuStyle.panelRadius.bottomLeft.x * 2;
+    return Rect.fromLTWH(
+      surface.left,
+      surface.bottom - diameter,
+      diameter,
+      diameter,
+    );
+  }
+
   Widget _buildCompactAddButton() {
     final english = Localizations.localeOf(context).languageCode == 'en';
     final canOpen =
@@ -43,7 +61,7 @@ extension _CompactComposerActions on _ChatInputAreaStateBase {
         )) {
       return;
     }
-    final anchor = glassPopupAnchorFromContext(anchorContext);
+    final anchor = _compactActionsAnchor(anchorContext);
     if (anchor == null) {
       _composerStateMachine.popupClosed(ChatComposerPopup.compactActions);
       return;
@@ -100,7 +118,11 @@ extension _CompactComposerActions on _ChatInputAreaStateBase {
         case _CompactComposerAction.files:
           await widget.onPickAttachment?.call();
         case _CompactComposerAction.permissions:
-          await _openAgentPermissionMenu(anchorContext, preferBelow: false);
+          await _openAgentPermissionMenu(
+            anchorContext,
+            preferBelow: false,
+            anchorOverride: _compactActionsAnchor(anchorContext),
+          );
         case null:
           break;
       }
