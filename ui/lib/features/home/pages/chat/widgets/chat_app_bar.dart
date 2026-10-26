@@ -69,8 +69,6 @@ class ChatAppBar extends StatelessWidget {
   final bool showWorkspacePaneButton;
   final VoidCallback? onWorkspacePaneTap;
   final Key? tutorialMenuAnchorKey;
-  final Key? tutorialPetAnchorKey;
-  final Key? tutorialIslandAnchorKey;
   final Key? tutorialModeAnchorKey;
 
   const ChatAppBar({
@@ -107,8 +105,6 @@ class ChatAppBar extends StatelessWidget {
     this.showWorkspacePaneButton = false,
     this.onWorkspacePaneTap,
     this.tutorialMenuAnchorKey,
-    this.tutorialPetAnchorKey,
-    this.tutorialIslandAnchorKey,
     this.tutorialModeAnchorKey,
   });
 
@@ -307,21 +303,15 @@ class ChatAppBar extends StatelessWidget {
               const SizedBox(width: 8),
               KeyedSubtree(
                 key: tutorialActionsAnchorKey,
-                child: KeyedSubtree(
-                  key: tutorialPetAnchorKey,
-                  child: KeyedSubtree(
-                    key: tutorialIslandAnchorKey,
-                    child: Builder(
-                      builder: (anchorContext) => OmniCircleButton(
-                        key: const ValueKey('chat-app-bar-more-button'),
-                        icon: LucideIcons.ellipsis,
-                        size: _navigationButtonSize,
-                        tapTargetSize: MaterialTapTargetSize.padded,
-                        tooltip: english ? 'Conversation options' : '对话选项',
-                        foregroundColor: palette.textPrimary,
-                        onPressed: () => _openActionsMenu(anchorContext),
-                      ),
-                    ),
+                child: Builder(
+                  builder: (anchorContext) => OmniCircleButton(
+                    key: const ValueKey('chat-app-bar-more-button'),
+                    icon: LucideIcons.ellipsis,
+                    size: _navigationButtonSize,
+                    tapTargetSize: MaterialTapTargetSize.padded,
+                    tooltip: english ? 'Conversation options' : '对话选项',
+                    foregroundColor: palette.textPrimary,
+                    onPressed: () => _openActionsMenu(anchorContext),
                   ),
                 ),
               ),

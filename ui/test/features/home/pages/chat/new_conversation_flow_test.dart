@@ -11,6 +11,7 @@ import 'package:ui/features/home/pages/chat/chat_page.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
 import 'package:ui/features/home/pages/chat/widgets/acp_config_button.dart';
 import 'package:ui/features/home/pages/chat/widgets/chat_empty_greeting.dart';
+import 'package:ui/features/home/pages/chat/widgets/chat_spotlight_tour.dart';
 import 'package:ui/features/home/pages/chat/widgets/chat_widgets.dart';
 import 'package:ui/features/home/pages/chat/widgets/new_conversation_mode_selector.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/chat_input_area.dart';
@@ -1395,7 +1396,7 @@ void main() {
     await disposeChat(tester);
   });
 
-  testWidgets('first-use tour does not show selector or focus the composer', (
+  testWidgets('first-use tour follows the current header and composer layout', (
     tester,
   ) async {
     await pumpChat(
@@ -1404,6 +1405,67 @@ void main() {
       tour: true,
     );
     expect(find.byType(NewConversationModeSelector), findsNothing);
+    expect(composer(tester).focusNode.hasFocus, isFalse);
+
+    Rect spotlight(int step) {
+      final painter =
+          tester
+                  .widget<CustomPaint>(
+                    find.byKey(ValueKey('chat-spotlight-hole-$step')),
+                  )
+                  .painter
+              as dynamic;
+      return painter.spotlight as Rect;
+    }
+
+    expect(
+      spotlight(0),
+      tester
+          .getRect(find.byKey(const ValueKey('chat-app-bar-menu-button')))
+          .inflate(6),
+    );
+    await tester.tapAt(const Offset(8, 400));
+    await tester.pumpAndSettle();
+    expect(find.text('对话标题与模式'), findsOneWidget);
+    expect(
+      spotlight(1).contains(
+        tester.getCenter(find.byKey(const ValueKey('chat-app-bar-title'))),
+      ),
+      isTrue,
+    );
+    await tester.tapAt(const Offset(8, 400));
+    await tester.pumpAndSettle();
+    expect(find.text('对话选项'), findsOneWidget);
+    expect(
+      spotlight(2),
+      tester
+          .getRect(find.byKey(const ValueKey('chat-app-bar-more-button')))
+          .inflate(6),
+    );
+    await tester.tapAt(const Offset(8, 400));
+    await tester.pumpAndSettle();
+    expect(composer(tester).focusNode.hasFocus, isTrue);
+    expect(
+      spotlight(ChatSpotlightTour.modelStep),
+      tester
+          .getRect(find.byKey(const ValueKey('chat-acp-config-button')))
+          .inflate(4),
+    );
+    await tester.tapAt(const Offset(8, 400));
+    await tester.pumpAndSettle();
+    expect(find.text('输入、附件与发送'), findsOneWidget);
+    expect(
+      spotlight(4).contains(
+        tester.getCenter(find.byKey(const ValueKey('chat-minimal-composer'))),
+      ),
+      isTrue,
+    );
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('模型与参数'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('对话选项'), findsOneWidget);
     expect(composer(tester).focusNode.hasFocus, isFalse);
     expectNoSessionAdmission();
     await disposeChat(tester);
