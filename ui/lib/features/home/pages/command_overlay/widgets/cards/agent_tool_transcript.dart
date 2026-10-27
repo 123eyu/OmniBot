@@ -1286,6 +1286,29 @@ List<Map<String, dynamic>> _resolveAgentToolActions(
       ),
     );
   }
+  final artifacts = cardData['artifacts'];
+  if (artifacts is List) {
+    for (final artifact in artifacts.whereType<Map>()) {
+      if (artifact['historyPayloadOffloaded'] != true) continue;
+      final path = (artifact['androidPath'] ?? artifact['path'] ?? '')
+          .toString()
+          .trim();
+      if (path.isEmpty) continue;
+      actions.add({
+        'type': 'open',
+        'label': (artifact['title'] ?? artifact['fileName'] ?? '完整工具记录')
+            .toString(),
+        'target': artifact['uri'],
+        'payload': {
+          'path': path,
+          'shellPath': artifact['workspacePath'],
+          'title': artifact['title'],
+          'mimeType': artifact['mimeType'],
+          'previewKind': 'file',
+        },
+      });
+    }
+  }
   final workspaceId = (cardData['workspaceId'] ?? '').toString().trim();
   final hasWorkspaceAction = actions.any(
     (action) => (action['type'] ?? '').toString().trim() == 'workspace',
