@@ -10,18 +10,23 @@ import 'package:ui/services/storage_service.dart';
 import 'package:ui/services/workspace_memory_service.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
-import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/omni_root_toolbar.dart';
+import 'package:ui/widgets/flclash/open_container.dart';
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:ui/widgets/settings_detail_sheet.dart';
 import 'package:ui/widgets/settings_ui.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({super.key, this.embedded = false, this.active = true});
+
+  final bool embedded;
+  final bool active;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends State<SettingsPage> with FlClashPageLoadMixin {
   bool _mcpEnabled = false;
   bool _mcpBusy = false;
   McpServerInfo? _mcpInfo;
@@ -41,10 +46,22 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadWorkspaceMemoryState();
   }
 
-  Future<void> _loadMcpServerState() async {
+  @override
+  void didUpdateWidget(SettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      _loadMcpServerState();
+      _loadWorkspaceMemoryState();
+    }
+  }
+
+  Future<void> _loadMcpServerState() =>
+      runPageLoad(#mcpState, _readMcpServerState, revalidate: true);
+
+  Future<void> _readMcpServerState() async {
     try {
       final info = await McpServerService.getState();
-      if (!mounted) return;
+      if (!await waitForPageReady() || !pageLoadIsCurrent(#mcpState)) return;
       final enabled = info?.enabled == true;
       setState(() {
         _mcpInfo = info;
@@ -60,13 +77,22 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _loadWorkspaceMemoryState() async {
+  Future<void> _loadWorkspaceMemoryState() => runPageLoad(
+    #workspaceMemoryState,
+    _readWorkspaceMemoryState,
+    revalidate: true,
+  );
+
+  Future<void> _readWorkspaceMemoryState() async {
     try {
       final results = await Future.wait([
         WorkspaceMemoryService.getEmbeddingConfig(),
         WorkspaceMemoryService.getRollupStatus(),
       ]);
-      if (!mounted) return;
+      if (!await waitForPageReady() ||
+          !pageLoadIsCurrent(#workspaceMemoryState)) {
+        return;
+      }
       final config = results[0] as WorkspaceMemoryEmbeddingConfig;
       setState(() {
         _workspaceMemoryConfigured = config.configured;
@@ -254,7 +280,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return Scaffold(
       backgroundColor: palette.pageBackground,
-      appBar: CommonAppBar(title: context.l10n.settingsTitle, primary: true),
+      appBar: OmniRootToolbar(
+        title: context.l10n.settingsTitle,
+        primary: true,
+        showBackButton: !widget.embedded,
+      ),
       body: SafeArea(
         top: false,
         bottom: false,
@@ -286,9 +316,7 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitle: isEnglish
                 ? 'Sign in, view platform quota'
                 : '注册登录、查看平台额度',
-            onTap: () {
-              GoRouterManager.push('/my/account');
-            },
+            route: '/my/account',
           ),
         ],
       ),
@@ -299,17 +327,13 @@ class _SettingsPageState extends State<SettingsPage> {
             icon: LucideIcons.box,
             title: context.l10n.settingsModelProviderTitle,
             subtitle: context.l10n.settingsModelProviderSubtitle,
-            onTap: () {
-              GoRouterManager.push('/home/model_provider_setting');
-            },
+            route: '/home/model_provider_setting',
           ),
           _SettingItem(
             icon: LucideIcons.fileBox,
             title: context.l10n.settingsSceneModelTitle,
             subtitle: context.l10n.settingsSceneModelSubtitle,
-            onTap: () {
-              GoRouterManager.push('/home/scene_model_setting');
-            },
+            route: '/home/scene_model_setting',
           ),
           _SettingItem(
             icon: LucideIcons.database,
@@ -318,12 +342,8 @@ class _SettingsPageState extends State<SettingsPage> {
             trailingText: _workspaceMemoryConfigured
                 ? (isEnglish ? 'Configured' : '已配置')
                 : null,
-            onTap: () async {
-              await GoRouterManager.pushForResult(
-                '/home/workspace_memory_setting',
-              );
-              _loadWorkspaceMemoryState();
-            },
+            route: '/home/workspace_memory_setting',
+            onReturned: _loadWorkspaceMemoryState,
           ),
         ],
       ),
@@ -331,28 +351,18 @@ class _SettingsPageState extends State<SettingsPage> {
         label: context.l10n.settingsSectionServiceEnvironment,
         items: [
           _SettingItem(
-            icon: LucideIcons.bot,
-            title: context.trLegacy('Agent 模式'),
-            subtitle: context.trLegacy('管理 ACP Agent、可用状态与统一模型绑定'),
-            onTap: () {
-              GoRouterManager.push('/home/agent_mode_setting');
-            },
-          ),
-          _SettingItem(
             icon: LucideIcons.wrench,
             title: isEnglish ? 'Tools' : '工具',
             subtitle: isEnglish
                 ? 'Explore tools available to agents'
                 : '查看 Agent 可调用的工具',
-            onTap: () => GoRouterManager.push('/home/tools'),
+            route: '/home/tools',
           ),
           _SettingItem(
             icon: LucideIcons.squareTerminal,
             title: context.l10n.settingsAlpineTitle,
             subtitle: context.l10n.settingsAlpineSubtitle,
-            onTap: () {
-              GoRouterManager.push('/home/termux_setting');
-            },
+            route: '/home/termux_setting',
           ),
           _SettingItem(
             icon: LucideIcons.monitorSmartphone,
@@ -371,9 +381,7 @@ class _SettingsPageState extends State<SettingsPage> {
             icon: LucideIcons.hammer,
             title: context.l10n.settingsMcpToolsTitle,
             subtitle: context.l10n.settingsMcpToolsSubtitle,
-            onTap: () {
-              GoRouterManager.push('/home/mcp_tools');
-            },
+            route: '/home/mcp_tools',
           ),
         ],
       ),
@@ -384,17 +392,13 @@ class _SettingsPageState extends State<SettingsPage> {
             icon: LucideIcons.palette,
             title: context.l10n.settingsAppearanceTitle,
             subtitle: context.l10n.settingsAppearanceSubtitle,
-            onTap: () {
-              GoRouterManager.push('/home/background_setting');
-            },
+            route: '/home/background_setting',
           ),
           _SettingItem(
             icon: LucideIcons.settings2,
             title: context.trLegacy('杂项'),
             subtitle: context.trLegacy('首页、后台隐藏、闹钟、振动与打开方式'),
-            onTap: () {
-              GoRouterManager.push('/home/experience_misc_setting');
-            },
+            route: '/home/experience_misc_setting',
           ),
         ],
       ),
@@ -405,24 +409,18 @@ class _SettingsPageState extends State<SettingsPage> {
             icon: LucideIcons.shieldCheck,
             title: context.l10n.authorizePageTitle,
             subtitle: context.trLegacy('查看并配置悬浮窗、后台运行、Shizuku 等权限'),
-            onTap: () {
-              GoRouterManager.push('/home/authorize_setting');
-            },
+            route: '/home/authorize_setting',
           ),
           _SettingItem(
             icon: LucideIcons.hardDrive,
             title: context.l10n.storageUsageTitle,
             subtitle: context.l10n.storageUsageSubtitle,
-            onTap: () {
-              GoRouterManager.push('/home/storage_usage');
-            },
+            route: '/home/storage_usage',
           ),
           _SettingItem(
             icon: LucideIcons.info,
             title: context.l10n.settingsAboutTitle,
-            onTap: () {
-              GoRouterManager.push('/my/about');
-            },
+            route: '/my/about',
           ),
         ],
       ),
@@ -434,23 +432,56 @@ class _SettingsPageState extends State<SettingsPage> {
       title: section.isAccount ? null : section.label,
       translateTitle: false,
       children: [
-        for (final item in section.items)
-          Semantics(
-            hint: item.subtitle,
-            child: OmniSettingsTile(
-              icon: item.icon,
-              title: item.title,
-              trailingText: item.trailingText,
-              trailing: item.trailing,
-              onTap: item.onTap,
-              translateText: false,
-              padding: EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: section.isAccount ? 22 : 16,
-              ),
-            ),
-          ),
+        for (final item in section.items) _buildSettingsItem(item, section),
       ],
+    );
+  }
+
+  Widget _buildSettingsItem(_SettingItem item, _SettingSection section) {
+    Widget buildTile(VoidCallback? onTap) => Semantics(
+      hint: item.subtitle,
+      child: OmniSettingsTile(
+        icon: item.icon,
+        title: item.title,
+        trailingText: item.trailingText,
+        trailing: item.trailing,
+        onTap: onTap,
+        translateText: false,
+        padding: EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: section.isAccount ? 22 : 16,
+        ),
+      ),
+    );
+    final route = item.route;
+    if (route == null) return buildTile(item.onTap);
+    // FlClash's ListItem.open captures ItemPosition before reparenting its
+    // DecorationListItem. Carry this row's own surface and group corners too:
+    // the parent OmniSettingsGroup stays behind while the row is in the route.
+    // Upstream intentionally leaves OpenContainer.closedShape/closedColor null;
+    // the expanding rectangle has page color, with the shaped row inside it.
+    final index = section.items.indexOf(item);
+    final rowShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(
+        top: index == 0 ? const Radius.circular(22) : Radius.zero,
+        bottom: index == section.items.length - 1
+            ? const Radius.circular(22)
+            : Radius.zero,
+      ),
+    );
+    return FlClashOpenContainer(
+      key: ValueKey('settings-open-$route'),
+      closedBuilder: (rowContext, open) => Material(
+        color: rowContext.omniPalette.surfacePrimary,
+        shape: rowShape,
+        clipBehavior: Clip.antiAlias,
+        child: buildTile(open),
+      ),
+      onOpen: (source) => GoRouterManager.pushForResult<Object?>(
+        route,
+        extra: {flClashContainerExtraKey: source},
+      ),
+      onClosed: (_) => item.onReturned?.call(),
     );
   }
 }
@@ -474,6 +505,8 @@ class _SettingItem {
   final String? trailingText;
   final Widget? trailing;
   final VoidCallback? onTap;
+  final String? route;
+  final VoidCallback? onReturned;
 
   const _SettingItem({
     this.icon,
@@ -482,5 +515,7 @@ class _SettingItem {
     this.trailingText,
     this.trailing,
     this.onTap,
+    this.route,
+    this.onReturned,
   });
 }

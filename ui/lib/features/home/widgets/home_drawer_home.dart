@@ -28,11 +28,18 @@ class _HomeConversationFilter {
 }
 
 extension _HomeDrawerHome on HomeDrawerState {
-  Future<void> _loadHomeAgentCatalog() async {
+  Future<void> _loadHomeAgentCatalog() =>
+      runPageLoad(#homeAgentCatalog, _readHomeAgentCatalog, revalidate: true);
+
+  Future<void> _readHomeAgentCatalog() async {
     final request = ++_homeCatalogRequest;
     try {
       final catalog = await AgentRuntimeService.listAgents();
-      if (!mounted || request != _homeCatalogRequest) return;
+      if (!await waitForPageReady() ||
+          request != _homeCatalogRequest ||
+          !pageLoadIsCurrent(#homeAgentCatalog)) {
+        return;
+      }
       setState(() {
         _homeAgentCatalog = catalog;
         final filters = _homeFilters;
@@ -99,9 +106,10 @@ extension _HomeDrawerHome on HomeDrawerState {
   Widget _buildHomePage() {
     final palette = context.omniPalette;
     return PopScope(
-      canPop: !_homeSearchVisible && !_isSelectingConversations,
+      canPop:
+          !widget.active || (!_homeSearchVisible && !_isSelectingConversations),
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
+        if (didPop || !widget.active) return;
         if (_isSelectingConversations) {
           _exitConversationSelection();
         } else if (_homeSearchVisible) {
@@ -109,7 +117,7 @@ extension _HomeDrawerHome on HomeDrawerState {
         }
       },
       child: Scaffold(
-        backgroundColor: palette.surfacePrimary,
+        backgroundColor: palette.pageBackground,
         resizeToAvoidBottomInset: true,
         body: SafeArea(
           child: Column(
@@ -120,20 +128,25 @@ extension _HomeDrawerHome on HomeDrawerState {
               if (!_isSelectingConversations || _homeSearchVisible)
                 HomeSearchHeader(
                   searching: _homeSearchVisible,
-                  title: _buildHomeAgentSwitcher(),
                   updateIndicator: _buildHomeAppUpdateIndicator(),
-                  searchField: HomeDrawerSearchField(
-                    key: widget.searchFieldKey,
-                    controller: _searchController,
-                    focusNode: _searchFocusNode,
-                    isSearching: _isSearching,
-                    textColor: palette.textPrimary,
-                  ),
+                  searchFieldKey: widget.searchFieldKey,
+                  controller: _searchController,
+                  focusNode: _searchFocusNode,
+                  isSearching: _isSearching,
                   onSearch: _openHomeSearch,
                   onClose: _closeHomeSearch,
-                  onMenu: _showHomeMenu,
+                  menuButton: _buildHomeMenuButton(),
                 ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
+              if (!_isSelectingConversations) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  child: _homeSearchVisible
+                      ? _buildHomeSearchContext()
+                      : _buildHomeAgentSwitcher(compact: true),
+                ),
+                const SizedBox(height: 10),
+              ],
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -254,6 +267,33 @@ extension _HomeDrawerHome on HomeDrawerState {
       ),
     );
   }
+
+  /// Search keeps the current filter visible without moving the history list.
+  Widget _buildHomeSearchContext() => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 48),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: [
+          ExcludeSemantics(child: _buildHomeFilterIcon(_homeFilter, 24)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              _homeFilterLabel(_homeFilter),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                height: 1.2,
+                color: context.omniPalette.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   Widget _buildHomeAgentSwitcher({bool compact = false}) {
     final palette = context.omniPalette;
@@ -383,9 +423,8 @@ extension _HomeDrawerHome on HomeDrawerState {
                                 ),
                               ),
                             );
-                            final inlineWidth = MediaQuery.textScalerOf(
-                              context,
-                            ).scale(english ? 92 : 78);
+                            final inlineWidth = MediaQuery.textScalerOf(context)
+                                .scale(english ? 92 : 78);
                             if (constraints.maxWidth < inlineWidth) {
                               // Keep the badge above-right of a readable name
                               // when large text cannot share the same line.
@@ -430,59 +469,75 @@ extension _HomeDrawerHome on HomeDrawerState {
     setState(() => _homeFilter = filter);
   }
 
-  Future<void> _showHomeMenu(BuildContext anchorContext) async {
-    if (_homeMenuOpening) return;
-    _homeMenuOpening = true;
-    try {
-      await _openHomeMenu(anchorContext);
-    } finally {
-      _homeMenuOpening = false;
-    }
-  }
-
-  Future<void> _openHomeMenu(BuildContext anchorContext) async {
-    // Home remains mounted under settings/plugin pages. Read the existing
-    // plugin registry again so newly enabled or removed actions are reflected.
-    await _loadWebQuickActions();
-    if (!mounted || !anchorContext.mounted) return;
-    final actions = [
+  List<_DrawerShortcutAction> get _homeMenuActions => [
+    _DrawerShortcutAction(
+      label: context.l10n.homeDrawerArchive,
+      assetPath: 'assets/home/archive_icon.svg',
+      onTap: () => _navigateTo('/home/archived_conversations'),
+    ),
+    ..._shortcutActions,
+    if (_webQuickActions.isNotEmpty)
       _DrawerShortcutAction(
-        label: context.l10n.homeDrawerArchive,
-        assetPath: 'assets/home/archive_icon.svg',
-        onTap: () => _navigateTo('/home/archived_conversations'),
+        label: 'Agent WebUI',
+        icon: LucideIcons.globe,
+        onTap: _showHomeWebActions,
       ),
-      ..._shortcutActions,
-      if (_webQuickActions.isNotEmpty)
-        _DrawerShortcutAction(
-          label: 'Agent WebUI',
-          icon: LucideIcons.globe,
-          onTap: _showHomeWebActions,
-        ),
-    ];
-    final anchor = glassPopupAnchorFromContext(anchorContext);
-    if (anchor == null) return;
-    final selected = await showOmniMenu<int>(
-      context: context,
-      anchor: anchor,
-      width: 260,
-      items: [
-        for (var i = 0; i < actions.length; i++)
-          OmniPopupMenuItem<int>(
-            key: ValueKey('home-menu-item-$i'),
-            value: i,
-            child: Row(
-              children: [
-                _shortcutIcon(actions[i], size: 20),
-                const SizedBox(width: 14),
-                Expanded(child: Text(actions[i].label)),
-              ],
+  ];
+
+  Widget _buildHomeMenuButton() => Builder(
+    builder: (buttonContext) => FlClashPopupBox<VoidCallback>(
+      onOpened: () {
+        scheduleMicrotask(() {
+          if (buttonContext.mounted) {
+            HomeSearchHeader.releaseMenuPressOf(buttonContext);
+          }
+        });
+        // Show the cached actions on pointer down, then refresh the already-open
+        // menu. Plugin I/O must not hold the source button's opening animation.
+        unawaited(_loadWebQuickActions());
+      },
+      onSelected: (action) {
+        if (mounted) action();
+      },
+      targetBuilder: (context, open) => IconButton(
+        key: const ValueKey('home-menu-button'),
+        tooltip: MaterialLocalizations.of(context).showMenuTooltip,
+        onPressed: open,
+        icon: const Icon(LucideIcons.ellipsis),
+      ),
+      popupBuilder: (popupContext) => ValueListenableBuilder<int>(
+        valueListenable: _homeMenuRevision,
+        builder: (context, _, _) {
+          if (!mounted) return const SizedBox.shrink();
+          final actions = _homeMenuActions;
+          return SizedBox(
+            width: 260,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < actions.length; i++)
+                    FlClashPopupMenuItem<VoidCallback>(
+                      key: ValueKey('home-menu-item-$i'),
+                      value: actions[i].onTap,
+                      child: Row(
+                        children: [
+                          _shortcutIcon(actions[i], size: 20),
+                          const SizedBox(width: 14),
+                          Expanded(child: Text(actions[i].label)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-      ],
-    );
-    if (!mounted || selected == null) return;
-    actions[selected].onTap();
-  }
+          );
+        },
+      ),
+    ),
+  );
 
   Future<void> _showHomeWebActions() async {
     await _refreshWebQuickActionStatuses();

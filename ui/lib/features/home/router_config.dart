@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/core/router/conversation_route_target.dart';
-import 'package:ui/features/home/pages/conversation_home_page.dart';
+import 'package:ui/features/home/pages/main_navigation_page.dart';
 import 'package:ui/features/home/pages/alarm_setting/alarm_setting_page.dart';
 import 'package:ui/features/home/pages/authorize_setting/authorize_setting_page.dart';
 import 'package:ui/features/home/pages/agent/remote_codex_setting_page.dart';
@@ -54,7 +54,9 @@ List<GoRoute> homeRoutes = [
       );
       return destination == state.uri.toString() ? null : destination;
     },
-    builder: (context, state) => const ConversationHomePage(),
+    builder: (context, state) => MainNavigationPage(
+      initialTab: MainNavigationTab.fromName(state.uri.queryParameters['tab']),
+    ),
   ),
   GoRoute(
     path: '/home/blank_page',

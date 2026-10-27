@@ -98,20 +98,38 @@ void main() {
         addTearDown(tester.view.resetDevicePixelRatio);
         await tester.pumpWidget(page());
         await tester.pumpAndSettle();
+        expect(find.text('版本未检测'), findsNothing);
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('agent-version-details')),
+          160,
+        );
+        await tester.tap(find.byKey(const Key('agent-version-details')));
+        await tester.pumpAndSettle();
         expect(find.text('版本未检测'), findsOneWidget);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(
+          find.byKey(const Key('agent-check-updates')),
+        );
         await tester.tap(find.byKey(const Key('agent-check-updates')));
         await tester.pumpAndSettle();
         expect(find.text('1.18.29 · 有新版本 2.0.32'), findsOneWidget);
         expect(find.textContaining('上次检查'), findsOneWidget);
         expect(calls.where((call) => call == 'agent/prepare'), isEmpty);
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('agent-check-OpenCode')),
+          -160,
+        );
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('agent-check-OpenCode')));
         await tester.pumpAndSettle();
         expect(
           find.text(initializationOk ? '助手升级成功' : '版本已升级，助手未能启动'),
           findsOneWidget,
         );
-        if (initializationOk)
+        if (initializationOk) {
           expect(find.textContaining('已安装 2.0.32'), findsOneWidget);
+        }
         expect(tester.takeException(), isNull);
       },
     );
@@ -126,7 +144,7 @@ void main() {
       });
       final started = <String>[];
       messenger.setMockMethodCallHandler(channel, (call) async {
-        if (call.method == 'agent/list')
+        if (call.method == 'agent/list') {
           return {
             'agents': [
               agent('first', checked: true),
@@ -134,6 +152,7 @@ void main() {
               agent('missing', checked: true, missing: true),
             ],
           };
+        }
         if (call.method == 'agent/prepare') {
           final id = (call.arguments as Map)['agentId'] as String;
           started.add(id);
@@ -143,6 +162,11 @@ void main() {
         return null;
       });
       await tester.pumpWidget(page());
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('agent-upgrade-all')),
+        160,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('agent-upgrade-all')));
       await tester.pump();
@@ -159,12 +183,13 @@ void main() {
     tester,
   ) async {
     messenger.setMockMethodCallHandler(channel, (call) async {
-      if (call.method == 'agent/list')
+      if (call.method == 'agent/list') {
         return {
           'agents': [
             agent('OpenCode', checked: true, error: 'registry_unavailable'),
           ],
         };
+      }
       return null;
     });
     await tester.pumpWidget(page(english: true));

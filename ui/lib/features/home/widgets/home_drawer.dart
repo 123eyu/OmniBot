@@ -40,8 +40,10 @@ import 'package:ui/utils/cache_util.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
 import 'package:ui/widgets/app_update_dialog.dart';
+import 'package:ui/widgets/flclash/popup.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/omni_menu.dart';
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:ui/widgets/settings_ui.dart';
 
 part 'home_drawer_actions.dart';
@@ -121,6 +123,7 @@ class HomeDrawer extends ConsumerStatefulWidget {
     this.searchFieldKey,
     this.deferInitialLoad = false,
     this.homePage = false,
+    this.active = true,
   });
 
   final int? memoryCount;
@@ -141,11 +144,15 @@ class HomeDrawer extends ConsumerStatefulWidget {
   /// Search, history mutations and running-session status remain shared.
   final bool homePage;
 
+  /// Kept-alive home tabs refresh their catalog when selected again.
+  final bool active;
+
   @override
   ConsumerState<HomeDrawer> createState() => HomeDrawerState();
 }
 
-class HomeDrawerState extends ConsumerState<HomeDrawer> {
+class HomeDrawerState extends ConsumerState<HomeDrawer>
+    with FlClashPageLoadMixin {
   static const Duration _searchDebounceDuration = Duration(milliseconds: 220);
   static const Duration _sectionToggleDuration = Duration(milliseconds: 260);
   static const Duration _imagePreviewStripTransitionDuration = Duration(
@@ -189,7 +196,7 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
   bool isLoadingConversations = true;
   bool _isSearching = false;
   bool _homeSearchVisible = false;
-  bool _homeMenuOpening = false;
+  final _homeMenuRevision = ValueNotifier<int>(0);
   _HomeConversationFilter _homeFilter = _HomeConversationFilter.xiaowan;
   AcpAgentCatalog? _homeAgentCatalog;
   bool _homeRouteWasCurrent = false;
@@ -283,6 +290,14 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
   }
 
   @override
+  void didUpdateWidget(covariant HomeDrawer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.homePage && widget.active && !oldWidget.active) {
+      unawaited(_loadHomeAgentCatalog());
+    }
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!widget.homePage) return;
@@ -295,6 +310,7 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
 
   @override
   void dispose() {
+    _homeMenuRevision.dispose();
     _homeAppLifecycleListener?.dispose();
     _searchDebounceTimer?.cancel();
     _settledReloadTimer?.cancel();
@@ -372,10 +388,15 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
     _settledReloadTimer = null;
   }
 
-  Future<void> _loadWebQuickActions() async {
+  Future<void> _loadWebQuickActions() =>
+      runPageLoad(#homePluginActions, _readWebQuickActions, revalidate: true);
+
+  Future<void> _readWebQuickActions() async {
     try {
       final actions = await OmniPluginService.listActions();
-      if (!mounted) return;
+      if (!await waitForPageReady() || !pageLoadIsCurrent(#homePluginActions)) {
+        return;
+      }
       final quickActions =
           actions
               .where(
@@ -397,18 +418,28 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
                   : left.displayName.compareTo(right.displayName);
             });
       setState(() => _webQuickActions = quickActions);
+      _homeMenuRevision.value++;
       unawaited(_refreshWebQuickActionStatuses());
     } catch (error) {
       debugPrint('[HomeDrawer] failed to load Web quick actions: $error');
-      if (mounted && _webQuickActions.isNotEmpty) {
+      if (await waitForPageReady() &&
+          pageLoadIsCurrent(#homePluginActions) &&
+          _webQuickActions.isNotEmpty) {
         setState(() => _webQuickActions = const <OmniPluginActionItem>[]);
+        _homeMenuRevision.value++;
       }
     }
   }
 
   /// Probes the managed Web processes behind the quick launch chips so a
   /// running service is visibly marked and offers a stop affordance.
-  Future<void> _refreshWebQuickActionStatuses() async {
+  Future<void> _refreshWebQuickActionStatuses() => runPageLoad(
+    #homeWebStatus,
+    _readWebQuickActionStatuses,
+    revalidate: true,
+  );
+
+  Future<void> _readWebQuickActionStatuses() async {
     final actions = _webQuickActions
         .where(AgentWebStatusService.supportsLifecycle)
         .toList(growable: false);
@@ -421,7 +452,7 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
       return;
     }
     final statuses = await AgentWebStatusService.queryAll(actions);
-    if (!mounted) return;
+    if (!await waitForPageReady() || !pageLoadIsCurrent(#homeWebStatus)) return;
     setState(() => _webQuickActionStatuses = statuses);
   }
 

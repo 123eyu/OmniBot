@@ -266,11 +266,12 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
   }
 
   List<_DrawerShortcutAction> get _shortcutActions => <_DrawerShortcutAction>[
-    _DrawerShortcutAction(
-      label: context.l10n.settingsTitle,
-      assetPath: 'assets/home/setting_icon.svg',
-      onTap: () => _navigateTo('/home/settings'),
-    ),
+    if (!widget.homePage)
+      _DrawerShortcutAction(
+        label: context.l10n.settingsTitle,
+        assetPath: 'assets/home/setting_icon.svg',
+        onTap: () => _navigateTo('/home/settings'),
+      ),
     _DrawerShortcutAction(
       label: context.l10n.memoryCenterTitle,
       svgString: _kDrawerMemoryIconSvg,
@@ -286,11 +287,12 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
       svgString: _kDrawerSkillStoreIconSvg,
       onTap: () => _navigateTo('/home/skill_store'),
     ),
-    _DrawerShortcutAction(
-      label: context.trLegacy('轨迹'),
-      svgString: _kDrawerUsageStatisticsIconSvg,
-      onTap: () => _navigateTo('/task/execution_history'),
-    ),
+    if (!widget.homePage)
+      _DrawerShortcutAction(
+        label: context.trLegacy('轨迹'),
+        svgString: _kDrawerUsageStatisticsIconSvg,
+        onTap: () => _navigateTo('/task/execution_history'),
+      ),
     _DrawerShortcutAction(
       label: context.l10n.homeDrawerScheduled,
       assetPath: 'assets/common/schedule_icon.svg',

@@ -9,7 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/features/home/state/habitual_hand_controller.dart';
 import 'package:ui/features/home/widgets/home_drawer.dart';
-import 'package:ui/features/home/widgets/home_drawer_search_field.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
 import 'package:ui/l10n/app_language_mode.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
@@ -24,7 +23,7 @@ import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
-import 'package:ui/widgets/omni_circle_button.dart';
+import 'package:ui/widgets/omni_root_toolbar.dart';
 
 class _SvgTestAssetBundle extends CachingAssetBundle {
   static final Uint8List _svgBytes = Uint8List.fromList(
@@ -673,7 +672,10 @@ void main() {
       await tester.pumpAndSettle(const Duration(milliseconds: 250));
       await startSelection(tester, '查找甲');
       expect(find.text('已选择 1 项'), findsOneWidget);
-      expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('home-agent-switcher')).hitTestable(),
+        findsNothing,
+      );
       expect(find.byKey(const ValueKey('home-new-conversation')), findsNothing);
       await tester.tap(find.text('查找乙'));
       await tester.pumpAndSettle();
@@ -1409,7 +1411,10 @@ void main() {
         await selectHomeCategory(tester, agentId);
         await tester.tap(find.byKey(const ValueKey('home-search-button')));
         await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+        expect(
+          find.byKey(const ValueKey('home-agent-switcher')).hitTestable(),
+          findsNothing,
+        );
         await tester.enterText(find.byType(TextField), '对话');
         await tester.pumpAndSettle(const Duration(milliseconds: 250));
         await tester.binding.handlePopRoute();
@@ -1479,7 +1484,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('home-search-button')));
       await tester.pumpAndSettle();
       expect(update, findsNothing);
-      expect(tester.getRect(find.byType(HomeDrawerSearchField)).left, 22);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('home-search-input'))).left,
+        16,
+      );
       await tester.tap(find.byKey(const ValueKey('home-close-search')));
       await tester.pumpAndSettle();
       expect(update, findsOneWidget);
@@ -1573,12 +1581,17 @@ void main() {
     expect(tester.widget<Text>(name).maxLines, 1);
     expect(tester.widget<Text>(name).overflow, TextOverflow.ellipsis);
     expect(
-      tester.getRect(name).right,
-      lessThanOrEqualTo(
-        tester
-            .getRect(find.byKey(const ValueKey('home-app-update-button')))
-            .left,
-      ),
+      tester.getRect(name).top,
+      greaterThanOrEqualTo(tester.getRect(find.byType(OmniRootToolbar)).bottom),
+    );
+    expect(
+      tester.widget<Text>(find.byKey(OmniRootToolbar.titleKey)).data,
+      '首页',
+    );
+    expect(tester.getSize(find.byType(OmniRootToolbar)).height, 72);
+    expect(
+      find.byKey(const ValueKey('home-app-update-button')).hitTestable(),
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
     await startSelection(tester, '长名称Agent对话');
@@ -1656,28 +1669,18 @@ void main() {
   });
 
   testWidgets(
-    'home search has an independent button and menu retains other shortcuts',
+    'home uses FlClash search group and menu retains other shortcuts',
     (tester) async {
       void expectCircleGeometry(String key) {
         final button = find.byKey(ValueKey(key));
-        // Match the chat header's visible circle without reducing its padded
-        // hit target. Tight animation slots must not enlarge the Material.
-        expect(tester.getSize(button), const Size.square(48));
-        final surface = find.descendant(
-          of: button,
-          matching: find.byWidgetPredicate(
-            (widget) => widget is Material && widget.shape is CircleBorder,
-          ),
-        );
-        expect(surface, findsOneWidget);
-        expect(tester.getSize(surface), const Size.square(40));
+        expect(tester.getSize(button), const Size.square(44));
         for (final icon
             in find
                 .descendant(of: button, matching: find.byType(Icon))
                 .evaluate()) {
           expect(
             tester.getSize(find.byElementPredicate((e) => e == icon)),
-            const Size.square(20),
+            const Size.square(24),
           );
         }
       }
@@ -1707,14 +1710,43 @@ void main() {
       expect(find.text('设置'), findsNothing);
       expectCircleGeometry('home-search-button');
       expectCircleGeometry('home-menu-button');
+      final searchBounds = tester.getRect(
+        find.byKey(const ValueKey('home-search-button')),
+      );
+      final menuBounds = tester.getRect(
+        find.byKey(const ValueKey('home-menu-button')),
+      );
+      expect(searchBounds.right, menuBounds.left);
+      expect(searchBounds.center.dy, menuBounds.center.dy);
+      final sharedCapsule = find.ancestor(
+        of: find.byKey(const ValueKey('home-search-button')),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is DecoratedBox &&
+              widget.decoration is ShapeDecoration &&
+              (widget.decoration as ShapeDecoration).shape
+                  is RoundedSuperellipseBorder,
+        ),
+      );
+      expect(sharedCapsule, findsOneWidget);
+      expect(tester.getSize(sharedCapsule), const Size(88, 44));
+      expect(
+        find.descendant(
+          of: sharedCapsule,
+          matching: find.byKey(const ValueKey('home-menu-button')),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('home-menu-button')));
       await tester.pumpAndSettle();
       expect(
-        find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
-        findsNWidgets(7),
+        find.byWidgetPredicate(
+          (widget) => widget is PopupMenuItem<VoidCallback>,
+        ),
+        findsNWidgets(5),
       );
-      expect(find.text('设置'), findsOneWidget);
-      expect(find.text('轨迹'), findsOneWidget);
+      expect(find.text('设置'), findsNothing);
+      expect(find.text('轨迹'), findsNothing);
       expect(find.text('搜索对话'), findsNothing);
       await tester.tapAt(const Offset(4, 4));
       await tester.pumpAndSettle();
@@ -1731,8 +1763,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pumpAndSettle();
       expect(find.byType(TextField), findsOneWidget);
-      expect(find.byKey(const ValueKey('home-agent-name')), findsNothing);
-      expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('home-agent-name')).hitTestable(),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('home-agent-switcher')).hitTestable(),
+        findsNothing,
+      );
       expect(find.text('取消'), findsNothing);
       expectCircleGeometry('home-close-search');
       expect(
@@ -1756,22 +1794,11 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       nativeConversations = [selectionRow(1, '固定会话')];
       await pumpSelectionHome(tester);
-      final searchIcon = find.byKey(const ValueKey('home-search-moving-icon'));
-      final searchCenter = tester.getCenter(searchIcon);
-      final menuCenter = tester.getCenter(
-        find.byKey(const ValueKey('home-menu-button')),
-      );
       final historyTop = tester.getTopLeft(find.byType(CustomScrollView)).dy;
 
       await tester.tap(find.byKey(const ValueKey('home-search-button')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 80));
-      expect(tester.getCenter(searchIcon).dx, greaterThan(searchCenter.dx));
-      expect(tester.getCenter(searchIcon).dx, lessThan(menuCenter.dx));
-      expect(
-        tester.getCenter(find.byKey(const ValueKey('home-close-search'))),
-        menuCenter,
-      );
       expect(tester.getTopLeft(find.byType(CustomScrollView)).dy, historyTop);
       final field = tester.widget<TextField>(find.byType(TextField));
       final editor = tester.state<EditableTextState>(find.byType(EditableText));
@@ -1779,23 +1806,19 @@ void main() {
       await tester.enterText(find.byType(TextField), 'unfinished query');
       await tester.pump();
 
-      await tester.tap(find.byKey(const ValueKey('home-close-search')));
+      // The container can be retargeted while its spring is still moving.
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('home-close-search')))
+          .onPressed!();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 16));
-      expect(
-        tester
-            .widget<OmniCircleButton>(
-              find.byKey(const ValueKey('home-menu-button')),
-            )
-            .onPressed,
-        isNull,
-      );
       expect(field.controller!.text, isEmpty);
       expect(field.focusNode!.hasFocus, isFalse);
       expect(find.byType(TextField), findsOneWidget);
       expect(tester.getTopLeft(find.byType(CustomScrollView)).dy, historyTop);
-
-      await tester.tap(find.byKey(const ValueKey('home-search-button')));
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('home-search-button')))
+          .onPressed!();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 80));
       expect(
@@ -1804,16 +1827,8 @@ void main() {
       );
       expect(field.focusNode!.hasFocus, isTrue);
       expect(field.controller!.text, isEmpty);
-      expect(tester.getTopLeft(find.byType(CustomScrollView)).dy, historyTop);
       await tester.pumpAndSettle();
-      expect(
-        tester.state<EditableTextState>(find.byType(EditableText)),
-        same(editor),
-      );
-      expect(
-        tester.getCenter(find.byKey(const ValueKey('home-close-search'))),
-        menuCenter,
-      );
+      expect(tester.getTopLeft(find.byType(CustomScrollView)).dy, historyTop);
       await tester.tap(find.byKey(const ValueKey('home-close-search')));
       await tester.pumpAndSettle();
       expect(find.byType(TextField), findsNothing);
@@ -1841,7 +1856,10 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(update, findsNothing);
-      expect(tester.getRect(find.byType(HomeDrawerSearchField)).left, 22);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('home-search-input'))).left,
+        16,
+      );
       expect(
         tester.getCenter(find.byKey(const ValueKey('home-close-search'))),
         menuCenter,
@@ -1919,11 +1937,15 @@ void main() {
     await tester.pumpAndSettle();
 
     installed = true;
-    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    final menuPress = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('home-menu-button'))),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Agent WebUI'), findsOneWidget);
     running = true;
-    await tester.tap(find.text('Agent WebUI'));
+    await menuPress.moveTo(tester.getCenter(find.text('Agent WebUI')));
+    await tester.pump();
+    await menuPress.up();
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('home-drawer-web-kimi-code-acp')),
@@ -1994,14 +2016,26 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'missing');
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('home-menu-button')), findsNothing);
-    expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('home-menu-button')).hitTestable(),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('home-agent-switcher')).hitTestable(),
+      findsNothing,
+    );
     expect(find.byType(TextField), findsOneWidget);
     expect(tester.takeException(), isNull);
     tester.view.viewInsets = FakeViewPadding.zero;
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('home-agent-name')), findsNothing);
-    expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('home-agent-name')).hitTestable(),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('home-agent-switcher')).hitTestable(),
+      findsNothing,
+    );
 
     await tester.tap(find.byKey(const ValueKey('home-close-search')));
     tester.view.viewInsets = FakeViewPadding.zero;
@@ -2063,8 +2097,14 @@ void main() {
       final home = tester.state(find.byType(HomeDrawer));
       await tester.tap(find.byKey(const ValueKey('home-search-button')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('home-agent-name')), findsNothing);
-      expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('home-agent-name')).hitTestable(),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('home-agent-switcher')).hitTestable(),
+        findsNothing,
+      );
       await tester.enterText(find.byType(TextField), '聊天');
       await tester.pump(const Duration(milliseconds: 250));
       await tester.pumpAndSettle();
@@ -2076,7 +2116,10 @@ void main() {
         isEmpty,
       );
       expect(find.byType(TextField), findsOneWidget);
-      expect(find.byKey(const ValueKey('home-agent-name')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('home-agent-name')).hitTestable(),
+        findsNothing,
+      );
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(tester.state(find.byType(HomeDrawer)), same(home));
@@ -2100,7 +2143,7 @@ void main() {
     },
   );
 
-  testWidgets('home menu ignores repeated taps while refreshing plugins', (
+  testWidgets('home menu opens on press without waiting for plugin refresh', (
     tester,
   ) async {
     final registryResponse = Completer<List<Object?>>();
@@ -2133,26 +2176,26 @@ void main() {
     final initialRegistryReads = registryReads;
     delayRegistry = true;
     final menuButton = find.byKey(const ValueKey('home-menu-button'));
-    await tester.tap(menuButton);
-    await tester.pump();
-    await tester.tap(menuButton);
+    final press = await tester.startGesture(tester.getCenter(menuButton));
     await tester.pump();
     expect(registryReads, initialRegistryReads + 1);
     expect(
-      find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
-      findsNothing,
+      find.byWidgetPredicate((widget) => widget is PopupMenuItem<VoidCallback>),
+      findsNWidgets(5),
     );
+    await press.up();
+    await tester.pumpAndSettle();
 
     registryResponse.complete(<Object?>[]);
     await tester.pumpAndSettle();
     expect(
-      find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
-      findsNWidgets(7),
+      find.byWidgetPredicate((widget) => widget is PopupMenuItem<VoidCallback>),
+      findsNWidgets(5),
     );
     await tester.tapAt(const Offset(4, 4));
     await tester.pumpAndSettle();
     expect(
-      find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
+      find.byWidgetPredicate((widget) => widget is PopupMenuItem<VoidCallback>),
       findsNothing,
     );
 
@@ -2160,8 +2203,8 @@ void main() {
     await tester.tap(menuButton);
     await tester.pumpAndSettle();
     expect(
-      find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
-      findsNWidgets(7),
+      find.byWidgetPredicate((widget) => widget is PopupMenuItem<VoidCallback>),
+      findsNWidgets(5),
     );
     expect(registryReads, initialRegistryReads + 2);
     expect(tester.takeException(), isNull);

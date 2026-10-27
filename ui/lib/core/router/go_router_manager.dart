@@ -1,9 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show MaterialPage;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:ui/features/home/pages/conversation_home_page.dart';
+import 'package:ui/features/home/pages/main_navigation_page.dart';
 
 import 'conversation_route_target.dart';
 import 'go_router_config.dart';
@@ -16,6 +17,7 @@ import 'package:ui/services/method_channel_service.dart';
 import 'package:ui/constants/storage_keys.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/widgets/predictive_back_route.dart';
+import 'package:ui/widgets/flclash/open_container.dart';
 
 class RouteOptions {
   final bool noAnim;
@@ -148,16 +150,38 @@ class GoRouterManager {
           .toList(),
       pageBuilder: (context, state) {
         final parsed = _parseExtra(state.extra);
+        final source = parsed.data is Map
+            ? (parsed.data as Map)[flClashContainerExtraKey]
+            : null;
 
         Widget child;
         if (route.builder != null) {
           child = route.builder!(context, state);
         } else if (route.pageBuilder != null) {
-          return route.pageBuilder!(context, state);
+          final page = route.pageBuilder!(context, state);
+          if (source is! FlClashContainerSource) return page;
+          // Preserve each destination's existing route builder. The source
+          // supplies presentation geometry, never a second navigation stack.
+          final content = switch (page) {
+            PredictiveBackPage page => page.child,
+            CustomTransitionPage page => page.child,
+            MaterialPage page => page.child,
+            CupertinoPage page => page.child,
+            _ => null,
+          };
+          if (content == null) return page;
+          child = content;
         } else {
           child = const SizedBox.shrink();
         }
 
+        if (source is FlClashContainerSource && !parsed.options.noAnim) {
+          return source.createPage(
+            key: state.pageKey,
+            name: route.name,
+            child: child,
+          );
+        }
         return _buildPage(
           key: state.pageKey,
           child: child,
@@ -230,7 +254,7 @@ class GoRouterManager {
             final parsed = _parseExtra(state.extra);
             final child = _isSubEngine
                 ? const SizedBox.shrink()
-                : const ConversationHomePage();
+                : const MainNavigationPage();
             return _buildPage(
               key: state.pageKey,
               child: child,

@@ -4,6 +4,7 @@ import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/omni_theme_palette.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
+import 'package:ui/widgets/flclash/page_activity.dart';
 
 // ---------------------------------------------------------------------------
 //  Month label helper (heatmap)
@@ -21,14 +22,23 @@ class _MonthLabel {
 
 class ActivityDashboardCard extends StatefulWidget {
   final int weeksToShow;
-  const ActivityDashboardCard({super.key, this.weeksToShow = 16});
+  const ActivityDashboardCard({
+    super.key,
+    this.weeksToShow = 16,
+    this.active = true,
+  });
+
+  final bool active;
 
   @override
   State<ActivityDashboardCard> createState() => _ActivityDashboardCardState();
 }
 
 class _ActivityDashboardCardState extends State<ActivityDashboardCard>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with
+        SingleTickerProviderStateMixin,
+        WidgetsBindingObserver,
+        FlClashPageLoadMixin {
   // -- tab --
   static const int _convTab = 0;
   static const int _tokenTab = 1;
@@ -38,6 +48,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   // -- conversation data --
   Map<String, int> _activityMap = {};
   bool _isConvLoading = true;
+  bool _hasConversationData = false;
   bool _hasConvError = false;
   int _convLoadGeneration = 0;
   int _totalConversations = 0;
@@ -46,6 +57,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   // -- token data --
   List<WeeklyTokenData> _weeklyData = [];
   bool _isTokenLoading = true;
+  bool _hasTokenData = false;
   bool _hasTokenError = false;
   int _tokenLoadGeneration = 0;
   int _totalCached = 0;
@@ -80,8 +92,17 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   }
 
   @override
+  void didUpdateWidget(covariant ActivityDashboardCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      _loadConversationData();
+      _loadTokenData();
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed && widget.active) {
       _loadConversationData();
       _loadTokenData();
     }
@@ -91,10 +112,17 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   //  Data loading — conversation
   // -----------------------------------------------------------------------
 
-  Future<void> _loadConversationData() async {
+  Future<void> _loadConversationData() => runPageLoad(
+    #conversationActivity,
+    _readConversationData,
+    revalidate: true,
+  );
+
+  Future<void> _readConversationData() async {
     final generation = ++_convLoadGeneration;
     setState(() {
-      _isConvLoading = true;
+      // Retain the cached chart while refreshing an already visited tab.
+      _isConvLoading = !_hasConversationData;
       _hasConvError = false;
     });
     try {
@@ -109,18 +137,23 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
         today: today,
       );
 
-      if (mounted && generation == _convLoadGeneration) {
+      if (await waitForPageReady() &&
+          generation == _convLoadGeneration &&
+          pageLoadIsCurrent(#conversationActivity)) {
         setState(() {
           _activityMap = summary.activityMap;
           _totalConversations = summary.totalConversations;
           _currentStreak = summary.currentStreak;
+          _hasConversationData = true;
           _isConvLoading = false;
         });
         _tryStartFade();
       }
     } catch (e) {
       debugPrint('[ActivityDashboard] conv load failed: $e');
-      if (mounted && generation == _convLoadGeneration) {
+      if (await waitForPageReady() &&
+          generation == _convLoadGeneration &&
+          pageLoadIsCurrent(#conversationActivity)) {
         setState(() {
           _isConvLoading = false;
           _hasConvError = true;
@@ -134,10 +167,13 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   //  Data loading — token
   // -----------------------------------------------------------------------
 
-  Future<void> _loadTokenData() async {
+  Future<void> _loadTokenData() =>
+      runPageLoad(#tokenUsage, _readTokenData, revalidate: true);
+
+  Future<void> _readTokenData() async {
     final generation = ++_tokenLoadGeneration;
     setState(() {
-      _isTokenLoading = true;
+      _isTokenLoading = !_hasTokenData;
       _hasTokenError = false;
     });
     try {
@@ -161,19 +197,24 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
         weekStarts: weekStarts,
       );
 
-      if (mounted && generation == _tokenLoadGeneration) {
+      if (await waitForPageReady() &&
+          generation == _tokenLoadGeneration &&
+          pageLoadIsCurrent(#tokenUsage)) {
         setState(() {
           _weeklyData = summary.weeklyData;
           _totalCached = summary.totalCached;
           _modelTotals = summary.modelTotals;
           _modelOrder = summary.modelOrder;
+          _hasTokenData = true;
           _isTokenLoading = false;
         });
         _tryStartFade();
       }
     } catch (e) {
       debugPrint('[ActivityDashboard] token load failed: $e');
-      if (mounted && generation == _tokenLoadGeneration) {
+      if (await waitForPageReady() &&
+          generation == _tokenLoadGeneration &&
+          pageLoadIsCurrent(#tokenUsage)) {
         setState(() {
           _isTokenLoading = false;
           _hasTokenError = true;
@@ -275,7 +316,7 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
 
     return Padding(
       key: const ValueKey('usage-statistics-content'),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 22),
       child: isLoading
           ? _buildSkeleton(palette, isDark)
           : FadeTransition(

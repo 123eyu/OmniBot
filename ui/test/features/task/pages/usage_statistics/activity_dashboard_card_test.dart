@@ -87,7 +87,7 @@ void main() {
       final content = tester.widget<Padding>(
         find.byKey(const ValueKey('usage-statistics-content')),
       );
-      expect(content.padding, const EdgeInsets.symmetric(horizontal: 20));
+      expect(content.padding, const EdgeInsets.symmetric(horizontal: 22));
       expect(content.child, isA<FadeTransition>());
 
       await tester.tap(find.text('Token'));
