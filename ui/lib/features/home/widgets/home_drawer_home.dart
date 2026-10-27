@@ -231,7 +231,7 @@ extension _HomeDrawerHome on HomeDrawerState {
   String _homeFilterLabel(_HomeConversationFilter filter) {
     final english = Localizations.localeOf(context).languageCode == 'en';
     return switch (filter.id) {
-      'all' => english ? 'All conversations' : '全部对话',
+      'all' => english ? 'All' : '全部',
       'chat' => english ? 'Chat' : '纯聊天',
       'xiaowan-acp' => english ? 'Xiaowan' : '小万',
       _ => filter.name ?? filter.id,

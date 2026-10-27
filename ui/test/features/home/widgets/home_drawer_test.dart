@@ -1274,7 +1274,7 @@ void main() {
           findsOneWidget,
         );
       }
-      expect(find.text('全部对话'), findsOneWidget);
+      expect(find.text('全部'), findsOneWidget);
       final codex = find.byKey(const ValueKey('home-agent-option-codex-acp'));
       expect(
         find.descendant(of: codex, matching: find.byType(AgentBrandIcon)),
