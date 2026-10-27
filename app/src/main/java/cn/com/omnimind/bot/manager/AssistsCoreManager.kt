@@ -3191,7 +3191,8 @@ class AssistsCoreManager(private val context: Context) {
                     conversationId = conversationId,
                     conversationMode = mode,
                     messages = messages,
-                    allowHistoryRemoval = call.argument<Boolean>("allowHistoryRemoval") == true
+                    allowHistoryRemoval = call.argument<Boolean>("allowHistoryRemoval") == true,
+                    removedMessageIds = call.argument<List<String>>("removedMessageIds"),
                 )
                 withContext(Dispatchers.Main) {
                     result.success("SUCCESS")

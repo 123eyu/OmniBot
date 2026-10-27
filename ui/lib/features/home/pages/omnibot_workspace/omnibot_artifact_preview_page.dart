@@ -735,7 +735,11 @@ Future<void> showOmnibotArtifactPreviewSheet(
     uri: sourceMetadata.uri,
     shellPath: sourceMetadata.shellPath,
     title: sourceMetadata.title,
-    previewKind: sourceMetadata.previewKind,
+    // A caller can deliberately request file actions for a large text record.
+    // Resolving its URI must not silently turn that into a full text read.
+    previewKind: metadata.previewKind == 'file'
+        ? 'file'
+        : sourceMetadata.previewKind,
     mimeType: sourceMetadata.mimeType,
   );
   if (!await OmnibotResourceService.ensureResourceAccess(

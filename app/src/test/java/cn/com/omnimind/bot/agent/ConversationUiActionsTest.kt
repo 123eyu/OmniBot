@@ -77,6 +77,7 @@ class ConversationUiActionsTest {
         Mockito.doCallRealMethod().`when`(dao).updatePreservingCheckpoint(incoming, true)
         dao.updatePreservingCheckpoint(incoming, true)
         Mockito.verify(dao).update(incoming.copy(title = "Renamed", isPinned = true, isArchived = true,
-            contextSummary = "checkpoint", contextSummaryUpdatedAt = 20, createdAt = 1))
+            contextSummary = "checkpoint", contextSummaryUpdatedAt = 20, createdAt = 1,
+            messageCount = current.messageCount, lastMessage = current.lastMessage, updatedAt = current.updatedAt))
     }
 }

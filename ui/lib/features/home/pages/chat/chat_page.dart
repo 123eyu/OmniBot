@@ -1354,6 +1354,49 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   }
 
   @override
+  ({bool hasMore, int nextOffset})? getInMemoryHistoryPageForConversation(
+    int conversationId,
+    ConversationMode mode,
+  ) => _runtimeCoordinator
+      .runtimeFor(
+        conversationId: conversationId,
+        mode: _modeKey(_pageModeForConversationMode(mode)),
+      )
+      ?.historyPage;
+
+  @override
+  int getHistoryPageRevisionForConversation(
+    int conversationId,
+    ConversationMode mode,
+  ) =>
+      _runtimeCoordinator
+          .runtimeFor(
+            conversationId: conversationId,
+            mode: _modeKey(_pageModeForConversationMode(mode)),
+          )
+          ?.historyPageRevision ??
+      0;
+
+  @override
+  void onConversationHistoryPageLoaded(
+    ConversationMode mode,
+    int conversationId, {
+    required bool hasMore,
+    required int nextOffset,
+  }) {
+    final pageMode = _pageModeForConversationMode(mode);
+    final runtime = _runtimeCoordinator.runtimeFor(
+      conversationId: conversationId,
+      mode: _modeKey(pageMode),
+    );
+    runtime?.historyPage = (hasMore: hasMore, nextOffset: nextOffset);
+    if (_modeState(pageMode).currentConversationId == conversationId) {
+      _modeState(pageMode).hasMoreMessages = hasMore;
+      _modeState(pageMode).messageOffset = nextOffset;
+    }
+  }
+
+  @override
   bool isEphemeralConversation(int conversationId, ConversationMode mode) {
     final pageMode = _pageModeForConversationMode(mode);
     return _runtimeCoordinator.isEphemeralRuntime(
@@ -1625,11 +1668,21 @@ abstract class _ChatPageStateBase extends State<ChatPage>
         .runtimeMessageMutationRevision;
     final hasChromeChange = nextChromeSignature != previousChromeSignature;
     final hasMessageMutation = nextMutationRevision != previousMutationRevision;
+    final historyPage = runtime.historyPage;
+    final hasHistoryPageChange =
+        historyPage != null &&
+        (_modeState(mode).hasMoreMessages != historyPage.hasMore ||
+            _modeState(mode).messageOffset != historyPage.nextOffset);
 
     _modeState(mode).runtimeChromeSignature = nextChromeSignature;
     _modeState(mode).runtimeMessageMutationRevision = nextMutationRevision;
+    if (historyPage != null) {
+      _modeState(mode).hasMoreMessages = historyPage.hasMore;
+      _modeState(mode).messageOffset = historyPage.nextOffset;
+    }
 
     if (hasChromeChange ||
+        hasHistoryPageChange ||
         (hasMessageMutation &&
             runtime.messages.lastMutationAffectsPageChrome)) {
       setState(() {});
