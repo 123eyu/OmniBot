@@ -586,7 +586,7 @@ class ShizukuCapabilityManager private constructor(
         private const val TAG = "ShizukuCapabilityMgr"
         private const val SHIZUKU_PACKAGE_NAME = "moe.shizuku.privileged.api"
         private const val USER_SERVICE_TAG = "omnibot-privileged-agent"
-        private const val USER_SERVICE_VERSION = 4
+        private const val USER_SERVICE_VERSION = 5
 
         @Volatile
         private var instance: ShizukuCapabilityManager? = null

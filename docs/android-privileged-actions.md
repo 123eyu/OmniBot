@@ -38,6 +38,8 @@
 
 `system`、`secure` 设置使用应用所在 Android 用户；`global` 设置报告设备级范围。硬件不存在、命令不受支持、读取权限不足或 ROM 输出无法可靠识别时返回明确失败，不猜测设备状态。亮度要求可读的归一化系统接口；不假定所有 ROM 使用相同的整数亮度范围。
 
+系统命令能力探测只读取 `cmd <service> help` 的命令声明，同时检查 stdout 和 stderr。[AOSP 的默认帮助处理](https://android.googlesource.com/platform/frameworks/libs/modules-utils/+/refs/heads/main/java/com/android/modules/utils/BasicShellCommandHandler.java#304) 打印正常帮助后仍返回 `-1`，进程退出码表现为 `255`；这一约定仅用于只读帮助探测，实际状态修改仍须成功返回并读回验证。授权失败、超时和服务错误保留原始错误；输出被截断且未找到目标声明时报告探测不完整，不据此认定设备不支持。
+
 持久 shell 同时绑定 Conversation 和 ACP Session，并固定使用创建时的执行后端。不同对话、不同 ACP Session 或新授权代次不能接管旧 shell。取消执行会结束相应命令；取消持久 shell 命令会关闭该 shell。官方 ACP session close/delete 的资源清理路径释放对应 shell，工具进度与结果仍由现有 ACP reducer 投影。
 
 直接 Root 子进程通过 UID 握手确认身份。输出在读取过程中限量缓存并持续排空；持久会话保留有截断标记的尾部记录。Root 子进程组由监督进程观察本地租约和宿主进程存活状态，撤销、超时或取消时清理该进程组。
@@ -47,3 +49,5 @@
 定向测试覆盖默认零探测、显式启用、拒绝/超时后的手动重试、迟到授权、取消和输出限量、后端优先级、Conversation/ACP Session 隔离、逐次确认及状态读回。
 
 设备验收需要分别覆盖无 Root、仅 Shizuku、仅直接 Root、两者共存，并验证所用 Android 版本和 ROM 的系统服务命令。自动化 JVM/Flutter 测试不能替代真实 Root 管理器授权、SELinux 和厂商系统行为的验证。
+
+可构建 `:baselib:assembleDebugAndroidTest` 并运行 `cn.com.omnimind.baselib.privileged.AndroidShellCommandCompatibilityTest`，在支持 UiAutomation Rwe 的设备上检查真实系统帮助。该独立测试包默认只读；传入 instrumentation 参数 `omnibot.verifyDarkModeRoundTrip=true` 后，才会通过生产控制器切换一次系统深色模式并在 `finally` 中恢复原状态。原配置为自动或自定义模式时跳过修改，不覆盖其策略。

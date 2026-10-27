@@ -58,7 +58,7 @@ internal class PrivilegedDeviceController(private val context: Context, private 
                 else -> displaySound.execute(execution)
             }
         } catch (error: CancellationException) { throw error
-        } catch (error: DeviceActionException) { execution.failure(error.code, error.message.orEmpty())
+        } catch (error: DeviceActionException) { execution.failure(error)
         } catch (error: IllegalArgumentException) { execution.failure("invalid_arguments", error.message.orEmpty())
         } catch (_: SecurityException) { execution.failure("permission_denied", "The system denied access to this device capability.")
         } catch (_: UnsupportedOperationException) { execution.failure("unsupported_action", "This device does not support the operation.")

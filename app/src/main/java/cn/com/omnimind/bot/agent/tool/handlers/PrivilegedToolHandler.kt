@@ -139,6 +139,8 @@ class PrivilegedToolHandler(
             "root_denied", "permission_denied" -> "系统拒绝了此操作，请检查 Root 或 Shizuku 授权。"
             "root_unavailable" -> "设备上的直接 Root 不可用。"
             "unsupported_action" -> "当前设备、系统版本或执行后端不支持该操作。"
+            "capability_probe_failed" -> "系统命令能力检查失败，尚无法确认是否支持；请查看具体错误。"
+            "capability_probe_incomplete" -> "系统命令帮助输出不完整，尚无法确认是否支持该操作。"
             "timeout", "service_timeout" -> "高权限操作超时，执行已停止；请先检查设备状态。"
             "session_not_found" -> "高权限 shell 会话不存在或已失效。"
             "session_busy" -> "高权限 shell 会话仍有命令在执行。"

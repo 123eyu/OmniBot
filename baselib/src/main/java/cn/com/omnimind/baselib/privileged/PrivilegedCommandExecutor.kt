@@ -157,7 +157,7 @@ internal class PrivilegedCommandExecutor(
         )
         val stdout = trimOutput(result.stdout)
         val stderr = trimOutput(result.stderr)
-        return if (result.success) {
+        val response = if (result.success) {
             val data = when (action) {
                 PrivilegedActionPolicy.ACTION_SETTINGS_GET -> mapOf("value" to stdout.trim())
                 PrivilegedActionPolicy.ACTION_DIAGNOSTICS_GETPROP -> mapOf("value" to stdout.trim())
@@ -185,7 +185,7 @@ internal class PrivilegedCommandExecutor(
                 stderr = stderr,
                 exitCode = result.exitCode,
                 availableActions = PrivilegedActionPolicy.visibleAgentActions(backend),
-                data = data + ("truncated" to (result.truncated || result.stdout.length > OUTPUT_LIMIT || result.stderr.length > OUTPUT_LIMIT).toString()),
+                data = data,
                 command = command.joinToString(" "),
                 timeoutSeconds = DEFAULT_TYPED_TIMEOUT_SECONDS.toInt()
             )
@@ -206,6 +206,7 @@ internal class PrivilegedCommandExecutor(
                 timeoutSeconds = DEFAULT_TYPED_TIMEOUT_SECONDS.toInt()
             )
         }
+        return response.withOutputMetadata(result)
     }
 
     private fun executeRawShell(
@@ -247,7 +248,7 @@ internal class PrivilegedCommandExecutor(
         )
         val stdout = trimOutput(result.stdout)
         val stderr = trimOutput(result.stderr)
-        return if (result.success) {
+        val response = if (result.success) {
             PrivilegedResult(
                 requestId = request.requestId,
                 action = request.action,
@@ -260,7 +261,6 @@ internal class PrivilegedCommandExecutor(
                 stderr = stderr,
                 exitCode = result.exitCode,
                 availableActions = PrivilegedActionPolicy.visibleAgentActions(backend),
-                data = mapOf("truncated" to (result.truncated || result.stdout.length > OUTPUT_LIMIT || result.stderr.length > OUTPUT_LIMIT).toString()),
                 command = command,
                 timeoutSeconds = timeoutSeconds.toInt(),
                 workingDirectory = request.workingDirectory,
@@ -283,7 +283,13 @@ internal class PrivilegedCommandExecutor(
                 timeoutSeconds = timeoutSeconds.toInt()
             )
         }
+        return response.withOutputMetadata(result)
     }
+
+    private fun PrivilegedResult.withOutputMetadata(result: PrivilegedProcessResult): PrivilegedResult = copy(
+        data = data + ("truncated" to
+            (result.truncated || result.stdout.length > OUTPUT_LIMIT || result.stderr.length > OUTPUT_LIMIT).toString()),
+    )
 
     private fun buildCommand(
         action: String,

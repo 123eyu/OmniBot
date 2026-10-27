@@ -1,5 +1,6 @@
 package cn.com.omnimind.baselib.privileged
 
+import android.app.UiModeManager
 import android.content.Context
 import android.net.wifi.WifiManager
 import kotlinx.coroutines.runBlocking
@@ -62,6 +63,69 @@ class PrivilegedDeviceControllerTest {
             PrivilegedBackend.ROOT, { true },
         ) { error("Must not run") }
         assertEquals("unsupported_action", result.code)
+    }
+
+    @Test fun darkModeAcceptsAospHelpExitAndVerifiesOneWrite() = runBlocking {
+        val uiMode = context.getSystemService(UiModeManager::class.java)!!
+        uiMode.nightMode = UiModeManager.MODE_NIGHT_NO
+        val commands = mutableListOf<String>()
+        val request = PrivilegedRequest("dark-mode", PrivilegedActionPolicy.ACTION_DEVICE_SET_STATE,
+            mapOf("target" to "dark_mode", "enabled" to "true"))
+        val result = PrivilegedDeviceController(context, 0).execute(request, PrivilegedBackend.ROOT, { true }) { command ->
+            commands += command
+            when (command) {
+                "'cmd' 'uimode' 'help'" -> PrivilegedResult(
+                    "help", "device_control.command", false, "command_failed", "Help exited with -1.",
+                    stdout = "UiModeManager service (uimode) commands:\n  night [yes|no|auto]\n    Set or read night mode.\n", exitCode = 255,
+                )
+                "'cmd' 'uimode' 'night' 'yes'" -> {
+                    uiMode.nightMode = UiModeManager.MODE_NIGHT_YES
+                    PrivilegedResult("write", "device_control.command", true, "ok", "", exitCode = 0)
+                }
+                else -> error("Unexpected command: $command")
+            }
+        }
+        assertTrue(result.message, result.success)
+        assertEquals(JsonPrimitive(true), result.observation!!["verified"])
+        assertEquals(listOf("'cmd' 'uimode' 'help'", "'cmd' 'uimode' 'night' 'yes'"), commands)
+    }
+
+    @Test fun failedHelpPreservesDiagnosticsAndDoesNotWriteDeviceState() = runBlocking {
+        val request = PrivilegedRequest("dark-mode", PrivilegedActionPolicy.ACTION_DEVICE_SET_STATE,
+            mapOf("target" to "dark_mode", "enabled" to "true"))
+        val commands = mutableListOf<String>()
+        val result = PrivilegedDeviceController(context, 0).execute(request, PrivilegedBackend.ROOT, { true }) { command ->
+            commands += command
+            PrivilegedResult("help", "device_control.command", false, "root_denied", "Root access denied.",
+                stderr = "su: permission denied", exitCode = 1, provider = PrivilegedProvider.ROOT)
+        }
+        assertFalse(result.success)
+        assertEquals("root_denied", result.code)
+        assertEquals("su: permission denied", result.stderr)
+        assertEquals(1, result.exitCode)
+        assertEquals(request.requestId, result.requestId)
+        assertEquals(request.action, result.action)
+        assertEquals(listOf("'cmd' 'uimode' 'help'"), commands)
+    }
+
+    @Test fun acceptingHelpDoesNotTurnFailedStateMutationIntoSuccess() = runBlocking {
+        context.getSystemService(UiModeManager::class.java)!!.nightMode = UiModeManager.MODE_NIGHT_NO
+        val request = PrivilegedRequest("dark-mode", PrivilegedActionPolicy.ACTION_DEVICE_SET_STATE,
+            mapOf("target" to "dark_mode", "enabled" to "true"))
+        var writes = 0
+        val result = PrivilegedDeviceController(context, 0).execute(request, PrivilegedBackend.ROOT, { true }) { command ->
+            if (command.endsWith("'help'")) {
+                PrivilegedResult("help", "device_control.command", false, "command_failed", "",
+                    stdout = "UiModeManager commands:\n  night [yes|no]\n", exitCode = 255)
+            } else {
+                writes++
+                PrivilegedResult("write", "device_control.command", false, "command_failed", "Write refused.", exitCode = 255)
+            }
+        }
+        assertFalse(result.success)
+        assertEquals("command_failed", result.code)
+        assertEquals(JsonPrimitive(false), result.observation!!["commandAccepted"])
+        assertEquals(1, writes)
     }
 
     @Test fun bluetoothParserDoesNotInferStateFromAnUnrelatedLine() {
