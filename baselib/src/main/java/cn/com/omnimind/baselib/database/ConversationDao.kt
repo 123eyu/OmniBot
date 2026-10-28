@@ -24,6 +24,12 @@ interface ConversationDao {
                 parentConversationMode = current.parentConversationMode,
                 scheduledTaskId = current.scheduledTaskId,
                 createdAt = current.createdAt,
+                // UI snapshots may contain only a byte-bounded display page.
+                // Canonical entry mutations refresh these values from Room;
+                // viewing or persisting a partial page must not replace them.
+                messageCount = current.messageCount,
+                lastMessage = current.lastMessage,
+                updatedAt = current.updatedAt,
             )
         } else conversation
         val updated = if (current != null) {

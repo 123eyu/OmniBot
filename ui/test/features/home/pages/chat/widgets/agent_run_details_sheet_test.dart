@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/chat/utils/agent_run_timeline.dart';
 import 'package:ui/features/home/pages/chat/widgets/agent_run_details_sheet.dart';
+import 'package:ui/features/home/pages/command_overlay/widgets/cards/artifact_card.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/models/chat_message_model.dart';
@@ -298,6 +299,33 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('thinking detail exposes its complete historical record', (
+    tester,
+  ) async {
+    await openSheet(tester, group: _group(offloadedThinking: true));
+    await tester.tap(
+      find.byKey(const ValueKey('agent-run-details-row-thought-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('完整思考记录'), findsOneWidget);
+    final artifact = tester.widget<ArtifactCard>(find.byType(ArtifactCard));
+    expect(artifact.artifact['androidPath'], '/workspace/thinking.json');
+    expect(artifact.artifact['previewKind'], 'file');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tool detail exposes its complete historical record action', (
+    tester,
+  ) async {
+    await openSheet(tester, group: _group(offloadedTool: true));
+    await tester.tap(
+      find.byKey(const ValueKey('agent-run-details-row-tool-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(OutlinedButton, '完整工具记录'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _tapOutsideSheet(WidgetTester tester) async {
@@ -310,6 +338,8 @@ AgentRunTimelineGroup _group({
   String toolStatus = 'success',
   AgentRunStatus status = AgentRunStatus.finished,
   int extraTools = 0,
+  bool offloadedThinking = false,
+  bool offloadedTool = false,
 }) {
   ChatMessageModel tool(String id) => ChatMessageModel.cardMessage({
     'type': 'agent_tool_summary',
@@ -324,6 +354,15 @@ AgentRunTimelineGroup _group({
     'cardId': id,
     'toolCallId': id,
     'taskId': 'turn-1',
+    if (offloadedTool)
+      'artifacts': [
+        {
+          'title': '完整工具记录',
+          'androidPath': '/workspace/tool.json',
+          'mimeType': 'application/json',
+          'historyPayloadOffloaded': true,
+        },
+      ],
   }, id: id);
   return AgentRunTimelineGroup(
     taskId: 'turn-1',
@@ -333,13 +372,32 @@ AgentRunTimelineGroup _group({
     finishedAt: DateTime(2026, 10, 20, 12, 0, 10),
     segmentsOldestFirst: [
       AgentRunTimelineSegment.process([
-        ChatMessageModel.cardMessage({
-          'type': 'deep_thinking',
-          'thinkingContent': '已有的思考内容',
-          'stage': 4,
-          'taskID': 'turn-1',
-          'cardId': 'thought-1',
-        }, id: 'thought-1'),
+        ChatMessageModel(
+          id: 'thought-1',
+          type: 2,
+          user: 3,
+          content: {
+            'id': 'thought-1',
+            'cardData': {
+              'type': 'deep_thinking',
+              'thinkingContent': '已有的思考内容',
+              'stage': 4,
+              'taskID': 'turn-1',
+              'cardId': 'thought-1',
+            },
+            if (offloadedThinking) ...{
+              'historyPayloadOffloaded': true,
+              'attachments': [
+                {
+                  'title': '完整思考记录',
+                  'androidPath': '/workspace/thinking.json',
+                  'mimeType': 'application/json',
+                  'historyPayloadOffloaded': true,
+                },
+              ],
+            },
+          },
+        ),
         tool('tool-1'),
         for (var i = 0; i < extraTools; i++) tool('extra-$i'),
       ]),

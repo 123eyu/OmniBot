@@ -23,6 +23,7 @@ class SpecialPermissionChannel {
     private var personalContextActions: PersonalContextPermissionActions? = null
 
     fun onCreate(context: Context) {
+        specialPermissionManager?.closeRootSettings()
         specialPermissionManager = SpecialPermissionManager(context)
         personalContextActions?.close()
         personalContextActions = PersonalContextPermissionActions(context)
@@ -107,6 +108,9 @@ class SpecialPermissionChannel {
                     "requestShizukuPermission" -> specialPermissionManager!!.requestShizukuPermission(
                         result
                     )
+                    "getRootStatus" -> specialPermissionManager!!.getRootStatus(result)
+                    "setRootEnabled" -> specialPermissionManager!!.setRootEnabled(call, result)
+                    "requestRootAccess" -> specialPermissionManager!!.requestRootAccess(result)
                     "getShizukuStatus" -> specialPermissionManager!!.getShizukuStatus(
                         result
                     )
@@ -195,6 +199,7 @@ class SpecialPermissionChannel {
     }
 
     fun clear() {
+        specialPermissionManager?.closeRootSettings()
         personalContextActions?.close()
         personalContextActions = null
         embeddedTerminalInitListener?.let {

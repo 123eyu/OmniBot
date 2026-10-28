@@ -69,6 +69,16 @@ internal fun compareAgentVersions(left: String, right: String): Int? {
 }
 
 internal fun parseAgentVersion(output: String?): String? = output?.let {
+    // Older Pi launchers report both the adapter and SDK versions. The catalog
+    // manages the SDK package, so never compare the adapter version to its pin.
+    val legacyPi = it.lineSequence().map(String::trim)
+        .firstOrNull { line -> line.startsWith("omnibot-pi-acp ") }
+    if (legacyPi != null) {
+        val sdkVersion = Regex("^omnibot-pi-acp \\S+ \\(Pi (\\S+)\\)$")
+            .matchEntire(legacyPi)?.groupValues?.get(1)
+        return sdkVersion?.removePrefix("v")
+            ?.takeIf { version -> compareAgentVersions(version, version) != null }
+    }
     Regex("(?<![0-9A-Za-z])v?(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?)")
         .find(it)?.groupValues?.get(1)
 }
@@ -115,7 +125,11 @@ internal class ManagedAgentUpdates(
                     latestVersion = upstream,
                     targetVersion = target,
                     checkedAt = if (remote) now() else previous?.checkedAt,
-                    error = error ?: if (!remote) previous?.error else null,
+                    // A fresh local probe replaces a previous local failure.
+                    // Only a registry error needs another remote check to clear.
+                    error = error ?: if (!remote) previous?.error?.takeIf {
+                        it == "registry_unavailable"
+                    } else null,
                     pinned = pinned,
                 ))
             } }.awaitAll()

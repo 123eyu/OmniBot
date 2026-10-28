@@ -574,4 +574,3 @@ void main() {
 
   fragColor = vec4(min(glass, vec3(coverage)), coverage);
 }
-

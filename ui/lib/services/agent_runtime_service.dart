@@ -148,6 +148,30 @@ const _agentUserErrors = <String, ({String zh, String en})>{
     zh: '已有助手正在安装，请等待完成后再试。',
     en: 'Another assistant is being installed. Try again when it finishes.',
   ),
+  'packageBusy': (
+    zh: '助手正在安装或卸载，请等待完成后再试。',
+    en: 'An assistant is being installed or uninstalled. Try again when it finishes.',
+  ),
+  'uninstallFailed': (
+    zh: '卸载未完成，请重试。',
+    en: 'Uninstall did not finish. Try again.',
+  ),
+  'uninstallExternalInstallation': (
+    zh: '检测到其他安装或无法安全移除的文件，请在终端中检查该助手的安装位置。',
+    en: 'Another installation or files that could not be safely removed remain. Check the assistant\'s installation in the terminal.',
+  ),
+  'uninstallInvalidRequest': (
+    zh: '卸载请求无效，请刷新助手列表后重试。',
+    en: 'The uninstall request is invalid. Refresh the assistant list and try again.',
+  ),
+  'uninstallDistributionChanged': (
+    zh: '终端环境已切换，请刷新助手列表后重试。',
+    en: 'The terminal environment changed. Refresh the assistant list and try again.',
+  ),
+  'uninstallTerminalUnavailable': (
+    zh: '终端环境不可用，请恢复终端环境后重试卸载。',
+    en: 'The terminal environment is unavailable. Restore it before trying to uninstall again.',
+  ),
   'incompatible': (
     zh: '当前模型连接不适用于这个助手，请更换模型连接或助手。',
     en: 'This model connection is incompatible with the assistant. Choose another connection or assistant.',
@@ -204,6 +228,24 @@ String formatAgentRuntimeErrorForUser(
   String text(String key) {
     final message = _agentUserErrors[key]!;
     return english ? message.en : message.zh;
+  }
+
+  // Package maintenance errors belong to the host, not a model request. Use
+  // their structured kind before inspecting diagnostics such as "timeout".
+  final packageError = switch (failureKind) {
+    'agent_uninstall_failed' => 'uninstallFailed',
+    'agent_uninstall_external_installation' => 'uninstallExternalInstallation',
+    'agent_uninstall_invalid_request' => 'uninstallInvalidRequest',
+    'agent_uninstall_distribution_changed' => 'uninstallDistributionChanged',
+    'agent_uninstall_terminal_unavailable' => 'uninstallTerminalUnavailable',
+    'agent_package_operation_in_progress' => 'packageBusy',
+    _ => null,
+  };
+  if (packageError != null) {
+    return text(packageError);
+  }
+  if (raw.contains('agent package operation is already running')) {
+    return text('packageBusy');
   }
 
   // Errors may already have been formatted before durable projection.
@@ -612,6 +654,7 @@ class AcpAgentProfile {
     this.capabilities = const <String, dynamic>{},
     this.discoveryCommand,
     this.managedAdapter = false,
+    this.uninstallable = false,
     this.packageVersion,
     bool? configurationAvailable,
   }) : configurationAvailable = configurationAvailable ?? id != 'na-cloud';
@@ -634,6 +677,7 @@ class AcpAgentProfile {
   final Map<String, dynamic> capabilities;
   final String? discoveryCommand;
   final bool managedAdapter;
+  final bool uninstallable;
   final AgentPackageVersion? packageVersion;
 
   /// Native build policy owns whether this Agent exposes a configuration page.
@@ -672,6 +716,7 @@ class AcpAgentProfile {
           _normalizeMap(map['capabilities']) ?? const <String, dynamic>{},
       discoveryCommand: _stringOrNull(map['discoveryCommand']),
       managedAdapter: map['managedAdapter'] == true,
+      uninstallable: map['uninstallable'] == true,
       packageVersion: map['packageVersion'] is Map
           ? AgentPackageVersion.fromMap(map['packageVersion'] as Map)
           : null,
@@ -988,6 +1033,15 @@ class CodexRemoteFilePayload {
   }
 }
 
+enum AgentPackageOperation { install, uninstall }
+
+typedef _AgentPackageTask = ({
+  AgentPackageOperation operation,
+  String? distributionId,
+  bool force,
+  Future<Map<String, dynamic>> future,
+});
+
 class AgentRuntimeService {
   AgentRuntimeService._();
 
@@ -1000,12 +1054,14 @@ class AgentRuntimeService {
 
   static final StreamController<Map<String, dynamic>> _eventController =
       StreamController<Map<String, dynamic>>.broadcast();
-  static final Map<String, Future<Map<String, dynamic>>>
-  _agentPreparationTasks = <String, Future<Map<String, dynamic>>>{};
-  static Future<void>? _preparationQueue;
+  static final Map<String, _AgentPackageTask> _agentPackageTasks = {};
+  static Future<void>? _packageOperationQueue;
   static final Set<String> _queuedAgentIds = <String>{};
   static final StreamController<Set<String>> _agentPreparationController =
       StreamController<Set<String>>.broadcast();
+  static final StreamController<Map<String, AgentPackageOperation>>
+  _agentPackageOperationController =
+      StreamController<Map<String, AgentPackageOperation>>.broadcast();
   static StreamSubscription<dynamic>? _nativeEventSubscription;
 
   static Stream<Map<String, dynamic>> get events {
@@ -1013,12 +1069,24 @@ class AgentRuntimeService {
     return _eventController.stream;
   }
 
-  /// Harness preparation can spend minutes downloading npm/native packages.
-  /// Keep the operation owned by the service instead of a settings page so it
-  /// continues when that page is popped and a rebuilt page can recover the
-  /// in-flight state without starting the same installation again.
-  static Set<String> get preparingAgentIds =>
-      Set<String>.unmodifiable(_agentPreparationTasks.keys);
+  /// Package operations belong to this service so leaving a settings page
+  /// cannot interrupt them or start the same operation a second time.
+  static Map<String, AgentPackageOperation> get agentPackageOperations =>
+      Map<String, AgentPackageOperation>.unmodifiable(
+        _agentPackageTasks.map((id, task) => MapEntry(id, task.operation)),
+      );
+
+  static Stream<Map<String, AgentPackageOperation>>
+  get agentPackageOperationChanges => _agentPackageOperationController.stream;
+
+  /// Compatibility projection for callers interested only in installation.
+  static Set<String> get preparingAgentIds => Set<String>.unmodifiable(
+    _agentPackageTasks.entries
+        .where(
+          (entry) => entry.value.operation == AgentPackageOperation.install,
+        )
+        .map((entry) => entry.key),
+  );
 
   static Set<String> get queuedAgentIds =>
       Set<String>.unmodifiable(_queuedAgentIds);
@@ -1104,54 +1172,121 @@ class AgentRuntimeService {
     String agentId, {
     bool force = false,
     String? distributionId,
+  }) => _queueAgentPackageOperation(
+    agentId,
+    operation: AgentPackageOperation.install,
+    force: force,
+    distributionId: distributionId,
+  );
+
+  static Future<Map<String, dynamic>> uninstallAgent(
+    String agentId, {
+    required String distributionId,
   }) {
     final normalizedId = agentId.trim();
-    final existing = _agentPreparationTasks[normalizedId];
-    if (existing != null) return existing;
+    final normalizedDistribution = distributionId.trim();
+    if (normalizedId.isEmpty || normalizedDistribution.isEmpty) {
+      return Future.error(
+        ArgumentError('Uninstall requires an agent and terminal distribution.'),
+      );
+    }
+    return _invokeMap('agent/uninstall', {
+      'agentId': normalizedId,
+      'distributionId': normalizedDistribution,
+    });
+  }
 
-    _queuedAgentIds.add(normalizedId);
-    // The npm prefix is shared. Queue installs in the existing service so
-    // bulk upgrades continue after leaving this page and never overlap.
-    Future<Map<String, dynamic>> run() {
-      _queuedAgentIds.remove(normalizedId);
-      _emitAgentPreparationState();
-      return prepareAgent(
-        normalizedId,
-        force: force,
-        distributionId: distributionId,
+  static Future<Map<String, dynamic>> uninstallAgentInBackground(
+    String agentId, {
+    required String distributionId,
+  }) => _queueAgentPackageOperation(
+    agentId,
+    operation: AgentPackageOperation.uninstall,
+    distributionId: distributionId,
+  );
+
+  static Future<Map<String, dynamic>> _queueAgentPackageOperation(
+    String agentId, {
+    required AgentPackageOperation operation,
+    required String? distributionId,
+    bool force = false,
+  }) {
+    final normalizedId = agentId.trim();
+    final normalizedDistribution = distributionId?.trim();
+    if (normalizedId.isEmpty || normalizedDistribution == '') {
+      return Future.error(
+        ArgumentError('Package operations require non-empty identities.'),
+      );
+    }
+    final existing = _agentPackageTasks[normalizedId];
+    if (existing != null) {
+      if (existing.operation == operation &&
+          existing.distributionId == normalizedDistribution &&
+          existing.force == force) {
+        return existing.future;
+      }
+      return Future.error(
+        StateError(
+          'Agent package operation is already running for $normalizedId.',
+        ),
       );
     }
 
-    final task = _preparationQueue?.then((_) => run()) ?? Future.microtask(run);
-    _preparationQueue = task.then<void>(
+    _queuedAgentIds.add(normalizedId);
+    // Installs and uninstalls share the same npm prefix and must not overlap.
+    Future<Map<String, dynamic>> run() {
+      _queuedAgentIds.remove(normalizedId);
+      _emitAgentPackageOperationState();
+      return switch (operation) {
+        AgentPackageOperation.install => prepareAgent(
+          normalizedId,
+          force: force,
+          distributionId: normalizedDistribution,
+        ),
+        AgentPackageOperation.uninstall => uninstallAgent(
+          normalizedId,
+          distributionId: normalizedDistribution!,
+        ),
+      };
+    }
+
+    final task =
+        _packageOperationQueue?.then((_) => run()) ?? Future.microtask(run);
+    _packageOperationQueue = task.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
     );
-    _agentPreparationTasks[normalizedId] = task;
-    _emitAgentPreparationState();
+    _agentPackageTasks[normalizedId] = (
+      operation: operation,
+      distributionId: normalizedDistribution,
+      force: force,
+      future: task,
+    );
+    _emitAgentPackageOperationState();
     unawaited(
       task.then<void>(
-        (_) => _finishAgentPreparation(normalizedId, task),
-        onError: (Object _, StackTrace __) {
-          _finishAgentPreparation(normalizedId, task);
+        (_) => _finishAgentPackageOperation(normalizedId, task),
+        onError: (Object _, StackTrace _) {
+          _finishAgentPackageOperation(normalizedId, task);
         },
       ),
     );
     return task;
   }
 
-  static void _finishAgentPreparation(
+  static void _finishAgentPackageOperation(
     String agentId,
     Future<Map<String, dynamic>> task,
   ) {
-    if (!identical(_agentPreparationTasks[agentId], task)) return;
-    _agentPreparationTasks.remove(agentId);
+    if (!identical(_agentPackageTasks[agentId]?.future, task)) return;
+    _agentPackageTasks.remove(agentId);
     _queuedAgentIds.remove(agentId);
-    if (_agentPreparationTasks.isEmpty) _preparationQueue = null;
-    _emitAgentPreparationState();
+    if (_agentPackageTasks.isEmpty) _packageOperationQueue = null;
+    _emitAgentPackageOperationState();
   }
 
-  static void _emitAgentPreparationState() {
+  static void _emitAgentPackageOperationState() {
+    _agentPackageOperationController.add(agentPackageOperations);
     _agentPreparationController.add(preparingAgentIds);
   }
 

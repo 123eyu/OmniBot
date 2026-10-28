@@ -52,6 +52,39 @@ class ManagedAgentUpdatesTest {
     }
 
     @Test
+    fun `Pi inventory reads the SDK version from current and legacy launchers`() {
+        for (output in listOf("1.4.0", "omnibot-pi-acp 0.1.0 (Pi 1.4.0)")) {
+            val result = parseManagedAgentVersionProbe("__OMNI_AGENT_VERSIONS__" +
+                """{"pi-acp":"$output"}""")
+            assertEquals("1.4.0", result["pi-acp"])
+            assertFalse(ManagedAgentVersion(result["pi-acp"], targetVersion = "1.4.0").updateAvailable)
+        }
+        assertEquals("1.3.0", parseAgentVersion("omnibot-pi-acp 0.1.0 (Pi 1.3.0)"))
+        assertEquals("1.5.0-rc.1", parseAgentVersion("omnibot-pi-acp 0.2.0 (Pi 1.5.0-rc.1)"))
+        assertNull(parseAgentVersion("omnibot-pi-acp 0.1.0 (Pi unknown)"))
+        assertNull(parseAgentVersion("omnibot-pi-acp 0.1.0"))
+    }
+
+    @Test
+    fun `successful local refresh clears a local probe error but preserves a registry error`() = runBlocking {
+        val cache = mutableMapOf(
+            "local" to ManagedAgentVersion(targetVersion = "1.4.0", error = "local_probe_failed"),
+            "remote" to ManagedAgentVersion(error = "registry_unavailable"),
+        )
+        val updater = ManagedAgentUpdates(
+            probe = { _, _ -> mapOf("local" to "1.4.0", "remote" to "1.4.0") },
+            read = { _, id -> cache[id] }, save = { _, id, info -> cache[id] = info },
+            latest = { error("Local refresh must not query the registry") },
+        )
+        updater.check(listOf(profile("local", "pi@1.4.0"), profile("remote")), "ubuntu", remote = false)
+        assertEquals("1.4.0", cache.getValue("local").installedVersion)
+        assertNull(cache.getValue("local").error)
+        assertFalse(cache.getValue("local").updateAvailable)
+        assertEquals("registry_unavailable", cache.getValue("remote").error)
+        assertFalse(cache.getValue("remote").updateAvailable)
+    }
+
+    @Test
     fun `checks honor catalog pins and do not downgrade or install missing agents`() = runBlocking {
         val cache = mutableMapOf<Pair<String, String>, ManagedAgentVersion>()
         val queried = mutableListOf<String>()

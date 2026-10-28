@@ -37,6 +37,11 @@ The app's **Agent → Pi → Prepare** action and terminal environment's **Pi**
 package both use that catalog installer. Normal Agent switching does not
 install packages. `omnibot-pi-acp --health` terminates after checking the SDK
 import, version and Node runtime; it does not require model credentials.
+`omnibot-pi-acp --version` reads only the installed Pi SDK package metadata and
+prints its version, without loading the SDK or requiring Provider configuration.
+The adapter's own version remains available in ACP `initialize` and `--health`.
+Existing installations receive this change through Pi's explicit Prepare/reinstall
+action after updating the app; checking for updates does not replace the launcher.
 
 ## Ownership
 

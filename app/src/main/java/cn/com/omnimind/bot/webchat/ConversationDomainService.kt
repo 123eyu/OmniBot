@@ -496,7 +496,8 @@ class ConversationDomainService(
         conversationId: Long,
         conversationMode: String,
         messages: List<Map<String, Any?>>,
-        allowHistoryRemoval: Boolean = false
+        allowHistoryRemoval: Boolean = false,
+        removedMessageIds: List<String>? = null,
     ) {
         check(naAccess.canRead(conversationId)) { "请登录此云端会话所属的账号。" }
         val normalizedMode = normalizeConversationMode(conversationMode)
@@ -504,7 +505,8 @@ class ConversationDomainService(
             conversationId = conversationId,
             conversationMode = normalizedMode,
             messages = messages,
-            allowHistoryRemoval = allowHistoryRemoval
+            allowHistoryRemoval = allowHistoryRemoval,
+            removedMessageIds = removedMessageIds,
         )
         publishMessagesReplaced(conversationId, normalizedMode)
     }

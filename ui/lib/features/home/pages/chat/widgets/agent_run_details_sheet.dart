@@ -7,6 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/chat/tool_activity_utils.dart';
 import 'package:ui/features/home/pages/chat/utils/agent_run_timeline.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/cards/agent_tool_transcript.dart';
+import 'package:ui/features/home/pages/command_overlay/widgets/history_payload_attachments.dart';
 import 'package:ui/models/chat_message_model.dart';
 import 'package:ui/services/agent_message_kinds.dart';
 import 'package:ui/theme/theme_context.dart';
@@ -353,20 +354,28 @@ class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet>
                                   24,
                                   24,
                                 ),
-                                child: StreamingText(
-                                  fullText:
-                                      selected.cardData?['thinkingContent']
-                                          ?.toString() ??
-                                      selected.text ??
-                                      '',
-                                  style: TextStyle(
-                                    color: palette.textSecondary,
-                                    fontSize: 15,
-                                    height: 1.55,
-                                  ),
-                                  isFinal: true,
-                                  selectable: true,
-                                  enableMarkdown: true,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    StreamingText(
+                                      fullText:
+                                          selected.cardData?['thinkingContent']
+                                              ?.toString() ??
+                                          selected.text ??
+                                          '',
+                                      style: TextStyle(
+                                        color: palette.textSecondary,
+                                        fontSize: 15,
+                                        height: 1.55,
+                                      ),
+                                      isFinal: true,
+                                      selectable: true,
+                                      enableMarkdown: true,
+                                    ),
+                                    HistoryPayloadAttachments(
+                                      message: selected,
+                                    ),
+                                  ],
                                 ),
                               ),
                       ),

@@ -58,7 +58,8 @@ internal data class AcpAgentProfile(
                 negotiated = agentHealth.capabilities,
             ),
             "discoveryCommand" to runtime?.discoveryCommand,
-            "managedAdapter" to (runtime?.managedAdapterPackage != null)
+            "managedAdapter" to (runtime?.managedAdapterPackage != null),
+            "uninstallable" to (builtIn && runtime?.managedUninstallStrategy != null),
         )
     }
 
@@ -138,6 +139,7 @@ internal data class AcpOfficialRuntime(
     val terminalPackageId: String? = null,
     val managedInstallScriptPath: String? = null,
     val managedInstallCommand: String? = null,
+    val managedUninstallStrategy: ManagedAgentUninstallStrategy? = null,
     val preparationRevision: String? = null,
     val embedded: Boolean = false,
     /**

@@ -1,6 +1,8 @@
 package cn.com.omnimind.bot.agent
 
 import cn.com.omnimind.baselib.shizuku.ShizukuBackend
+import cn.com.omnimind.baselib.privileged.PrivilegedProvider
+import cn.com.omnimind.baselib.privileged.PrivilegedActionPolicy
 import cn.com.omnimind.bot.agent.personal.PersonalContextTools
 import cn.com.omnimind.baselib.i18n.AppLocaleManager
 import cn.com.omnimind.baselib.i18n.PromptLocale
@@ -593,19 +595,25 @@ object AgentToolDefinitions {
         }
     }
 
+    private fun privilegedBackendLabel(backend: ShizukuBackend, provider: PrivilegedProvider, locale: PromptLocale): String {
+        val level = when (backend) {
+            ShizukuBackend.ROOT -> "Root"
+            ShizukuBackend.ADB -> "adb shell"
+            ShizukuBackend.NONE -> if (locale == PromptLocale.ZH_CN) "未授权" else "not granted"
+        }
+        return if (provider == PrivilegedProvider.SHIZUKU) "Shizuku / $level" else level
+    }
+
     fun androidPrivilegedActionTool(
         visibleActions: List<String>,
         backend: ShizukuBackend,
-        locale: PromptLocale = currentLocale()
+        locale: PromptLocale = currentLocale(),
+        provider: PrivilegedProvider = PrivilegedProvider.NONE,
     ): JsonObject {
         val text: (String, String) -> String = { zh, en ->
             if (locale == PromptLocale.ZH_CN) zh else en
         }
-        val backendLabel = when (backend) {
-            ShizukuBackend.ROOT -> text("root/Sui", "root/Sui")
-            ShizukuBackend.ADB -> text("adb shell", "adb shell")
-            ShizukuBackend.NONE -> text("未授权", "not granted")
-        }
+        val backendLabel = privilegedBackendLabel(backend, provider, locale)
         val actionList = visibleActions.joinToString(", ")
 
         return decorateToolDefinition(buildJsonObject {
@@ -617,8 +625,8 @@ object AgentToolDefinitions {
                 put(
                     "description",
                     text(
-                        "通过 Shizuku 执行安卓高权限动作。这条能力链路独立于 `terminal_execute`：既保留受控 typed action，也支持 `action=shell.exec` 的一次性任意 shell。若确实需要保留 cwd、环境变量或 shell 状态，请改用 `android_privileged_session_*`。当前后端：$backendLabel。当前可见 action：$actionList。需要授权时由 ACP 客户端统一请求确认。",
-                        "Run Android privileged actions through Shizuku. This path stays separate from `terminal_execute`: it keeps the typed allowlisted actions and also supports one-shot arbitrary shell via `action=shell.exec`. When you truly need persistent cwd, environment, or shell state, switch to `android_privileged_session_*`. Current backend: $backendLabel. Currently visible actions: $actionList. Permission is requested through the standard ACP client boundary when needed."
+                        "通过已选定的 Root 或 Shizuku 后端执行安卓高权限动作。这条能力链路独立于 `terminal_execute`：既保留受控 typed action，也支持 `action=shell.exec` 的一次性任意 shell。若确实需要保留 cwd、环境变量或 shell 状态，请改用 `android_privileged_session_*`。当前后端：$backendLabel。当前可见 action：$actionList。需要授权时由 ACP 客户端统一请求确认。",
+                        "Run Android privileged actions through the selected Root or Shizuku backend. This path stays separate from `terminal_execute`: it keeps the typed allowlisted actions and also supports one-shot arbitrary shell via `action=shell.exec`. When you truly need persistent cwd, environment, or shell state, switch to `android_privileged_session_*`. Current backend: $backendLabel. Currently visible actions: $actionList. Permission is requested through the standard ACP client boundary when needed."
                     )
                 )
                 put(
@@ -636,8 +644,8 @@ object AgentToolDefinitions {
                             put(
                                 "description",
                                 text(
-                                    "要执行的受控高级动作标识。",
-                                    "The controlled privileged action to run."
+                                    "要执行的高级动作。设备状态查询/切换使用 device_control.get_state/set_state 与 target/enabled；亮度、音量使用 percent；息屏使用 seconds；查询显示/声音使用 get_display/get_sound。",
+                                    "The privileged action to run. Use device_control.get_state/set_state with target/enabled, set_brightness/set_volume with percent, set_screen_timeout with seconds, and get_display/get_sound for queries."
                                 )
                             )
                             putJsonArray("enum") {
@@ -672,7 +680,7 @@ object AgentToolDefinitions {
                                 }
                                 putJsonObject("mode") {
                                     put("type", "string")
-                                    put("description", text("AppOps 模式。", "AppOps mode."))
+                                    put("description", text("AppOps 模式，或 set_do_not_disturb 的 off/priority/silent/alarms。", "AppOps mode, or off/priority/silent/alarms for set_do_not_disturb."))
                                 }
                                 putJsonObject("op") {
                                     put("type", "string")
@@ -693,6 +701,28 @@ object AgentToolDefinitions {
                                 putJsonObject("enabled") {
                                     put("type", "boolean")
                                     put("description", text("是否启用该设备功能。", "Whether to enable the device feature."))
+                                }
+                                putJsonObject("target") {
+                                    put("type", "string")
+                                    put("description", text("get_state/set_state 的系统开关。", "System toggle for get_state/set_state."))
+                                    putJsonArray("enum") { PrivilegedActionPolicy.deviceStateTargets.forEach { add(it) } }
+                                }
+                                putJsonObject("percent") {
+                                    put("type", "integer")
+                                    put("minimum", 0)
+                                    put("maximum", 100)
+                                    put("description", text("set_brightness/set_volume 的百分比。", "Percentage for set_brightness/set_volume."))
+                                }
+                                putJsonObject("stream") {
+                                    put("type", "string")
+                                    putJsonArray("enum") { listOf("media", "alarm", "ring", "notification", "voice_call", "system").forEach { add(it) } }
+                                    put("description", text("set_volume 的音量通道。", "Audio stream for set_volume."))
+                                }
+                                putJsonObject("seconds") {
+                                    put("type", "integer")
+                                    put("minimum", 15)
+                                    put("maximum", 1800)
+                                    put("description", text("set_screen_timeout 的息屏等待秒数。", "Screen timeout in seconds for set_screen_timeout."))
                                 }
                                 putJsonObject("text") {
                                     put("type", "string")
@@ -740,10 +770,6 @@ object AgentToolDefinitions {
                                         put("type", "string")
                                     }
                                 }
-                                putJsonObject("confirmed") {
-                                    put("type", "boolean")
-                                    put("description", text("仅用于已完成用户确认的高风险动作。", "Use only after the user has confirmed a high-risk action."))
-                                }
                             }
                             put("additionalProperties", false)
                             put(
@@ -766,16 +792,13 @@ object AgentToolDefinitions {
 
     fun androidPrivilegedSessionStartTool(
         backend: ShizukuBackend,
-        locale: PromptLocale = currentLocale()
+        locale: PromptLocale = currentLocale(),
+        provider: PrivilegedProvider = PrivilegedProvider.NONE,
     ): JsonObject {
         val text: (String, String) -> String = { zh, en ->
             if (locale == PromptLocale.ZH_CN) zh else en
         }
-        val backendLabel = when (backend) {
-            ShizukuBackend.ROOT -> text("root/Sui", "root/Sui")
-            ShizukuBackend.ADB -> text("adb shell", "adb shell")
-            ShizukuBackend.NONE -> text("未授权", "not granted")
-        }
+        val backendLabel = privilegedBackendLabel(backend, provider, locale)
         return decorateToolDefinition(buildJsonObject {
             put("type", "function")
             putJsonObject("function") {
@@ -785,8 +808,8 @@ object AgentToolDefinitions {
                 put(
                     "description",
                     text(
-                        "启动一个可复用的 Shizuku 高权限 shell 会话，仅用于确实需要跨多轮保留 cwd、环境变量或 shell 状态的任务。当前后端：$backendLabel。需要确认时由 ACP 客户端统一请求权限。",
-                        "Start a reusable Shizuku privileged shell session. Use it only when a task truly needs persistent cwd, environment variables, or shell state across turns. Current backend: $backendLabel. When confirmation is needed, the standard ACP client boundary requests permission."
+                        "启动一个可复用的安卓高权限 shell 会话，仅用于确实需要跨多轮保留 cwd、环境变量或 shell 状态的任务。当前后端：$backendLabel。需要确认时由 ACP 客户端统一请求权限。",
+                        "Start a reusable Android privileged shell session. Use it only when a task truly needs persistent cwd, environment variables, or shell state across turns. Current backend: $backendLabel. When confirmation is needed, the standard ACP client boundary requests permission."
                     )
                 )
                 put(
@@ -822,16 +845,13 @@ object AgentToolDefinitions {
 
     fun androidPrivilegedSessionExecTool(
         backend: ShizukuBackend,
-        locale: PromptLocale = currentLocale()
+        locale: PromptLocale = currentLocale(),
+        provider: PrivilegedProvider = PrivilegedProvider.NONE,
     ): JsonObject {
         val text: (String, String) -> String = { zh, en ->
             if (locale == PromptLocale.ZH_CN) zh else en
         }
-        val backendLabel = when (backend) {
-            ShizukuBackend.ROOT -> text("root/Sui", "root/Sui")
-            ShizukuBackend.ADB -> text("adb shell", "adb shell")
-            ShizukuBackend.NONE -> text("未授权", "not granted")
-        }
+        val backendLabel = privilegedBackendLabel(backend, provider, locale)
         return decorateToolDefinition(buildJsonObject {
             put("type", "function")
             putJsonObject("function") {
@@ -841,8 +861,8 @@ object AgentToolDefinitions {
                 put(
                     "description",
                     text(
-                        "向已有的 Shizuku 高权限 shell 会话发送一条命令，并等待该命令完成。当前后端：$backendLabel。每次需要确认时由 ACP 客户端统一请求权限。",
-                        "Send a command to an existing Shizuku privileged shell session and wait for that command to finish. Current backend: $backendLabel. When confirmation is needed, permission is requested through the standard ACP client boundary."
+                        "向已有的安卓高权限 shell 会话发送一条命令，并等待该命令完成。当前后端：$backendLabel。每次需要确认时由 ACP 客户端统一请求权限。",
+                        "Send a command to an existing Android privileged shell session and wait for that command to finish. Current backend: $backendLabel. When confirmation is needed, permission is requested through the standard ACP client boundary."
                     )
                 )
                 put(
@@ -879,16 +899,13 @@ object AgentToolDefinitions {
 
     fun androidPrivilegedSessionReadTool(
         backend: ShizukuBackend,
-        locale: PromptLocale = currentLocale()
+        locale: PromptLocale = currentLocale(),
+        provider: PrivilegedProvider = PrivilegedProvider.NONE,
     ): JsonObject {
         val text: (String, String) -> String = { zh, en ->
             if (locale == PromptLocale.ZH_CN) zh else en
         }
-        val backendLabel = when (backend) {
-            ShizukuBackend.ROOT -> text("root/Sui", "root/Sui")
-            ShizukuBackend.ADB -> text("adb shell", "adb shell")
-            ShizukuBackend.NONE -> text("未授权", "not granted")
-        }
+        val backendLabel = privilegedBackendLabel(backend, provider, locale)
         return decorateToolDefinition(buildJsonObject {
             put("type", "function")
             putJsonObject("function") {
@@ -898,8 +915,8 @@ object AgentToolDefinitions {
                 put(
                     "description",
                     text(
-                        "读取 Shizuku 高权限 shell 会话最近的 transcript 尾部。当前后端：$backendLabel。该操作不会再次请求确认。",
-                        "Read the latest transcript tail from a Shizuku privileged shell session. Current backend: $backendLabel. This operation does not require another confirmation."
+                        "读取安卓高权限 shell 会话最近的 transcript 尾部。当前后端：$backendLabel。该操作不会再次请求确认。",
+                        "Read the latest transcript tail from an Android privileged shell session. Current backend: $backendLabel. This operation does not require another confirmation."
                     )
                 )
                 put(
@@ -927,16 +944,13 @@ object AgentToolDefinitions {
 
     fun androidPrivilegedSessionStopTool(
         backend: ShizukuBackend,
-        locale: PromptLocale = currentLocale()
+        locale: PromptLocale = currentLocale(),
+        provider: PrivilegedProvider = PrivilegedProvider.NONE,
     ): JsonObject {
         val text: (String, String) -> String = { zh, en ->
             if (locale == PromptLocale.ZH_CN) zh else en
         }
-        val backendLabel = when (backend) {
-            ShizukuBackend.ROOT -> text("root/Sui", "root/Sui")
-            ShizukuBackend.ADB -> text("adb shell", "adb shell")
-            ShizukuBackend.NONE -> text("未授权", "not granted")
-        }
+        val backendLabel = privilegedBackendLabel(backend, provider, locale)
         return decorateToolDefinition(buildJsonObject {
             put("type", "function")
             putJsonObject("function") {
@@ -946,8 +960,8 @@ object AgentToolDefinitions {
                 put(
                     "description",
                     text(
-                        "结束已有的 Shizuku 高权限 shell 会话并清理状态。当前后端：$backendLabel。该操作不会再次请求确认。",
-                        "Stop an existing Shizuku privileged shell session and clean up its state. Current backend: $backendLabel. This operation does not require another confirmation."
+                        "结束已有的安卓高权限 shell 会话并清理状态。当前后端：$backendLabel。该操作不会再次请求确认。",
+                        "Stop an existing Android privileged shell session and clean up its state. Current backend: $backendLabel. This operation does not require another confirmation."
                     )
                 )
                 put(

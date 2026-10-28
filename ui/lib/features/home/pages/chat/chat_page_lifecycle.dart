@@ -633,15 +633,23 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       mode: _modeKey(mode),
     );
     var resolvedConversation = runtime?.conversation ?? conversation;
-    var resolvedMessages =
-        (runtime?.messages.isNotEmpty == true
-            ? List<ChatMessageModel>.from(runtime!.messages)
-            : null) ??
-        await ConversationHistoryService.getConversationMessages(
-          conversationId,
-          mode: _conversationModeForPageMode(mode),
-          expectedMessageCount: resolvedConversation?.messageCount,
-        );
+    var historyPage = runtime?.historyPage;
+    final historyRevision = runtime?.historyPageRevision ?? 0;
+    List<ChatMessageModel> resolvedMessages;
+    if (runtime?.messages.isNotEmpty == true) {
+      resolvedMessages = List<ChatMessageModel>.from(runtime!.messages);
+    } else {
+      final page =
+          await ConversationHistoryService.getConversationMessagesPaged(
+            conversationId,
+            mode: _conversationModeForPageMode(mode),
+            limit: 50,
+            offset: 0,
+            expectedMessageCount: resolvedConversation?.messageCount,
+          );
+      resolvedMessages = page.messages;
+      historyPage = (hasMore: page.hasMore, nextOffset: page.nextOffset);
+    }
     if (!mounted || !isConversationLifecycleTokenCurrent(lifecycleToken)) {
       return;
     }
@@ -650,9 +658,15 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       conversationId: conversationId,
       mode: _modeKey(mode),
     );
+    if ((runtime?.historyPageRevision ?? 0) != historyRevision) return;
     if (runtime?.messages.isNotEmpty == true) {
-      resolvedMessages = List<ChatMessageModel>.from(runtime!.messages);
+      final knownIds = runtime!.messages.map((message) => message.id).toSet();
+      resolvedMessages = <ChatMessageModel>[
+        ...runtime.messages,
+        ...resolvedMessages.where((message) => knownIds.add(message.id)),
+      ];
       resolvedConversation = runtime.conversation ?? resolvedConversation;
+      historyPage = runtime.historyPage ?? historyPage;
     }
 
     _modeState(mode).currentConversationId = conversationId;
@@ -660,6 +674,18 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     _modeState(mode).messages
       ..clear()
       ..addAll(resolvedMessages);
+    final selectedPage =
+        historyPage ??
+        (
+          hasMore: !isEphemeralConversation(
+            conversationId,
+            _conversationModeForPageMode(mode),
+          ),
+          nextOffset: 0,
+        );
+    _modeState(mode).hasMoreMessages = selectedPage.hasMore;
+    _modeState(mode).messageOffset = selectedPage.nextOffset;
+    _modeState(mode).isLoadingMore = false;
 
     if (runtime == null) {
       _runtimeCoordinator.ensureRuntime(
@@ -676,6 +702,12 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       mode,
       conversation: resolvedConversation,
       messages: resolvedMessages,
+    );
+    onConversationHistoryPageLoaded(
+      _conversationModeForPageMode(mode),
+      conversationId,
+      hasMore: selectedPage.hasMore,
+      nextOffset: selectedPage.nextOffset,
     );
   }
 

@@ -1543,6 +1543,7 @@ class _ChatBotSheetState extends State<ChatBotSheet>
       if (raw is! List) return const [];
       return raw
           .whereType<Map>()
+          .where((item) => item['historyPayloadOffloaded'] != true)
           .map((item) => item.map((k, v) => MapEntry(k.toString(), v)))
           .where(_attachmentShouldSendToModel)
           .toList();
@@ -1585,6 +1586,7 @@ class _ChatBotSheetState extends State<ChatBotSheet>
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
+        .where((item) => item['historyPayloadOffloaded'] != true)
         .map((item) => item.map((k, v) => MapEntry(k.toString(), v)))
         .toList();
   }

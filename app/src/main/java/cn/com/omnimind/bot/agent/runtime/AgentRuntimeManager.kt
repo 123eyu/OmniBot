@@ -243,6 +243,23 @@ class AgentRuntimeManager private constructor(
         read = acpAgentProfileStore::packageVersion,
         save = acpAgentProfileStore::savePackageVersion,
     )
+    private val managedAgentUninstaller = ManagedAgentUninstaller(
+        gate = managedAcpPreparationGate,
+        profiles = acpAgentProfileStore::list,
+        currentDistribution = { TerminalDistribution.selected().id },
+        disconnect = { profile ->
+            if (!EmbeddedRuntimeInstaller.isCurrentDistributionReady(appContext)) {
+                throw ManagedAgentUninstallException(
+                    "agent_uninstall_terminal_unavailable", "The terminal environment is unavailable.",
+                )
+            }
+            localRuntimeFor(profile.id).disconnect()
+            acpAgentProfileStore.clearHealth(profile.id)
+            invalidateLocalProbeCache()
+        },
+        execute = ::executeManagedAgentUninstall,
+        refresh = ::refreshManagedAgentAfterUninstall,
+    )
     private val naRuntime by lazy { NaCloudRuntime(appContext, scope, bindingRepository, acpAgentProfileStore, ::emitEvent) }
     private val scheduledTaskScheduler by lazy {
         WorkspaceScheduledTaskScheduler(appContext)
@@ -785,6 +802,9 @@ class AgentRuntimeManager private constructor(
         if (method.startsWith("agent/")) {
             val distribution = TerminalDistribution.selected()
             val distributionId = distribution.id
+            if (method == "agent/uninstall") {
+                return uninstallManagedAgent(canonicalArgs, distributionId)
+            }
             if (method == "agent/checkUpdates") {
                 managedAgentUpdates.check(acpAgentProfileStore.list(), distributionId)
                 check(TerminalDistribution.selected().id == distributionId) {
@@ -2510,6 +2530,94 @@ class AgentRuntimeManager private constructor(
                     preparationRevision = runtime.preparationRevision,
                 ),
             )
+        }
+    }
+
+    private suspend fun uninstallManagedAgent(args: Map<String, Any?>, distributionId: String): Any? {
+        val agentId = args.stringValue("agentId").orEmpty().trim()
+        val payload = try {
+            val outcome = managedAgentUninstaller.uninstall(
+                agentId = agentId,
+                distributionId = args.stringValue("distributionId").orEmpty(),
+            )
+            linkedMapOf<String, Any?>(
+                "ok" to outcome.ok,
+                "agent" to outcome.profile.toPayload(
+                    selected = outcome.profile.id == acpAgentProfileStore.selected().id,
+                    health = if (TerminalDistribution.selected().id == distributionId) {
+                        acpAgentProfileStore.health(outcome.profile.id)
+                    } else managedAgentHealthAfterUninstall(outcome.report),
+                ),
+                "error" to outcome.error,
+                "failureKind" to outcome.failureKind,
+            )
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            linkedMapOf<String, Any?>(
+                "ok" to false,
+                "error" to (error.message ?: "Managed uninstall failed."),
+                "failureKind" to when (error) {
+                    is ManagedAgentUninstallException -> error.failureKind
+                    is ManagedAcpPreparationInProgressException -> "agent_package_operation_in_progress"
+                    else -> "agent_uninstall_failed"
+                },
+            ).apply {
+                acpAgentProfileStore.list().firstOrNull { it.id == agentId }?.let { profile ->
+                    put("agent", profile.toPayload(
+                        selected = profile.id == acpAgentProfileStore.selected().id,
+                        health = acpAgentProfileStore.health(profile.id),
+                    ))
+                }
+            }
+        }
+        payload["distributionId"] = distributionId
+        return withAgentPackageVersions(payload, distributionId)
+    }
+
+    private suspend fun executeManagedAgentUninstall(
+        profile: AcpAgentProfile,
+        distributionId: String,
+        probe: Boolean,
+    ): ManagedAgentUninstallReport {
+        // Do not let a hidden-command bootstrap install another environment
+        // after the settings selection changes, even for the recovery probe.
+        if (TerminalDistribution.selected().id != distributionId) {
+            throw ManagedAgentUninstallException(
+                "agent_uninstall_distribution_changed", "Terminal environment changed. Refresh Agent settings.",
+            )
+        }
+        if (!EmbeddedRuntimeInstaller.isCurrentDistributionReady(appContext)) {
+            throw ManagedAgentUninstallException(
+                "agent_uninstall_terminal_unavailable", "The terminal environment is unavailable.",
+            )
+        }
+        val strategy = requireNotNull(profile.officialRuntime?.managedUninstallStrategy)
+        val source = appContext.assets.open("acp/uninstall-agent.cjs").bufferedReader().use { it.readText() }
+        val result = TerminalManager.getInstance(appContext).executeHiddenCommand(
+            command = managedAgentUninstallCommand(source, strategy, probe),
+            executorKey = "acp-adapter-uninstall-${profile.id}-${if (probe) "probe" else "remove"}",
+            distribution = TerminalDistribution.fromId(distributionId),
+            timeoutMs = if (probe) 15_000L else MANAGED_ACP_INSTALL_TIMEOUT_MS,
+        )
+        // The script reports disk state even on a partial failure (exit 1).
+        // A zero exit without this report cannot establish that removal worked.
+        return parseManagedAgentUninstallReport(result.output)
+    }
+
+    private suspend fun refreshManagedAgentAfterUninstall(
+        profile: AcpAgentProfile,
+        distributionId: String,
+        report: ManagedAgentUninstallReport?,
+    ) {
+        invalidateLocalProbeCache()
+        acpAgentProfileStore.savePackageVersion(
+            distributionId, profile.id,
+            managedAgentVersionAfterUninstall(acpAgentProfileStore.packageVersion(distributionId, profile.id), report),
+        )
+        if (TerminalDistribution.selected().id != distributionId) return
+        acpAgentProfileStore.saveHealth(profile.id, managedAgentHealthAfterUninstall(report))
+        if (report != null && !report.removed) {
+            managedAgentUpdates.check(listOf(profile), distributionId, remote = false)
         }
     }
 

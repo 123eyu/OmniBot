@@ -95,6 +95,7 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
     final cardData = message.cardData;
     if (conversationId == null ||
         isEphemeralConversation(conversationId, activeConversationModeValue) ||
+        message.isHistoryPayloadOffloaded ||
         message.type != 2 ||
         cardData?['type'] != 'deep_thinking') {
       return;
@@ -1492,6 +1493,7 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
       if (raw is! List) return const [];
       final normalized = raw
           .whereType<Map>()
+          .where((item) => item['historyPayloadOffloaded'] != true)
           .map((item) => item.map((k, v) => MapEntry(k.toString(), v)))
           .where(_attachmentShouldSendToModel)
           .toList();
