@@ -357,9 +357,8 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
       await action();
       await _refreshPersonalContext();
       if (mounted && message != null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
       }
     } catch (_) {
       if (mounted) {
