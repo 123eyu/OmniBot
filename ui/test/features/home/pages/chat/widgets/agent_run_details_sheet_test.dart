@@ -10,6 +10,8 @@ import 'package:ui/models/chat_message_model.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/theme/omni_theme_palette.dart';
 import 'package:ui/widgets/streaming_text.dart';
+import 'package:ui/widgets/omni_glass.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
 
 void main() {
   setUp(() => LegacyTextLocalizer.setResolvedLocale(const Locale('zh')));
@@ -17,6 +19,7 @@ void main() {
     WidgetTester tester, {
     AgentRunTimelineGroup? group,
     bool dark = false,
+    bool glass = false,
     double width = 390,
   }) async {
     tester.view.physicalSize = Size(width, 858);
@@ -31,6 +34,8 @@ void main() {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
+        builder: (context, child) =>
+            LiquidGlassScope(enabled: glass, child: child!),
         home: Scaffold(
           body: Builder(
             builder: (context) => TextButton(
@@ -57,9 +62,9 @@ void main() {
         );
         final size = tester.getSize(sheet);
         expect(size.height, inInclusiveRange(858 * 0.48, 858 * 0.57));
-        final material = tester.widget<Material>(sheet);
+        final surface = tester.widget<OmniGlassSheet>(sheet);
         expect(
-          material.color,
+          surface.backgroundColor,
           dark
               ? OmniThemePalette.dark.pageBackground
               : OmniThemePalette.light.pageBackground,
@@ -260,6 +265,40 @@ void main() {
     expect(sheet, findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'glass detail handle stretches past its extent and springs back',
+    (tester) async {
+      await openSheet(tester, glass: true);
+      final sheet = find.byKey(
+        const ValueKey('agent-run-details-sheet-turn-1'),
+      );
+      final handle = find.byKey(
+        const ValueKey('agent-run-details-drag-handle'),
+      );
+      final drag = await tester.startGesture(tester.getCenter(handle));
+      await drag.moveBy(const Offset(0, -350));
+      await tester.pump();
+      final beforeOverdrag = tester.getTopLeft(sheet).dy;
+      await drag.moveBy(const Offset(0, -60));
+      await tester.pump();
+      final stretched = tester.getTopLeft(sheet).dy;
+      expect(stretched, lessThan(beforeOverdrag));
+      final heldHeight = tester.getSize(sheet).height;
+      await drag.moveBy(const Offset(0, 20));
+      await tester.pump();
+      expect(tester.getSize(sheet).height, closeTo(heldHeight, 0.1));
+      expect(tester.getTopLeft(sheet).dy, greaterThan(stretched));
+      await drag.up();
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(sheet).dy, greaterThan(beforeOverdrag));
+      expect(
+        find.byKey(const ValueKey('agent-run-details-row-tool-1')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('thinking detail exposes its complete historical record', (
     tester,

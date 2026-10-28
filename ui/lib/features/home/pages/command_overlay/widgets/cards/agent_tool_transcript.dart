@@ -223,33 +223,17 @@ Future<void> showAgentToolDetailDialog(
   BuildContext context, {
   required Map<String, dynamic> cardData,
 }) {
-  return showDialog<void>(
+  return showOmniGlassCardSheet<void>(
     context: context,
     useRootNavigator: false,
+    forceDark: true,
     builder: (dialogContext) {
-      return Dialog(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
-        child: Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(dialogContext).size.height * 0.76,
-            maxWidth: 520,
-          ),
-          decoration: BoxDecoration(
-            color: kTerminalSurfaceBlack,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: const [
-              BoxShadow(
-                color: kTerminalSurfaceShadow,
-                blurRadius: 32,
-                offset: Offset(0, 20),
-              ),
-            ],
-          ),
+      return OmniGlassCardBody(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(dialogContext).height * 0.5,
           child: _AgentToolDetailContent(
             cardData: cardData,
-            headerPadding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
+            headerPadding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
             scrollPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
           ),
         ),
@@ -262,7 +246,7 @@ Future<void> showAgentToolDetailSheet(
   BuildContext context, {
   required Map<String, dynamic> cardData,
 }) {
-  return showModalBottomSheet<void>(
+  return showOmniGlassBottomSheet<void>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,

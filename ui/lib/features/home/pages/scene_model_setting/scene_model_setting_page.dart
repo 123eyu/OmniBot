@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/services/model_provider_config_service.dart';
@@ -30,7 +31,8 @@ class SceneModelSettingPage extends StatefulWidget {
   State<SceneModelSettingPage> createState() => _SceneModelSettingPageState();
 }
 
-class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
+class _SceneModelSettingPageState extends State<SceneModelSettingPage>
+    with FlClashPageLoadMixin {
   static const List<String> _sceneOrder = [
     'scene.dispatch.model',
     'scene.voice',
@@ -179,6 +181,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
   }
 
   Future<void> _loadData({bool showLoading = true}) async {
+    if (!await waitForPageReady() || !mounted) return;
     if (showLoading && mounted) {
       setState(() => _isLoading = true);
     }
@@ -189,7 +192,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
         ModelProviderConfigService.listProfiles(),
         SceneModelConfigService.getSceneVoiceConfig(),
       ]);
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
 
       final catalog = results[0] as List<SceneCatalogItem>;
       final bindings = results[1] as List<SceneModelBindingEntry>;
@@ -211,6 +214,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
         bindings: bindings,
       );
 
+      if (!await waitForPageReady() || !mounted) return;
       setState(() {
         _catalog = catalog;
         _bindings = bindings;
@@ -226,10 +230,10 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
       // Show saved bindings and manual IDs while querying the remote catalogs.
       unawaited(_refreshProviderModelsInBackground());
     } catch (_) {
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       showToast(context.l10n.sceneModelLoadFailed, type: ToastType.error);
     } finally {
-      if (showLoading && mounted) {
+      if (showLoading && await waitForPageReady() && mounted) {
         setState(() => _isLoading = false);
       }
     }
@@ -300,6 +304,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
     required List<ModelProviderProfileSummary> profiles,
     required Map<String, List<ProviderModelOption>> providerModelsByProfileId,
   }) async {
+    if (!await waitForPageReady() || !mounted) return;
     final enrichedEntries =
         await Future.wait<MapEntry<String, List<ProviderModelOption>>>(
           profiles.map((profile) async {
@@ -317,7 +322,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
             );
           }),
         );
-    if (!mounted ||
+    if (!await waitForPageReady() ||
         !identical(_providerModelsByProfileId, providerModelsByProfileId)) {
       return;
     }
@@ -330,6 +335,7 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
   }
 
   Future<void> _refreshProviderModelsInBackground() async {
+    if (!await waitForPageReady() || !mounted) return;
     if (_isRefreshingModels) {
       await _providerRefreshCompleter?.future;
       return;
@@ -405,7 +411,10 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
       }
       await Future.wait(capabilityRefreshes.values);
 
-      if (!_isProviderRefreshActive(refreshGeneration)) return;
+      if (!await waitForPageReady() ||
+          !_isProviderRefreshActive(refreshGeneration)) {
+        return;
+      }
       final merged = _mergeBindingModels(
         providerModelsByProfileId: nextModels,
         bindings: _bindings,

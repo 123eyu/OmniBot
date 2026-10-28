@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -9,7 +10,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/features/home/state/habitual_hand_controller.dart';
 import 'package:ui/features/home/widgets/home_drawer.dart';
-import 'package:ui/features/home/widgets/home_drawer_search_field.dart';
+import 'package:ui/features/home/widgets/conversation_context_menu.dart';
+import 'package:ui/widgets/omni_menu.dart';
+import 'package:ui/features/home/widgets/home_search_header.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
 import 'package:ui/l10n/app_language_mode.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
@@ -24,7 +27,8 @@ import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
-import 'package:ui/widgets/omni_circle_button.dart';
+import 'package:ui/widgets/flclash/search_header.dart';
+import 'package:ui/widgets/flclash/popup.dart';
 
 class _SvgTestAssetBundle extends CachingAssetBundle {
   static final Uint8List _svgBytes = Uint8List.fromList(
@@ -544,7 +548,7 @@ void main() {
 
   for (final scheduledParent in [false, true]) {
     testWidgets(
-      'home ${scheduledParent ? 'scheduled parent' : 'regular row'} stays hidden until context reverse completes',
+      'home ${scheduledParent ? 'scheduled parent' : 'regular row'} returns from its focused context preview',
       (tester) async {
         final now = DateTime.now().millisecondsSinceEpoch;
         nativeConversations = [selectionRow(1, '聚焦目标')];
@@ -568,35 +572,80 @@ void main() {
         }
         await pumpSelectionHome(tester);
         final source = find.byKey(const ValueKey('home-source-row-agent:1'));
+        final sourceVisibility = find.byKey(
+          const ValueKey('home-context-source-visibility-agent:1'),
+        );
+        final preview = find.byKey(
+          const ValueKey('conversation-context-preview'),
+        );
         final originalRect = tester.getRect(source);
-        expect(tester.widget<Opacity>(source).opacity, 1);
+        void expectSource({bool focused = false, bool samePosition = true}) {
+          expect(tester.widget(source), isA<GestureDetector>());
+          if (samePosition) expect(tester.getRect(source), originalRect);
+          expect(
+            tester.widget<Opacity>(sourceVisibility).opacity,
+            focused ? 0 : 1,
+          );
+          expect(preview, focused ? findsOneWidget : findsNothing);
+          expect(find.text('聚焦目标'), findsNWidgets(focused ? 2 : 1));
+        }
+
+        expectSource();
         await tester.longPress(find.text('聚焦目标'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 40));
-        expect(tester.widget<Opacity>(source).opacity, 0);
-        expect(tester.getRect(source), originalRect);
+        expectSource(focused: true);
+        final earlyPreview = tester.getRect(preview);
         await tester.pumpAndSettle();
+        expect(tester.getRect(preview).top, lessThan(earlyPreview.top));
+        // A duplicate long-press callback cannot create a second menu owner.
+        tester.widget<GestureDetector>(source).onLongPressStart!(
+          LongPressStartDetails(globalPosition: originalRect.center),
+        );
+        await tester.pump();
+        expect(find.byType(ConversationContextMenu), findsOneWidget);
+        final contextRoute = ModalRoute.of(
+          tester.element(find.byType(ConversationContextMenu)),
+        )!;
+        expect(
+          contextRoute.transitionDuration,
+          const Duration(milliseconds: 450),
+        );
+        expect(
+          contextRoute.reverseTransitionDuration,
+          const Duration(milliseconds: 200),
+        );
+        expect(contextRoute.barrierColor, isNull);
         await tester.binding.handlePopRoute();
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 160));
-        expect(tester.widget<Opacity>(source).opacity, 0);
-        expect(
-          find.byKey(const ValueKey('conversation-context-preview')),
-          findsOneWidget,
-        );
+        expect(find.byType(ConversationContextMenu), findsOneWidget);
+        expectSource(focused: true);
+        await tester.pump(const Duration(milliseconds: 40));
+        expect(tester.widget<Opacity>(sourceVisibility).opacity, 1);
         await tester.pumpAndSettle();
-        expect(tester.widget<Opacity>(source).opacity, 1);
-        expect(tester.getRect(source), originalRect);
+        expectSource();
+
+        await tester.longPress(find.text('聚焦目标'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 40));
+        expectSource(focused: true);
+        await tester.binding.handlePopRoute();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(tester.widget<Opacity>(sourceVisibility).opacity, 1);
+        await tester.pumpAndSettle();
+        expectSource();
 
         await tester.longPress(find.text('聚焦目标'));
         await tester.pumpAndSettle();
         final selectAction = tester
-            .widget<InkWell>(
+            .widget<OmniMenuItem>(
               find.byKey(const ValueKey('home-drawer-context-select')),
             )
             .onTap!;
         final secondAction = tester
-            .widget<InkWell>(
+            .widget<OmniMenuItem>(
               find.byKey(const ValueKey('home-drawer-context-delete')),
             )
             .onTap!;
@@ -604,43 +653,288 @@ void main() {
         secondAction();
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 160));
-        expect(tester.widget<Opacity>(source).opacity, 0);
+        expectSource(focused: true);
         expect(
           find.byKey(const ValueKey('home-selection-count')),
           findsNothing,
         );
         await tester.pumpAndSettle();
-        expect(tester.widget<Opacity>(source).opacity, 1);
+        expectSource(samePosition: false);
         expect(find.text('已选择 1 项'), findsOneWidget);
-        expect(
-          find.byKey(const ValueKey('conversation-context-preview')),
-          findsNothing,
-        );
+        expect(find.byType(ConversationContextMenu), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );
   }
 
-  testWidgets('home time headers fold without an ink background', (
+  testWidgets('a scrolled home row returns to its captured list position', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    nativeConversations = [
+      for (var id = 1; id <= 20; id++)
+        selectionRow(id, '滚动会话 $id', updatedAt: now - id * 1000),
+    ];
+    await pumpSelectionHome(tester);
+    final source = find.byKey(const ValueKey('home-source-row-agent:12'));
+    await tester.scrollUntilVisible(
+      source,
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    final originalRect = tester.getRect(source);
+    await tester.longPress(source);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ConversationContextMenu>(find.byType(ConversationContextMenu))
+          .anchor,
+      originalRect,
+    );
+    final sourceVisibility = find.byKey(
+      const ValueKey('home-context-source-visibility-agent:12'),
+    );
+    expect(tester.widget<Opacity>(sourceVisibility).opacity, 0);
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.widget<Opacity>(sourceVisibility).opacity, 1);
+    expect(tester.getRect(source), originalRect);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reduced-motion early dismissal restores the home source', (
+    tester,
+  ) async {
+    nativeConversations = [selectionRow(1, '立即关闭')];
+    await pumpSelectionHome(tester, disableAnimations: true);
+    final source = find.byKey(const ValueKey('home-source-row-agent:1'));
+    tester.widget<GestureDetector>(source).onLongPressStart!(
+      LongPressStartDetails(globalPosition: tester.getCenter(source)),
+    );
+    Navigator.of(tester.element(source), rootNavigator: true).pop();
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<Opacity>(
+            find.byKey(
+              const ValueKey('home-context-source-visibility-agent:1'),
+            ),
+          )
+          .opacity,
+      1,
+    );
+    expect(find.byType(ConversationContextMenu), findsNothing);
+    await tester.longPress(source);
+    await tester.pumpAndSettle();
+    expect(find.byType(ConversationContextMenu), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home date headings stay visible despite legacy folded dates', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final day =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    await StorageService.setString(
+      'home_drawer_expanded_sections_v1',
+      jsonEncode({'__home_drawer_date__omni_ai__$day': false}),
+    );
     nativeConversations = [selectionRow(1, '今天的会话')];
     await pumpSelectionHome(tester);
-    final header = find
-        .ancestor(of: find.text('今天'), matching: find.byType(InkWell))
-        .first;
-    final ink = tester.widget<InkWell>(header);
-    expect(ink.splashFactory, NoSplash.splashFactory);
-    expect(ink.splashColor, Colors.transparent);
-    expect(ink.highlightColor, Colors.transparent);
-    expect(ink.focusColor, Colors.transparent);
-    expect(ink.hoverColor, Colors.transparent);
-    await tester.tap(header);
-    await tester.pumpAndSettle();
-    expect(find.text('今天的会话'), findsNothing);
-    await tester.tap(header);
+    expect(find.text('今天的会话'), findsOneWidget);
+    expect(
+      find.ancestor(of: find.text('今天'), matching: find.byType(InkWell)),
+      findsNothing,
+    );
+    await tester.tap(find.text('今天'), warnIfMissed: false);
     await tester.pumpAndSettle();
     expect(find.text('今天的会话'), findsOneWidget);
+  });
+
+  testWidgets(
+    'home focused preview keeps its Agent, latest message, and running state',
+    (tester) async {
+      final coordinator = ChatConversationRuntimeCoordinator.instance;
+      coordinator.resetForTest();
+      coordinator.ensureInitialized();
+      addTearDown(coordinator.resetForTest);
+      nativeConversations = [
+        {
+          ...selectionRow(1, '检查项目配置'),
+          'agentId': 'codex-acp',
+          'lastMessage': '已检查配置\n没有发现冲突',
+          'messageCount': 4,
+          'contextSummary': '不可作为会话预览的内部上下文',
+        },
+      ];
+      coordinator.beginAcpTurn(
+        taskId: 'focused-preview-running-task',
+        conversationId: 1,
+        mode: kChatRuntimeModeAgent,
+      );
+      await pumpSelectionHome(tester, initialCategory: 'all');
+      final row = find.byKey(const ValueKey('home-source-row-agent:1'));
+      final icon = find.descendant(
+        of: row,
+        matching: find.byType(AgentBrandIcon),
+      );
+      expect(tester.widget<AgentBrandIcon>(icon).agentId, 'codex-acp');
+      expect(find.text('已检查配置 没有发现冲突'), findsOneWidget);
+      expect(find.text('不可作为会话预览的内部上下文'), findsNothing);
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.byKey(const ValueKey('home-conversation-date')),
+        ),
+        findsOneWidget,
+      );
+      await tester.longPress(find.text('检查项目配置'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ConversationContextMenu), findsOneWidget);
+      final preview = find.byKey(
+        const ValueKey('conversation-context-preview'),
+      );
+      expect(preview, findsOneWidget);
+      expect(
+        find.descendant(of: preview, matching: find.text('已检查配置 没有发现冲突')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<AgentBrandIcon>(
+              find.descendant(
+                of: preview,
+                matching: find.byType(AgentBrandIcon),
+              ),
+            )
+            .agentId,
+        'codex-acp',
+      );
+      expect(find.text('不可作为会话预览的内部上下文'), findsNothing);
+      expect(
+        find.descendant(
+          of: preview,
+          matching: find.byKey(
+            const ValueKey('home-conversation-executing-dot'),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<Opacity>(
+              find.byKey(
+                const ValueKey('home-context-source-visibility-agent:1'),
+              ),
+            )
+            .opacity,
+        0,
+      );
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'long-press focused preview keeps the searched snippet and archive marker',
+    (tester) async {
+      nativeConversations = [
+        {
+          ...selectionRow(1, '归档会话'),
+          'summary': '历史匹配摘要',
+          'lastMessage': '最新消息内容',
+          'messageCount': 3,
+          'isArchived': true,
+        },
+      ];
+      await pumpSelectionHome(tester);
+      await tester.tap(find.byKey(const ValueKey('home-search-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '历史匹配');
+      await tester.pumpAndSettle(const Duration(milliseconds: 250));
+      final row = find.byKey(const ValueKey('home-source-row-agent:1'));
+      expect(
+        find.descendant(of: row, matching: find.text('历史匹配摘要')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: row, matching: find.byIcon(Icons.archive_outlined)),
+        findsOneWidget,
+      );
+      await tester.longPress(find.text('归档会话'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ConversationContextMenu), findsOneWidget);
+      final preview = find.byKey(
+        const ValueKey('conversation-context-preview'),
+      );
+      expect(preview, findsOneWidget);
+      expect(
+        find.descendant(of: preview, matching: find.text('历史匹配摘要')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: preview,
+          matching: find.byIcon(Icons.archive_outlined),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<Opacity>(
+              find.byKey(
+                const ValueKey('home-context-source-visibility-agent:1'),
+              ),
+            )
+            .opacity,
+        0,
+      );
+      expect(find.text('最新消息内容'), findsNothing);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('home combines older dates into a static earlier section', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    nativeConversations = [
+      selectionRow(
+        1,
+        '上个月的消息',
+        updatedAt: DateTime(now.year, now.month - 1, 5).millisecondsSinceEpoch,
+      ),
+      selectionRow(
+        2,
+        '更早的消息',
+        updatedAt: DateTime(now.year, now.month - 2, 16).millisecondsSinceEpoch,
+      ),
+    ];
+    await pumpSelectionHome(tester);
+    expect(find.text('更久以前'), findsOneWidget);
+    expect(find.text('上个月的消息'), findsOneWidget);
+    expect(find.text('更早的消息'), findsOneWidget);
+    await tester.tap(find.text('更久以前'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(find.text('上个月的消息'), findsOneWidget);
+    expect(find.text('更早的消息'), findsOneWidget);
   });
 
   testWidgets('home context selection ignores a row removed during the menu', (
@@ -673,7 +967,10 @@ void main() {
       await tester.pumpAndSettle(const Duration(milliseconds: 250));
       await startSelection(tester, '查找甲');
       expect(find.text('已选择 1 项'), findsOneWidget);
-      expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('home-agent-switcher')).hitTestable(),
+        findsNothing,
+      );
       expect(find.byKey(const ValueKey('home-new-conversation')), findsNothing);
       await tester.tap(find.text('查找乙'));
       await tester.pumpAndSettle();
@@ -831,41 +1128,40 @@ void main() {
     },
   );
 
-  testWidgets('home select visible respects folded dates and current search', (
-    tester,
-  ) async {
-    final yesterday = DateTime.now()
-        .subtract(const Duration(days: 1))
-        .millisecondsSinceEpoch;
-    nativeConversations = [
-      selectionRow(1, '匹配今天'),
-      selectionRow(2, '匹配置顶', pinned: true),
-      selectionRow(3, '隐藏昨天', updatedAt: yesterday),
-    ];
-    final calls = <Map<String, dynamic>>[];
-    installSelectionMutations(calls);
-    await pumpSelectionHome(tester);
-    await tester.tap(find.text('昨天'));
-    await tester.pumpAndSettle();
-    await startSelection(tester, '匹配今天');
-    await tester.tap(find.byKey(const ValueKey('home-selection-all')));
-    await tester.pumpAndSettle();
-    expect(find.text('已选择 2 项'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('home-selection-cancel')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('home-search-button')));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '置顶');
-    await tester.pumpAndSettle(const Duration(milliseconds: 250));
-    await startSelection(tester, '匹配置顶');
-    await tester.tap(find.byKey(const ValueKey('home-selection-archive')));
-    await tester.pumpAndSettle();
-    expect(calls.map((args) => args['conversationId']), [2]);
-    expect(
-      nativeConversations.singleWhere((row) => row['id'] == 3)['isArchived'],
-      isNull,
-    );
-  });
+  testWidgets(
+    'home select visible includes every date and respects current search',
+    (tester) async {
+      final yesterday = DateTime.now()
+          .subtract(const Duration(days: 1))
+          .millisecondsSinceEpoch;
+      nativeConversations = [
+        selectionRow(1, '匹配今天'),
+        selectionRow(2, '匹配置顶', pinned: true),
+        selectionRow(3, '昨天的会话', updatedAt: yesterday),
+      ];
+      final calls = <Map<String, dynamic>>[];
+      installSelectionMutations(calls);
+      await pumpSelectionHome(tester);
+      await startSelection(tester, '匹配今天');
+      await tester.tap(find.byKey(const ValueKey('home-selection-all')));
+      await tester.pumpAndSettle();
+      expect(find.text('已选择 3 项'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('home-selection-cancel')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('home-search-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '置顶');
+      await tester.pumpAndSettle(const Duration(milliseconds: 250));
+      await startSelection(tester, '匹配置顶');
+      await tester.tap(find.byKey(const ValueKey('home-selection-archive')));
+      await tester.pumpAndSettle();
+      expect(calls.map((args) => args['conversationId']), [2]);
+      expect(
+        nativeConversations.singleWhere((row) => row['id'] == 3)['isArchived'],
+        isNull,
+      );
+    },
+  );
 
   testWidgets(
     'home batch selection treats scheduled children as separate targets',
@@ -895,10 +1191,9 @@ void main() {
       final calls = <Map<String, dynamic>>[];
       installSelectionMutations(calls);
       await pumpSelectionHome(tester);
-      final parentRow = find
-          .ancestor(of: find.text('定时父对话'), matching: find.byType(InkWell))
-          .first;
-      await tester.tapAt(tester.getTopLeft(parentRow) + const Offset(20, 15));
+      await tester.tap(
+        find.byKey(const ValueKey('home-scheduled-toggle-agent:1')),
+      );
       await tester.pumpAndSettle();
       expect(find.text('定时子对话'), findsNothing);
       await startSelection(tester, '定时父对话');
@@ -1030,7 +1325,13 @@ void main() {
             ),
           ),
         );
-        await tester.pump(const Duration(milliseconds: 400));
+        if (duringConfirmation) {
+          // Let the sheet finish entering before interacting with its action;
+          // the owner change still happens while confirmation is pending.
+          await tester.pumpAndSettle();
+        } else {
+          await tester.pump(const Duration(milliseconds: 400));
+        }
         nativeConversations.removeWhere((row) => row['agentId'] == 'na-cloud');
         final handled = Completer<void>();
         await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
@@ -1409,7 +1710,10 @@ void main() {
         await selectHomeCategory(tester, agentId);
         await tester.tap(find.byKey(const ValueKey('home-search-button')));
         await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+        expect(
+          find.byKey(const ValueKey('home-agent-switcher')).hitTestable(),
+          findsNothing,
+        );
         await tester.enterText(find.byType(TextField), '对话');
         await tester.pumpAndSettle(const Duration(milliseconds: 250));
         await tester.binding.handlePopRoute();
@@ -1479,7 +1783,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('home-search-button')));
       await tester.pumpAndSettle();
       expect(update, findsNothing);
-      expect(tester.getRect(find.byType(HomeDrawerSearchField)).left, 22);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('home-search-input'))).left,
+        16,
+      );
       await tester.tap(find.byKey(const ValueKey('home-close-search')));
       await tester.pumpAndSettle();
       expect(update, findsOneWidget);
@@ -1572,13 +1879,58 @@ void main() {
     expect(tester.widget<Text>(name).data, longName);
     expect(tester.widget<Text>(name).maxLines, 1);
     expect(tester.widget<Text>(name).overflow, TextOverflow.ellipsis);
+    final header = tester.getRect(find.byType(HomeSearchHeader));
+    final switcher = tester.getRect(
+      find.byKey(const ValueKey('home-agent-switcher')),
+    );
+    expect(header.contains(tester.getCenter(name)), isTrue);
+    expect(find.text('首页'), findsNothing);
+    expect(header.height, 72);
+    expect(switcher.height, 44);
     expect(
-      tester.getRect(name).right,
-      lessThanOrEqualTo(
-        tester
-            .getRect(find.byKey(const ValueKey('home-app-update-button')))
-            .left,
+      switcher.center.dy,
+      tester.getCenter(find.byKey(const ValueKey('home-search-button'))).dy,
+    );
+    final paragraph = tester.renderObject<RenderParagraph>(
+      find.descendant(of: name, matching: find.byType(RichText)),
+    );
+    final prefix = TextPainter(
+      text: TextSpan(text: '一个…', style: paragraph.text.style),
+      textDirection: paragraph.textDirection,
+      textScaler: paragraph.textScaler,
+    )..layout();
+    expect(paragraph.size.width, greaterThanOrEqualTo(prefix.width));
+    expect(
+      paragraph.getBoxesForSelection(
+        const TextSelection(baseOffset: 0, extentOffset: 2),
       ),
+      isNotEmpty,
+    );
+    prefix.dispose();
+    expect(find.byKey(const ValueKey('home-app-update-button')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('home-menu-update-badge')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final update = find.byKey(const ValueKey('home-menu-app-update'));
+    expect(update, findsOneWidget);
+    expect(
+      find.descendant(of: update, matching: find.text('v1.0.1')),
+      findsOneWidget,
+    );
+    await tester.tap(update);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('发现新版本'), findsOneWidget);
+    expect(find.text('立即更新'), findsOneWidget);
+    await tester.tap(find.text('稍后'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('home-menu-update-badge')),
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
     await startSelection(tester, '长名称Agent对话');
@@ -1640,9 +1992,7 @@ void main() {
     expect(find.text('简单问候'), findsOneWidget);
     await tester.tap(find.text('今天'));
     await tester.pumpAndSettle();
-    expect(find.text('查看当前工作环境'), findsNothing);
-    await tester.tap(find.text('今天'));
-    await tester.pumpAndSettle();
+    expect(find.text('查看当前工作环境'), findsOneWidget);
     await tester.tap(find.text('查看当前工作环境'));
     expect(selected?.conversationId, 101);
     expect(selected?.agentId, 'codex-acp');
@@ -1656,28 +2006,18 @@ void main() {
   });
 
   testWidgets(
-    'home search has an independent button and menu retains other shortcuts',
+    'home uses FlClash search group and menu retains other shortcuts',
     (tester) async {
       void expectCircleGeometry(String key) {
         final button = find.byKey(ValueKey(key));
-        // Match the chat header's visible circle without reducing its padded
-        // hit target. Tight animation slots must not enlarge the Material.
-        expect(tester.getSize(button), const Size.square(48));
-        final surface = find.descendant(
-          of: button,
-          matching: find.byWidgetPredicate(
-            (widget) => widget is Material && widget.shape is CircleBorder,
-          ),
-        );
-        expect(surface, findsOneWidget);
-        expect(tester.getSize(surface), const Size.square(40));
+        expect(tester.getSize(button), const Size.square(44));
         for (final icon
             in find
                 .descendant(of: button, matching: find.byType(Icon))
                 .evaluate()) {
           expect(
             tester.getSize(find.byElementPredicate((e) => e == icon)),
-            const Size.square(20),
+            const Size.square(24),
           );
         }
       }
@@ -1707,14 +2047,67 @@ void main() {
       expect(find.text('设置'), findsNothing);
       expectCircleGeometry('home-search-button');
       expectCircleGeometry('home-menu-button');
+      final searchBounds = tester.getRect(
+        find.byKey(const ValueKey('home-search-button')),
+      );
+      final menuBounds = tester.getRect(
+        find.byKey(const ValueKey('home-menu-button')),
+      );
+      expect(searchBounds.right, menuBounds.left);
+      expect(searchBounds.center.dy, menuBounds.center.dy);
+      final switcher = find.byKey(const ValueKey('home-agent-switcher'));
+      expect(tester.getRect(switcher).height, searchBounds.height);
+      expect(tester.getRect(switcher).center.dy, searchBounds.center.dy);
+      expect(find.text('首页'), findsNothing);
+      expect(find.byType(FlClashToolbarCapsule), findsOneWidget);
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('home-agent-switch-action')),
+            )
+            .style
+            ?.color,
+        isNot(AppColors.primaryBlue),
+      );
+      final sharedCapsule = find.ancestor(
+        of: find.byKey(const ValueKey('home-search-button')),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is DecoratedBox &&
+              widget.decoration is ShapeDecoration &&
+              (widget.decoration as ShapeDecoration).shape
+                  is RoundedSuperellipseBorder,
+        ),
+      );
+      expect(sharedCapsule, findsOneWidget);
+      expect(tester.getSize(sharedCapsule), const Size(88, 44));
+      final groupSource = find.ancestor(
+        of: sharedCapsule,
+        matching: find.byType(FlClashPopupSource),
+      );
+      expect(groupSource, findsOneWidget);
+      expect(tester.getSize(groupSource), const Size(88, 44));
+      expect(
+        find.descendant(
+          of: sharedCapsule,
+          matching: find.byKey(const ValueKey('home-menu-button')),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('home-menu-button')));
       await tester.pumpAndSettle();
       expect(
-        find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
-        findsNWidgets(7),
+        find.byKey(const ValueKey('home-search-button')).hitTestable(),
+        findsNothing,
       );
-      expect(find.text('设置'), findsOneWidget);
-      expect(find.text('轨迹'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is PopupMenuItem<VoidCallback>,
+        ),
+        findsNWidgets(5),
+      );
+      expect(find.text('设置'), findsNothing);
+      expect(find.text('轨迹'), findsNothing);
       expect(find.text('搜索对话'), findsNothing);
       await tester.tapAt(const Offset(4, 4));
       await tester.pumpAndSettle();
@@ -1731,8 +2124,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pumpAndSettle();
       expect(find.byType(TextField), findsOneWidget);
-      expect(find.byKey(const ValueKey('home-agent-name')), findsNothing);
-      expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('home-agent-name')).hitTestable(),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('home-agent-switcher')).hitTestable(),
+        findsNothing,
+      );
       expect(find.text('取消'), findsNothing);
       expectCircleGeometry('home-close-search');
       expect(
@@ -1756,22 +2155,11 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       nativeConversations = [selectionRow(1, '固定会话')];
       await pumpSelectionHome(tester);
-      final searchIcon = find.byKey(const ValueKey('home-search-moving-icon'));
-      final searchCenter = tester.getCenter(searchIcon);
-      final menuCenter = tester.getCenter(
-        find.byKey(const ValueKey('home-menu-button')),
-      );
       final historyTop = tester.getTopLeft(find.byType(CustomScrollView)).dy;
 
       await tester.tap(find.byKey(const ValueKey('home-search-button')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 80));
-      expect(tester.getCenter(searchIcon).dx, greaterThan(searchCenter.dx));
-      expect(tester.getCenter(searchIcon).dx, lessThan(menuCenter.dx));
-      expect(
-        tester.getCenter(find.byKey(const ValueKey('home-close-search'))),
-        menuCenter,
-      );
       expect(tester.getTopLeft(find.byType(CustomScrollView)).dy, historyTop);
       final field = tester.widget<TextField>(find.byType(TextField));
       final editor = tester.state<EditableTextState>(find.byType(EditableText));
@@ -1779,23 +2167,19 @@ void main() {
       await tester.enterText(find.byType(TextField), 'unfinished query');
       await tester.pump();
 
-      await tester.tap(find.byKey(const ValueKey('home-close-search')));
+      // The container can be retargeted while its spring is still moving.
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('home-close-search')))
+          .onPressed!();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 16));
-      expect(
-        tester
-            .widget<OmniCircleButton>(
-              find.byKey(const ValueKey('home-menu-button')),
-            )
-            .onPressed,
-        isNull,
-      );
       expect(field.controller!.text, isEmpty);
       expect(field.focusNode!.hasFocus, isFalse);
       expect(find.byType(TextField), findsOneWidget);
       expect(tester.getTopLeft(find.byType(CustomScrollView)).dy, historyTop);
-
-      await tester.tap(find.byKey(const ValueKey('home-search-button')));
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('home-search-button')))
+          .onPressed!();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 80));
       expect(
@@ -1804,16 +2188,8 @@ void main() {
       );
       expect(field.focusNode!.hasFocus, isTrue);
       expect(field.controller!.text, isEmpty);
-      expect(tester.getTopLeft(find.byType(CustomScrollView)).dy, historyTop);
       await tester.pumpAndSettle();
-      expect(
-        tester.state<EditableTextState>(find.byType(EditableText)),
-        same(editor),
-      );
-      expect(
-        tester.getCenter(find.byKey(const ValueKey('home-close-search'))),
-        menuCenter,
-      );
+      expect(tester.getTopLeft(find.byType(CustomScrollView)).dy, historyTop);
       await tester.tap(find.byKey(const ValueKey('home-close-search')));
       await tester.pumpAndSettle();
       expect(find.byType(TextField), findsNothing);
@@ -1841,7 +2217,10 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(update, findsNothing);
-      expect(tester.getRect(find.byType(HomeDrawerSearchField)).left, 22);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('home-search-input'))).left,
+        16,
+      );
       expect(
         tester.getCenter(find.byKey(const ValueKey('home-close-search'))),
         menuCenter,
@@ -1919,11 +2298,15 @@ void main() {
     await tester.pumpAndSettle();
 
     installed = true;
-    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    final menuPress = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('home-menu-button'))),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Agent WebUI'), findsOneWidget);
     running = true;
-    await tester.tap(find.text('Agent WebUI'));
+    await menuPress.moveTo(tester.getCenter(find.text('Agent WebUI')));
+    await tester.pump();
+    await menuPress.up();
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('home-drawer-web-kimi-code-acp')),
@@ -1994,14 +2377,26 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'missing');
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('home-menu-button')), findsNothing);
-    expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('home-menu-button')).hitTestable(),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('home-agent-switcher')).hitTestable(),
+      findsNothing,
+    );
     expect(find.byType(TextField), findsOneWidget);
     expect(tester.takeException(), isNull);
     tester.view.viewInsets = FakeViewPadding.zero;
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('home-agent-name')), findsNothing);
-    expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('home-agent-name')).hitTestable(),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('home-agent-switcher')).hitTestable(),
+      findsNothing,
+    );
 
     await tester.tap(find.byKey(const ValueKey('home-close-search')));
     tester.view.viewInsets = FakeViewPadding.zero;
@@ -2063,8 +2458,14 @@ void main() {
       final home = tester.state(find.byType(HomeDrawer));
       await tester.tap(find.byKey(const ValueKey('home-search-button')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('home-agent-name')), findsNothing);
-      expect(find.byKey(const ValueKey('home-agent-switcher')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('home-agent-name')).hitTestable(),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('home-agent-switcher')).hitTestable(),
+        findsNothing,
+      );
       await tester.enterText(find.byType(TextField), '聊天');
       await tester.pump(const Duration(milliseconds: 250));
       await tester.pumpAndSettle();
@@ -2076,7 +2477,10 @@ void main() {
         isEmpty,
       );
       expect(find.byType(TextField), findsOneWidget);
-      expect(find.byKey(const ValueKey('home-agent-name')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('home-agent-name')).hitTestable(),
+        findsNothing,
+      );
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(tester.state(find.byType(HomeDrawer)), same(home));
@@ -2100,7 +2504,7 @@ void main() {
     },
   );
 
-  testWidgets('home menu ignores repeated taps while refreshing plugins', (
+  testWidgets('home menu opens on press without waiting for plugin refresh', (
     tester,
   ) async {
     final registryResponse = Completer<List<Object?>>();
@@ -2133,26 +2537,32 @@ void main() {
     final initialRegistryReads = registryReads;
     delayRegistry = true;
     final menuButton = find.byKey(const ValueKey('home-menu-button'));
-    await tester.tap(menuButton);
-    await tester.pump();
-    await tester.tap(menuButton);
+    final press = await tester.startGesture(tester.getCenter(menuButton));
     await tester.pump();
     expect(registryReads, initialRegistryReads + 1);
     expect(
-      find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
-      findsNothing,
+      find.byWidgetPredicate((widget) => widget is PopupMenuItem<VoidCallback>),
+      findsNWidgets(5),
     );
+    await press.up();
+    await tester.pumpAndSettle();
 
+    final coveredHomeBuilds = HomeDrawerState.debugBuildCount;
     registryResponse.complete(<Object?>[]);
     await tester.pumpAndSettle();
     expect(
-      find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
-      findsNWidgets(7),
+      HomeDrawerState.debugBuildCount,
+      coveredHomeBuilds,
+      reason: 'The popup refresh must not rebuild its covered parent page',
+    );
+    expect(
+      find.byWidgetPredicate((widget) => widget is PopupMenuItem<VoidCallback>),
+      findsNWidgets(5),
     );
     await tester.tapAt(const Offset(4, 4));
     await tester.pumpAndSettle();
     expect(
-      find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
+      find.byWidgetPredicate((widget) => widget is PopupMenuItem<VoidCallback>),
       findsNothing,
     );
 
@@ -2160,8 +2570,8 @@ void main() {
     await tester.tap(menuButton);
     await tester.pumpAndSettle();
     expect(
-      find.byWidgetPredicate((widget) => widget is PopupMenuItem<int>),
-      findsNWidgets(7),
+      find.byWidgetPredicate((widget) => widget is PopupMenuItem<VoidCallback>),
+      findsNWidgets(5),
     );
     expect(registryReads, initialRegistryReads + 2);
     expect(tester.takeException(), isNull);
@@ -3411,7 +3821,7 @@ void main() {
     expect(rawState, contains('__home_drawer_scheduled__'));
     expect(rawState, contains('__home_drawer_pinned__'));
     expect(rawState, contains('__home_drawer_scheduled_agent:1'));
-    expect(rawState, contains(dateKey));
+    expect(rawState, isNot(contains(dateKey)));
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
@@ -3424,7 +3834,7 @@ void main() {
     expect(find.text('主会话').hitTestable(), findsNothing);
     expect(find.text('子运行会话').hitTestable(), findsNothing);
     expect(find.text('重点对话').hitTestable(), findsNothing);
-    expect(find.text('普通会话').hitTestable(), findsNothing);
+    expect(find.text('普通会话').hitTestable(), findsOneWidget);
   });
 
   testWidgets('keeps default history flat and identifies each Agent Harness', (

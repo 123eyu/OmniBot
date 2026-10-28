@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ui/features/home/pages/chat/widgets/acp_config_button.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/chat_input_area.dart';
 import 'package:ui/theme/app_theme.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
 import 'package:ui/widgets/omni_menu.dart';
 
 void main() {
@@ -13,6 +14,170 @@ void main() {
     const ValueKey('chat-input-add-or-cancel-edit-button'),
   );
   final send = find.byKey(const ValueKey('chat-input-send-or-stop-button'));
+
+  for (final dark in [false, true]) {
+    for (final quality in LiquidGlassQuality.values) {
+      testWidgets(
+        'glass capsule follows scaled height and expands with the editor '
+        '(dark=$dark, quality=$quality)',
+        (tester) async {
+          final fixture = _ComposerFixture(tester);
+          await fixture.pump(
+            glass: true,
+            quality: quality,
+            dark: dark,
+            textScale: 2,
+          );
+          final pane = find.descendant(
+            of: shell,
+            matching: find.byType(LiquidGlass),
+          );
+          expect(pane, findsOneWidget);
+          final initialSize = tester.getSize(shell);
+          expect(initialSize.height, greaterThan(50));
+          final collapsedGlass = tester.widget<LiquidGlass>(pane);
+          // Wide capsules must use the shader's corner geometry, not its
+          // generic radial path profile (which pinches the long edges).
+          expect(collapsedGlass.clipper, isNull);
+          expect(
+            collapsedGlass.borderRadiusResolver!(initialSize),
+            BorderRadius.circular(initialSize.height / 2),
+          );
+          expect(
+            collapsedGlass.style,
+            LiquidGlassStyle.regular(
+              Theme.of(tester.element(pane)).colorScheme,
+            ),
+          );
+          final editor = tester.state<EditableTextState>(
+            find.byType(EditableText),
+          );
+          fixture.controller.value = const TextEditingValue(
+            text: 'One\nTwo\nThree\nFour',
+            selection: TextSelection.collapsed(offset: 7),
+            composing: TextRange(start: 4, end: 7),
+          );
+          fixture.focus.requestFocus();
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 80));
+          final intermediateHeight = tester.getSize(shell).height;
+          expect(intermediateHeight, greaterThan(initialSize.height));
+          await tester.pumpAndSettle();
+          expect(tester.getSize(shell).height, greaterThan(intermediateHeight));
+          final expanded = tester.widget<LiquidGlass>(pane);
+          expect(
+            expanded.borderRadiusResolver!(tester.getSize(shell)),
+            BorderRadius.circular(20),
+          );
+          expect(tester.widget<TextField>(find.byType(TextField)).maxLines, 6);
+          expect(
+            tester.state<EditableTextState>(find.byType(EditableText)),
+            same(editor),
+          );
+          expect(fixture.controller.selection.baseOffset, 7);
+          expect(
+            fixture.controller.value.composing,
+            const TextRange(start: 4, end: 7),
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets(
+    'attachments remain outside the idle capsule and keep send/remove',
+    (tester) async {
+      final fixture = _ComposerFixture(tester);
+      var sends = 0;
+      String? removed;
+      await fixture.pump(
+        glass: true,
+        attachments: const [
+          ChatInputAttachment(
+            id: 'file-a',
+            name: 'notes.txt',
+            path: '/tmp/notes.txt',
+            isImage: false,
+          ),
+        ],
+        onRemoveAttachment: (id) => removed = id,
+        onSend: () => sends++,
+      );
+      expect(tester.getSize(shell).height, 50);
+      expect(
+        tester.getRect(find.text('notes.txt')).bottom,
+        lessThan(tester.getRect(shell).top),
+      );
+      await tester.tap(send);
+      expect(sends, 1);
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      expect(removed, 'file-a');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('glass toggle preserves a focused multiline draft and editor', (
+    tester,
+  ) async {
+    final fixture = _ComposerFixture(tester);
+    await fixture.pump(glass: true);
+    fixture.focus.requestFocus();
+    fixture.controller.text = 'One\nTwo\nThree';
+    await tester.pumpAndSettle();
+    final editor = tester.state<EditableTextState>(find.byType(EditableText));
+    final height = tester.getSize(shell).height;
+    await fixture.pump(glass: false);
+    expect(
+      find.descendant(of: shell, matching: find.byType(LiquidGlass)),
+      findsNothing,
+    );
+    expect(tester.getSize(shell).height, height);
+    expect(fixture.focus.hasFocus, isTrue);
+    expect(fixture.controller.text, 'One\nTwo\nThree');
+    expect(
+      tester.state<EditableTextState>(find.byType(EditableText)),
+      same(editor),
+    );
+    await fixture.pump(glass: true);
+    expect(tester.getSize(shell).height, height);
+    expect(
+      tester.state<EditableTextState>(find.byType(EditableText)),
+      same(editor),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'command composer uses steady glass and preserves multiline space',
+    (tester) async {
+      final fixture = _ComposerFixture(tester);
+      await fixture.pump(glass: true, minimalComposer: false);
+      final area = find.byType(ChatInputArea);
+      final emptyHeight = tester.getSize(area).height;
+      final flowBorder = find.byWidgetPredicate(
+        (widget) =>
+            widget is CustomPaint &&
+            widget.painter.runtimeType.toString() ==
+                '_ComposerFlowBorderPainter',
+      );
+      expect(flowBorder, findsNothing);
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      fixture.controller.text = 'One\nTwo\nThree';
+      await tester.pumpAndSettle();
+      expect(tester.getSize(area).height, greaterThan(emptyHeight));
+      expect(tester.widget<TextField>(find.byType(TextField)).maxLines, 3);
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      await fixture.pump(
+        glass: false,
+        minimalComposer: false,
+        disableAnimations: true,
+      );
+      expect(flowBorder, findsOneWidget);
+      expect(fixture.controller.text, 'One\nTwo\nThree');
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'collapsed model is hidden without disposing its configuration owner',
@@ -485,6 +650,9 @@ class _ComposerFixture {
   final key = GlobalKey<ChatInputAreaState>();
 
   Future<void> pump({
+    bool glass = false,
+    LiquidGlassQuality quality = LiquidGlassQuality.standard,
+    bool minimalComposer = true,
     bool disableAnimations = false,
     bool dark = false,
     double textScale = 1,
@@ -503,10 +671,17 @@ class _ComposerFixture {
     VoidCallback? onSend,
     VoidCallback? onCancel,
     VoidCallback? onCancelEditing,
+    List<ChatInputAttachment> attachments = const [],
+    ValueChanged<String>? onRemoveAttachment,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: dark ? AppTheme.darkTheme : AppTheme.lightTheme,
+        builder: (context, child) => LiquidGlassScope(
+          enabled: glass,
+          quality: quality,
+          child: LiquidGlassHost(enabled: glass, child: child!),
+        ),
         home: MediaQuery(
           data: MediaQueryData(
             size: const Size(390, 858),
@@ -525,7 +700,8 @@ class _ComposerFixture {
                     key: key,
                     controller: controller,
                     focusNode: focus,
-                    minimalComposer: true,
+                    minimalComposer: minimalComposer,
+                    useLargeComposerStyle: !minimalComposer,
                     isProcessing: isProcessing,
                     hasExternalSendPayload: hasExternalPayload,
                     isEditingUserMessage: isEditing,
@@ -534,6 +710,8 @@ class _ComposerFixture {
                     onCancelTask: onCancel ?? () {},
                     onPickImages: onPickImages,
                     onPickAttachment: onPickAttachment,
+                    attachments: attachments,
+                    onRemoveAttachment: onRemoveAttachment,
                     agentPermissionMode: onPermission == null
                         ? null
                         : AgentPermissionMode.defaultMode,

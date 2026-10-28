@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:ui/widgets/flclash/popup.dart';
 import 'package:flutter/material.dart';
 import 'package:ui/services/chat_detail_sheet_preferences.dart';
 import 'package:ui/services/omnibot_resource_service.dart';
@@ -621,7 +622,10 @@ class _OmnibotArtifactPreviewPageState
     }
     if (widget.exists) {
       actions.add(
-        Builder(
+        FlClashPopupSource(
+          glass: false,
+          color: Colors.transparent,
+          shape: const CircleBorder(),
           builder: (anchorContext) => IconButton(
             key: const ValueKey('artifact-preview-more-actions'),
             tooltip: Localizations.localeOf(context).languageCode == 'en'
@@ -633,6 +637,7 @@ class _OmnibotArtifactPreviewPageState
               if (anchor == null) return;
               final action = await showOmniMenu<_ArtifactPreviewAction>(
                 context: anchorContext,
+                sourceContext: anchorContext,
                 anchor: anchor,
                 items: [
                   if (widget.previewKind == 'html')
@@ -771,7 +776,7 @@ Future<void> showOmnibotArtifactPreviewSheet(
     return;
   }
 
-  await showModalBottomSheet<void>(
+  await showOmniGlassBottomSheet<void>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,

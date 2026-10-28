@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/constants/storage_keys.dart';
 import 'package:ui/core/router/go_router_manager.dart';
@@ -114,7 +115,7 @@ class _StartupAccountPromptState extends State<StartupAccountPrompt> {
           GoRouterManager.rootNavigatorKey.currentState;
       final navigatorContext = navigator?.context;
       if (navigatorContext == null || !navigatorContext.mounted) return;
-      final dialogResult = await showDialog<bool>(
+      final dialogResult = await showOmniGlassCardSheet<bool>(
         context: navigatorContext,
         barrierDismissible: true,
         builder: (dialogContext) => _StartupAccountCard(
@@ -148,112 +149,102 @@ class _StartupAccountCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    final availableHeight = MediaQuery.sizeOf(context).height - 40;
-    return Dialog(
+    return OmniGlassCardBody(
       key: const ValueKey('startup-account-card'),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
-      backgroundColor: palette.surfacePrimary,
-      surfaceTintColor: Colors.transparent,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 480, maxHeight: availableHeight),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final desiredHeaderHeight = (constraints.maxWidth / 2.2).clamp(
-              132.0,
-              190.0,
-            );
-            final sloganFontSize = (constraints.maxWidth * 0.05).clamp(
-              18.0,
-              22.0,
-            );
-            final cardHeight = (desiredHeaderHeight + 372).clamp(
-              0.0,
-              constraints.maxHeight,
-            );
-            final headerHeight = desiredHeaderHeight.clamp(
-              0.0,
-              cardHeight * 0.36,
-            );
-            return SizedBox(
-              key: const ValueKey('startup-account-card-content'),
-              height: cardHeight,
-              child: Column(
-                children: [
-                  SizedBox(
-                    key: const ValueKey('startup-account-card-header'),
-                    height: headerHeight,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.asset(
-                          context.isDarkTheme ? _darkHeader : _lightHeader,
-                          key: const ValueKey('startup-account-header-image'),
-                          fit: BoxFit.cover,
-                          alignment: context.isDarkTheme
-                              ? Alignment.centerRight
-                              : Alignment.center,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final desiredHeaderHeight = (constraints.maxWidth / 2.2).clamp(
+            132.0,
+            190.0,
+          );
+          final sloganFontSize = (constraints.maxWidth * 0.05).clamp(
+            18.0,
+            22.0,
+          );
+          final cardHeight = (desiredHeaderHeight + 372).clamp(
+            0.0,
+            constraints.maxHeight,
+          );
+          final headerHeight = desiredHeaderHeight.clamp(
+            0.0,
+            cardHeight * 0.36,
+          );
+          return SizedBox(
+            key: const ValueKey('startup-account-card-content'),
+            height: cardHeight,
+            child: Column(
+              children: [
+                SizedBox(
+                  key: const ValueKey('startup-account-card-header'),
+                  height: headerHeight,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.asset(
+                        context.isDarkTheme ? _darkHeader : _lightHeader,
+                        key: const ValueKey('startup-account-header-image'),
+                        fit: BoxFit.cover,
+                        alignment: context.isDarkTheme
+                            ? Alignment.centerRight
+                            : Alignment.center,
+                      ),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: <Color>[
+                              Colors.transparent,
+                              (context.isDarkTheme
+                                      ? Colors.black
+                                      : Colors.white)
+                                  .withValues(alpha: 0.32),
+                            ],
+                            stops: const <double>[0.42, 1],
+                          ),
                         ),
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: <Color>[
-                                Colors.transparent,
-                                (context.isDarkTheme
-                                        ? Colors.black
-                                        : Colors.white)
-                                    .withValues(alpha: 0.32),
-                              ],
-                              stops: const <double>[0.42, 1],
+                      ),
+                      Positioned(
+                        left: 20,
+                        right: 68,
+                        bottom: 18,
+                        child: _StartupAccountSlogan(fontSize: sloganFontSize),
+                      ),
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: IconButton(
+                          key: const ValueKey('startup-account-close'),
+                          tooltip:
+                              Localizations.localeOf(context).languageCode ==
+                                  'zh'
+                              ? '关闭并不再提醒'
+                              : 'Close and don\'t remind me again',
+                          onPressed: () => Navigator.of(context).pop(false),
+                          style: IconButton.styleFrom(
+                            backgroundColor: palette.surfacePrimary.withValues(
+                              alpha: 0.82,
                             ),
+                            foregroundColor: palette.textPrimary,
+                            minimumSize: const Size.square(44),
                           ),
+                          icon: const Icon(LucideIcons.x, size: 20),
                         ),
-                        Positioned(
-                          left: 20,
-                          right: 68,
-                          bottom: 18,
-                          child: _StartupAccountSlogan(
-                            fontSize: sloganFontSize,
-                          ),
-                        ),
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: IconButton(
-                            key: const ValueKey('startup-account-close'),
-                            tooltip:
-                                Localizations.localeOf(context).languageCode ==
-                                    'zh'
-                                ? '关闭并不再提醒'
-                                : 'Close and don\'t remind me again',
-                            onPressed: () => Navigator.of(context).pop(false),
-                            style: IconButton.styleFrom(
-                              backgroundColor: palette.surfacePrimary
-                                  .withValues(alpha: 0.82),
-                              foregroundColor: palette.textPrimary,
-                              minimumSize: const Size.square(44),
-                            ),
-                            icon: const Icon(LucideIcons.x, size: 20),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  Expanded(
-                    child: AccountPage.authOnly(
-                      key: const ValueKey('startup-account-auth-form'),
-                      showAuthHeading: false,
-                      onAuthenticated: onAuthenticated,
-                    ),
+                ),
+                Expanded(
+                  child: AccountPage.authOnly(
+                    key: const ValueKey('startup-account-auth-form'),
+                    showAuthHeading: false,
+                    onAuthenticated: onAuthenticated,
                   ),
-                ],
-              ),
-            );
-          },
-        ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

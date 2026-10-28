@@ -7,6 +7,7 @@ import 'package:ui/constants/storage_keys.dart';
 import 'package:ui/services/account_service.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/widgets/startup_account_prompt.dart';
 
 void main() {
@@ -73,6 +74,11 @@ void main() {
       expect(
         find.byKey(const ValueKey('startup-account-card')),
         findsOneWidget,
+      );
+      expect(find.byType(Dialog), findsNothing);
+      expect(
+        tester.getRect(find.byType(OmniGlassPanel)).bottom,
+        closeTo(844, 1),
       );
       final header = tester.widget<Image>(
         find.byKey(const ValueKey('startup-account-header-image')),
@@ -252,6 +258,45 @@ void main() {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('account form remains usable above the keyboard', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+    final navigatorKey = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        theme: AppTheme.lightTheme,
+        home: StartupAccountPrompt(
+          navigatorKey: navigatorKey,
+          refreshVersionPolicy: () async {},
+          loadSession: () async =>
+              const AccountSessionState(configured: true, signedIn: false),
+          child: const Scaffold(body: Text('home')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.getRect(find.byType(OmniGlassPanel)).bottom, closeTo(524, 1));
+    await tester.tap(find.byKey(const ValueKey('account-auth-mode-register')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('account-register-email')),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('account-register-email')),
+      'person@example.com',
+    );
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const ValueKey('startup-account-close')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('startup-account-card')), findsNothing);
   });
 
   testWidgets('does not prompt an already signed-in user', (tester) async {

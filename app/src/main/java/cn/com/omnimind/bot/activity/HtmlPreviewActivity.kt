@@ -23,7 +23,6 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
-import android.widget.PopupMenu
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -36,6 +35,7 @@ import androidx.lifecycle.lifecycleScope
 import cn.com.omnimind.baselib.i18n.AppLocaleManager
 import cn.com.omnimind.bot.R
 import cn.com.omnimind.bot.resource.ResourceFileIntents
+import cn.com.omnimind.bot.ui.components.FlClashPopupMenu
 import cn.com.omnimind.bot.util.PredictiveBackGate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +63,7 @@ class HtmlPreviewActivity : ComponentActivity() {
     private lateinit var errorView: TextView
     private var failed = false
     private var dark = false
+    private var actionMenu: FlClashPopupMenu? = null
     private val english get() = AppLocaleManager.isEnglish(this)
     private fun text(zh: String, en: String) = if (english) en else zh
 
@@ -173,8 +174,14 @@ class HtmlPreviewActivity : ComponentActivity() {
             FrameLayout.LayoutParams(dp(48), dp(48), Gravity.START or Gravity.CENTER_VERTICAL))
         val more = iconButton(R.drawable.ic_html_preview_more,
             text("更多操作", "More actions"), foreground) { showMenu(it) }
+        more.background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(if (dark) Color.rgb(33, 33, 33) else Color.WHITE)
+            cornerRadius = dp(22).toFloat()
+        }
         toolbar.addView(more,
-            FrameLayout.LayoutParams(dp(48), dp(48), Gravity.END or Gravity.CENTER_VERTICAL))
+            FrameLayout.LayoutParams(dp(44), dp(44), Gravity.END or Gravity.CENTER_VERTICAL).apply {
+                marginEnd = dp(16)
+            })
         root.addView(toolbar, LinearLayout.LayoutParams(-1, dp(56)))
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -283,22 +290,14 @@ class HtmlPreviewActivity : ComponentActivity() {
     }
 
     private fun showMenu(anchor: View) {
-        PopupMenu(this, anchor).apply {
-            menu.add(0, 1, 0, text("重新加载", "Reload"))
-            menu.add(0, 2, 1, text("在浏览器打开", "Open in browser"))
-            menu.add(0, 3, 2, text("保存到设备", "Save to device"))
-            menu.add(0, 4, 3, text("系统打开", "Open with system"))
-            menu.add(0, 5, 4, text("分享文件", "Share file"))
-            setOnMenuItemClickListener { item ->
-                when (item.itemId) {
-                    1 -> reload()
-                    3 -> saveDocument.launch(source.name)
-                    else -> exportFile(item.itemId)
-                }
-                true
-            }
-            show()
-        }
+        actionMenu?.dispose()
+        actionMenu = FlClashPopupMenu(anchor, dark, listOf(
+            FlClashPopupMenu.Item(text("重新加载", "Reload")) { reload() },
+            FlClashPopupMenu.Item(text("在浏览器打开", "Open in browser")) { exportFile(2) },
+            FlClashPopupMenu.Item(text("保存到设备", "Save to device")) { saveDocument.launch(source.name) },
+            FlClashPopupMenu.Item(text("系统打开", "Open with system")) { exportFile(4) },
+            FlClashPopupMenu.Item(text("分享文件", "Share file")) { exportFile(5) },
+        )).also { it.show() }
     }
 
     private fun exportFile(action: Int) {
@@ -340,6 +339,8 @@ class HtmlPreviewActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        actionMenu?.dispose()
+        actionMenu = null
         webView?.onPause()
         super.onPause()
     }
@@ -350,6 +351,8 @@ class HtmlPreviewActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        actionMenu?.dispose()
+        actionMenu = null
         webView?.let { view ->
             webView = null
             (view.parent as? ViewGroup)?.removeView(view)

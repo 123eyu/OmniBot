@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_segmented_slider.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/my/pages/account/account_lifecycle_sheets.dart';
@@ -1574,107 +1575,24 @@ class _AccountPageState extends State<AccountPage> {
     _authSwipeDelta = Offset.zero;
   }
 
-  Widget _authModeSelector() {
-    final palette = context.omniPalette;
-    final isDark = context.isDarkTheme;
-    return Container(
-      key: const Key('account-auth-mode-selector'),
-      height: 38,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: palette.segmentTrack,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: palette.borderSubtle.withValues(alpha: isDark ? 0.55 : 0.7),
-          width: 0.65,
-        ),
+  Widget _authModeSelector() => OmniSegmentedSlider<bool>(
+    key: const Key('account-auth-mode-selector'),
+    keyPrefix: 'account-auth-mode',
+    value: _registerMode,
+    options: [
+      OmniSegmentedOption(
+        value: false,
+        label: _text('登录', 'Sign in'),
+        id: 'login',
       ),
-      child: Stack(
-        children: [
-          AnimatedAlign(
-            key: const Key('account-auth-mode-thumb-align'),
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            alignment: _registerMode
-                ? Alignment.centerRight
-                : Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: 0.5,
-              child: Container(
-                key: const Key('account-auth-mode-thumb'),
-                margin: const EdgeInsets.symmetric(horizontal: 1),
-                decoration: BoxDecoration(
-                  color: palette.segmentThumb,
-                  borderRadius: BorderRadius.circular(9.5),
-                  border: Border.all(
-                    color: palette.borderSubtle.withValues(
-                      alpha: isDark ? 0.45 : 0.55,
-                    ),
-                    width: 0.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: palette.shadowColor.withValues(
-                        alpha: isDark ? 0.16 : 0.04,
-                      ),
-                      blurRadius: 3,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Row(
-            children: [
-              _authModeButton(_text('登录', 'Sign in'), false),
-              _authModeButton(_text('注册', 'Register'), true),
-            ],
-          ),
-        ],
+      OmniSegmentedOption(
+        value: true,
+        label: _text('注册', 'Register'),
+        id: 'register',
       ),
-    );
-  }
-
-  Widget _authModeButton(String label, bool register) {
-    final palette = context.omniPalette;
-    final selected = _registerMode == register;
-    return Expanded(
-      child: Semantics(
-        button: true,
-        selected: selected,
-        child: GestureDetector(
-          key: ValueKey(
-            register ? 'account-auth-mode-register' : 'account-auth-mode-login',
-          ),
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            if (_registerMode != register) {
-              performOmniSelectionHaptic();
-            }
-            _selectAuthMode(register);
-          },
-          child: Center(
-            child: AnimatedScale(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              scale: selected ? 1 : 0.97,
-              child: AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                style: TextStyle(
-                  color: selected ? palette.textPrimary : palette.textSecondary,
-                  fontSize: 13.5,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                ),
-                child: Text(label),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+    ],
+    onChanged: _selectAuthMode,
+  );
 
   Widget _buildSignedIn(AccountOverview overview) {
     final settings = overview.settings;

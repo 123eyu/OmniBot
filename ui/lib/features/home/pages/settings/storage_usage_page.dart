@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
@@ -18,7 +20,8 @@ class StorageUsagePage extends StatefulWidget {
   State<StorageUsagePage> createState() => _StorageUsagePageState();
 }
 
-class _StorageUsagePageState extends State<StorageUsagePage> {
+class _StorageUsagePageState extends State<StorageUsagePage>
+    with FlClashPageLoadMixin {
   bool _loading = true;
   String? _error;
   String? _clearingCategoryId;
@@ -65,6 +68,7 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
   }
 
   Future<void> _loadSummary({bool silent = false}) async {
+    if (!await waitForPageReady() || !mounted) return;
     if (!silent) {
       setState(() {
         _loading = true;
@@ -73,14 +77,14 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
     }
     try {
       final summary = await StorageUsageService.getStorageUsageSummary();
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       setState(() {
         _summary = summary;
         _loading = false;
         _error = null;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       setState(() {
         _loading = false;
         _error = _t(
@@ -156,13 +160,13 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
   Future<int?> _showClearOptionsDialog(StorageUsageCategory category) async {
     int selected = 0;
     final canRetention = category.riskLevel != 'dangerous';
-    return showDialog<int>(
+    return showOmniGlassCardSheet<int>(
       context: context,
       builder: (dialogContext) {
         final palette = dialogContext.omniPalette;
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
-            return AlertDialog(
+            return OmniGlassAlertDialog(
               backgroundColor: palette.surfacePrimary,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -239,11 +243,11 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
   }
 
   Future<void> _applyStrategy(StorageCleanupStrategyPreset preset) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showOmniGlassCardSheet<bool>(
       context: context,
       builder: (dialogContext) {
         final palette = dialogContext.omniPalette;
-        return AlertDialog(
+        return OmniGlassAlertDialog(
           backgroundColor: palette.surfacePrimary,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),

@@ -11,6 +11,7 @@ import 'package:ui/features/home/pages/chat/widgets/chat_spotlight_tour.dart';
 import 'package:ui/features/welcome/pages/onboarding/onboarding_choice_page.dart';
 import 'package:ui/features/welcome/pages/onboarding/onboarding_definitions.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
+import 'package:ui/services/models_dev_catalog_service.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
@@ -112,6 +113,9 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await StorageService.init();
+    ModelsDevCatalogService.setCatalogForTesting(
+      const ModelsDevCatalog(providers: {}),
+    );
     savedDistribution = '';
     requestedPackageIds = <String>[];
     terminalSnapshot = <String, dynamic>{
@@ -246,6 +250,7 @@ void main() {
   });
 
   tearDown(() {
+    ModelsDevCatalogService.resetForTesting();
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(terminalChannel, null);

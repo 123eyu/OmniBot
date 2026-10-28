@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show setEquals, visibleForTesting;
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,7 @@ import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_c
 import 'package:ui/features/home/widgets/conversation_context_menu.dart';
 import 'package:ui/features/home/widgets/conversation_slidable.dart';
 import 'package:ui/features/home/widgets/home_drawer_search_field.dart';
+import 'package:ui/features/home/widgets/home_conversation_tile_content.dart';
 import 'package:ui/features/home/widgets/home_search_header.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
@@ -40,8 +42,12 @@ import 'package:ui/utils/cache_util.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
 import 'package:ui/widgets/app_update_dialog.dart';
+import 'package:ui/widgets/flclash/popup.dart';
+import 'package:ui/widgets/flclash/search_header.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/omni_menu.dart';
+import 'package:ui/widgets/omni_glass_floating_action_button.dart';
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:ui/widgets/settings_ui.dart';
 
 part 'home_drawer_actions.dart';
@@ -121,6 +127,7 @@ class HomeDrawer extends ConsumerStatefulWidget {
     this.searchFieldKey,
     this.deferInitialLoad = false,
     this.homePage = false,
+    this.active = true,
   });
 
   final int? memoryCount;
@@ -141,11 +148,15 @@ class HomeDrawer extends ConsumerStatefulWidget {
   /// Search, history mutations and running-session status remain shared.
   final bool homePage;
 
+  /// Kept-alive home tabs refresh their catalog when selected again.
+  final bool active;
+
   @override
   ConsumerState<HomeDrawer> createState() => HomeDrawerState();
 }
 
-class HomeDrawerState extends ConsumerState<HomeDrawer> {
+class HomeDrawerState extends ConsumerState<HomeDrawer>
+    with FlClashPageLoadMixin {
   static const Duration _searchDebounceDuration = Duration(milliseconds: 220);
   static const Duration _sectionToggleDuration = Duration(milliseconds: 260);
   static const Duration _imagePreviewStripTransitionDuration = Duration(
@@ -189,7 +200,9 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
   bool isLoadingConversations = true;
   bool _isSearching = false;
   bool _homeSearchVisible = false;
-  bool _homeMenuOpening = false;
+  final _homeMenuRevision = ValueNotifier<int>(0);
+  List<OmniPluginActionItem> _homeMenuWebQuickActions = const [];
+  int _webQuickActionsRequest = 0;
   _HomeConversationFilter _homeFilter = _HomeConversationFilter.xiaowan;
   AcpAgentCatalog? _homeAgentCatalog;
   bool _homeRouteWasCurrent = false;
@@ -283,6 +296,14 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
   }
 
   @override
+  void didUpdateWidget(covariant HomeDrawer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.homePage && widget.active && !oldWidget.active) {
+      unawaited(_loadHomeAgentCatalog());
+    }
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!widget.homePage) return;
@@ -295,6 +316,7 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
 
   @override
   void dispose() {
+    _homeMenuRevision.dispose();
     _homeAppLifecycleListener?.dispose();
     _searchDebounceTimer?.cancel();
     _settledReloadTimer?.cancel();
@@ -372,35 +394,64 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
     _settledReloadTimer = null;
   }
 
-  Future<void> _loadWebQuickActions() async {
+  Future<void> _loadWebQuickActions() =>
+      runPageLoad(#homePluginActions, _readWebQuickActions, revalidate: true);
+
+  Future<List<OmniPluginActionItem>> _queryWebQuickActions() async {
+    final actions = await OmniPluginService.listActions();
+    return actions
+        .where(
+          (action) =>
+              action.supportsPlacement('home_drawer_quick_launch') &&
+              (action.presentation['agentId']?.toString().trim().isNotEmpty ??
+                  false),
+        )
+        .toList(growable: false)
+      ..sort((left, right) {
+        final order = left.quickLaunchOrder.compareTo(right.quickLaunchOrder);
+        return order != 0
+            ? order
+            : left.displayName.compareTo(right.displayName);
+      });
+  }
+
+  /// The open popup owns this snapshot. Its parent route is intentionally not
+  /// current while the menu is visible, so only the parent's cache publication
+  /// waits for that route to settle; the menu's registry read cannot use it.
+  Future<void> _refreshHomeMenuWebQuickActions() async {
+    _homeMenuWebQuickActions = _webQuickActions;
+    final request = ++_webQuickActionsRequest;
+    List<OmniPluginActionItem> actions;
     try {
-      final actions = await OmniPluginService.listActions();
-      if (!mounted) return;
-      final quickActions =
-          actions
-              .where(
-                (action) =>
-                    action.supportsPlacement('home_drawer_quick_launch') &&
-                    (action.presentation['agentId']
-                            ?.toString()
-                            .trim()
-                            .isNotEmpty ??
-                        false),
-              )
-              .toList(growable: false)
-            ..sort((left, right) {
-              final order = left.quickLaunchOrder.compareTo(
-                right.quickLaunchOrder,
-              );
-              return order != 0
-                  ? order
-                  : left.displayName.compareTo(right.displayName);
-            });
+      actions = await _queryWebQuickActions();
+    } catch (error) {
+      debugPrint('[HomeDrawer] failed to load menu Web quick actions: $error');
+      actions = const [];
+    }
+    if (!mounted || request != _webQuickActionsRequest) return;
+    _homeMenuWebQuickActions = actions;
+    _homeMenuRevision.value++;
+    if (!await waitForPageReady() || request != _webQuickActionsRequest) return;
+    setState(() => _webQuickActions = actions);
+  }
+
+  Future<void> _readWebQuickActions() async {
+    final request = ++_webQuickActionsRequest;
+    try {
+      final quickActions = await _queryWebQuickActions();
+      if (!await waitForPageReady() ||
+          request != _webQuickActionsRequest ||
+          !pageLoadIsCurrent(#homePluginActions)) {
+        return;
+      }
       setState(() => _webQuickActions = quickActions);
       unawaited(_refreshWebQuickActionStatuses());
     } catch (error) {
       debugPrint('[HomeDrawer] failed to load Web quick actions: $error');
-      if (mounted && _webQuickActions.isNotEmpty) {
+      if (await waitForPageReady() &&
+          request == _webQuickActionsRequest &&
+          pageLoadIsCurrent(#homePluginActions) &&
+          _webQuickActions.isNotEmpty) {
         setState(() => _webQuickActions = const <OmniPluginActionItem>[]);
       }
     }
@@ -408,7 +459,13 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
 
   /// Probes the managed Web processes behind the quick launch chips so a
   /// running service is visibly marked and offers a stop affordance.
-  Future<void> _refreshWebQuickActionStatuses() async {
+  Future<void> _refreshWebQuickActionStatuses() => runPageLoad(
+    #homeWebStatus,
+    _readWebQuickActionStatuses,
+    revalidate: true,
+  );
+
+  Future<void> _readWebQuickActionStatuses() async {
     final actions = _webQuickActions
         .where(AgentWebStatusService.supportsLifecycle)
         .toList(growable: false);
@@ -421,7 +478,7 @@ class HomeDrawerState extends ConsumerState<HomeDrawer> {
       return;
     }
     final statuses = await AgentWebStatusService.queryAll(actions);
-    if (!mounted) return;
+    if (!await waitForPageReady() || !pageLoadIsCurrent(#homeWebStatus)) return;
     setState(() => _webQuickActionStatuses = statuses);
   }
 

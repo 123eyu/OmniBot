@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/features/home/pages/agent/agent_config_page.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/services/model_provider_config_service.dart';
+import 'package:ui/services/models_dev_catalog_service.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/widgets/predictive_back_gesture_wrapper.dart';
@@ -36,9 +37,13 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await StorageService.init();
+    ModelsDevCatalogService.setCatalogForTesting(
+      const ModelsDevCatalog(providers: {}),
+    );
   });
 
   tearDown(() {
+    ModelsDevCatalogService.resetForTesting();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(agentRuntimeChannel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

@@ -41,14 +41,7 @@ extension _HomeDrawerSelection on HomeDrawerState {
       }
     }
     for (final result in _visibleConversationResults) {
-      if (_isConversationSectionExpanded(
-        _dateConversationSectionKeyForConversation(
-          result.conversation,
-          namespace: _kOmniAiDateSectionNamespace,
-        ),
-      )) {
-        add(result.conversation);
-      }
+      add(result.conversation);
     }
     return rows;
   }
@@ -134,9 +127,9 @@ extension _HomeDrawerSelection on HomeDrawerState {
     var submitted = false;
     try {
       if (delete) {
-        final confirmed = await showDialog<bool>(
+        final confirmed = await showOmniGlassCardSheet<bool>(
           context: context,
-          builder: (dialogContext) => AlertDialog(
+          builder: (dialogContext) => OmniGlassAlertDialog(
             title: Text(
               _selectionText('删除所选对话？', 'Delete selected conversations?'),
             ),

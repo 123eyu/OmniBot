@@ -1,4 +1,6 @@
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/models/remote_mcp_server.dart';
@@ -7,6 +9,7 @@ import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/omni_glass_floating_action_button.dart';
 import 'package:ui/widgets/settings_detail_sheet.dart';
 import 'package:ui/widgets/settings_section_title.dart';
 import 'package:ui/widgets/settings_ui.dart';
@@ -18,7 +21,8 @@ class RemoteMcpServersPage extends StatefulWidget {
   State<RemoteMcpServersPage> createState() => _RemoteMcpServersPageState();
 }
 
-class _RemoteMcpServersPageState extends State<RemoteMcpServersPage> {
+class _RemoteMcpServersPageState extends State<RemoteMcpServersPage>
+    with FlClashPageLoadMixin {
   bool _loading = true;
   final Set<String> _busyIds = {};
   List<RemoteMcpServer> _servers = [];
@@ -30,16 +34,17 @@ class _RemoteMcpServersPageState extends State<RemoteMcpServersPage> {
   }
 
   Future<void> _loadServers() async {
+    if (!await waitForPageReady() || !mounted) return;
     setState(() => _loading = true);
     try {
       final servers = await RemoteMcpConfigService.listServers();
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       setState(() {
         _servers = servers;
         _loading = false;
       });
     } on PlatformException catch (e) {
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       setState(() => _loading = false);
       showToast(
         e.message ??
@@ -49,7 +54,7 @@ class _RemoteMcpServersPageState extends State<RemoteMcpServersPage> {
         type: ToastType.error,
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       setState(() => _loading = false);
       showToast(
         Localizations.localeOf(context).languageCode == 'en'
@@ -188,10 +193,11 @@ class _RemoteMcpServersPageState extends State<RemoteMcpServersPage> {
   }
 
   Future<void> _showServerEditor({RemoteMcpServer? server}) async {
-    final saved = await showModalBottomSheet<RemoteMcpServer>(
+    final saved = await showOmniGlassBottomSheet<RemoteMcpServer>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.omniPalette.surfacePrimary,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -245,12 +251,20 @@ class _RemoteMcpServersPageState extends State<RemoteMcpServersPage> {
             : 'MCP 工具',
         primary: true,
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: palette.accentPrimary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        elevation: 2,
-        onPressed: () => _showServerEditor(),
-        child: const Icon(LucideIcons.plus),
+      floatingActionButton: OmniGlassFloatingActionButton(
+        builder: (context, glass) => FloatingActionButton(
+          backgroundColor: glass ? Colors.transparent : palette.accentPrimary,
+          foregroundColor: glass
+              ? palette.textPrimary
+              : Theme.of(context).colorScheme.onPrimary,
+          elevation: glass ? 0 : 2,
+          focusElevation: glass ? 0 : null,
+          hoverElevation: glass ? 0 : null,
+          highlightElevation: glass ? 0 : null,
+          disabledElevation: glass ? 0 : null,
+          onPressed: () => _showServerEditor(),
+          child: const Icon(LucideIcons.plus),
+        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -544,81 +558,87 @@ class _RemoteMcpServerEditorSheetState
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(
-        left: 22,
-        right: 22,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.server == null
-                ? (Localizations.localeOf(context).languageCode == 'en'
-                      ? 'Add MCP Service'
-                      : '添加 MCP 服务')
-                : (Localizations.localeOf(context).languageCode == 'en'
-                      ? 'Edit MCP Service'
-                      : '编辑 MCP 服务'),
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 16),
-          _InputField(
-            controller: _nameController,
-            focusNode: _nameFocusNode,
-            label: Localizations.localeOf(context).languageCode == 'en'
-                ? 'Name'
-                : '名称',
-          ),
-          const SizedBox(height: 12),
-          _InputField(
-            controller: _endpointController,
-            label: 'Endpoint URL',
-            hint: 'https://example.com/mcp',
-          ),
-          const SizedBox(height: 12),
-          _InputField(
-            controller: _tokenController,
-            label: Localizations.localeOf(context).languageCode == 'en'
-                ? 'Bearer Token (Optional)'
-                : 'Bearer Token（可选）',
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  Localizations.localeOf(context).languageCode == 'en'
-                      ? 'Enabled'
-                      : '启用',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: context.omniPalette.textPrimary,
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: OmniGlassSheet(
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.server == null
+                      ? (Localizations.localeOf(context).languageCode == 'en'
+                            ? 'Add MCP Service'
+                            : '添加 MCP 服务')
+                      : (Localizations.localeOf(context).languageCode == 'en'
+                            ? 'Edit MCP Service'
+                            : '编辑 MCP 服务'),
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              ),
-              OmniSettingsSwitch(
-                value: _enabled,
-                onToggle: (value) => setState(() => _enabled = value),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _submit,
-              child: Text(
-                Localizations.localeOf(context).languageCode == 'en'
-                    ? 'Save'
-                    : '保存',
-              ),
+                const SizedBox(height: 16),
+                _InputField(
+                  controller: _nameController,
+                  focusNode: _nameFocusNode,
+                  label: Localizations.localeOf(context).languageCode == 'en'
+                      ? 'Name'
+                      : '名称',
+                ),
+                const SizedBox(height: 12),
+                _InputField(
+                  controller: _endpointController,
+                  label: 'Endpoint URL',
+                  hint: 'https://example.com/mcp',
+                ),
+                const SizedBox(height: 12),
+                _InputField(
+                  controller: _tokenController,
+                  label: Localizations.localeOf(context).languageCode == 'en'
+                      ? 'Bearer Token (Optional)'
+                      : 'Bearer Token（可选）',
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        Localizations.localeOf(context).languageCode == 'en'
+                            ? 'Enabled'
+                            : '启用',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: context.omniPalette.textPrimary,
+                        ),
+                      ),
+                    ),
+                    OmniSettingsSwitch(
+                      value: _enabled,
+                      onToggle: (value) => setState(() => _enabled = value),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _submit,
+                    child: Text(
+                      Localizations.localeOf(context).languageCode == 'en'
+                          ? 'Save'
+                          : '保存',
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

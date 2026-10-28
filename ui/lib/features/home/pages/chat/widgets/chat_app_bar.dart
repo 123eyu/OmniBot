@@ -197,6 +197,7 @@ class ChatAppBar extends StatelessWidget {
     );
     final selected = await showOmniMenu<int>(
       context: anchorContext,
+      sourceContext: anchorContext,
       anchor: anchor,
       width: 260,
       requestFocus: false,
@@ -303,16 +304,14 @@ class ChatAppBar extends StatelessWidget {
               const SizedBox(width: 8),
               KeyedSubtree(
                 key: tutorialActionsAnchorKey,
-                child: Builder(
-                  builder: (anchorContext) => OmniCircleButton(
-                    key: const ValueKey('chat-app-bar-more-button'),
-                    icon: LucideIcons.ellipsis,
-                    size: _navigationButtonSize,
-                    tapTargetSize: MaterialTapTargetSize.padded,
-                    tooltip: english ? 'Conversation options' : '对话选项',
-                    foregroundColor: palette.textPrimary,
-                    onPressed: () => _openActionsMenu(anchorContext),
-                  ),
+                child: OmniCircleButton.popup(
+                  key: const ValueKey('chat-app-bar-more-button'),
+                  icon: LucideIcons.ellipsis,
+                  size: _navigationButtonSize,
+                  tapTargetSize: MaterialTapTargetSize.padded,
+                  tooltip: english ? 'Conversation options' : '对话选项',
+                  foregroundColor: palette.textPrimary,
+                  onOpen: _openActionsMenu,
                 ),
               ),
             ],

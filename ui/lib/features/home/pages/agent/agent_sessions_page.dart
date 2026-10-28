@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'dart:math' as math;
 
+import 'package:ui/widgets/glass_popup.dart';
+import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ui/features/home/pages/agent/codex_remote_directory_picker.dart';
@@ -322,115 +323,75 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
     }
   }
 
-  Future<void> _showSessionActions(_AgentSessionSummary session) async {
-    final action = await showModalBottomSheet<_AgentSessionAction>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: context.omniPalette.surfacePrimary,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+  Future<void> _showSessionActions(
+    _AgentSessionSummary session,
+    BuildContext anchorContext,
+  ) async {
+    final anchor = glassPopupAnchorFromContext(anchorContext);
+    if (anchor == null) return;
+    final actions = [
+      (
+        Icons.open_in_new_rounded,
+        _isEnglish ? 'Open session' : '打开 Session',
+        _AgentSessionAction.open,
       ),
-      builder: (sheetContext) {
-        final palette = context.omniPalette;
-        final mediaQuery = MediaQuery.of(sheetContext);
-        final availableHeight = math.max(
-          0.0,
-          mediaQuery.size.height - mediaQuery.viewPadding.vertical,
-        );
-        final maxHeight = math.min(
-          availableHeight,
-          mediaQuery.size.height * 0.82,
-        );
-        return SafeArea(
-          top: false,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxHeight),
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: OmniMenuStyle.panelPadding,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: palette.borderStrong,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      session.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: palette.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'PingFang SC',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildSessionActionTile(
-                      sheetContext,
-                      icon: Icons.open_in_new_rounded,
-                      label: _isEnglish ? 'Open session' : '打开 Session',
-                      action: _AgentSessionAction.open,
-                    ),
-                    _buildSessionActionTile(
-                      sheetContext,
-                      icon: Icons.folder_open_rounded,
-                      label: _isEnglish ? 'Open workspace' : '打开工作区',
-                      action: _AgentSessionAction.workspace,
-                    ),
-                    _buildSessionActionTile(
-                      sheetContext,
-                      icon: Icons.drive_file_rename_outline_rounded,
-                      label: _isEnglish ? 'Rename' : '重命名',
-                      action: _AgentSessionAction.rename,
-                    ),
-                    _buildSessionActionTile(
-                      sheetContext,
-                      icon: session.archived
-                          ? Icons.unarchive_outlined
-                          : Icons.archive_outlined,
-                      label: session.archived
-                          ? (_isEnglish ? 'Unarchive' : '取消归档')
-                          : (_isEnglish ? 'Archive' : '归档'),
-                      action: session.archived
-                          ? _AgentSessionAction.unarchive
-                          : _AgentSessionAction.archive,
-                    ),
-                    _buildSessionActionTile(
-                      sheetContext,
-                      icon: Icons.copy_rounded,
-                      label: _isEnglish ? 'Copy thread id' : '复制 Thread ID',
-                      action: _AgentSessionAction.copyThreadId,
-                    ),
-                    if (session.cwd.trim().isNotEmpty) ...[
-                      _buildSessionActionTile(
-                        sheetContext,
-                        icon: Icons.content_copy_rounded,
-                        label: _isEnglish ? 'Copy workspace path' : '复制工作区路径',
-                        action: _AgentSessionAction.copyCwd,
-                      ),
-                    ],
-                    const SizedBox(height: 6),
-                    Divider(height: 1, color: palette.borderSubtle),
-                    const SizedBox(height: 6),
-                    OmniMenuItem(
-                      onTap: () => Navigator.of(sheetContext).pop(),
-                      label: _isEnglish ? 'Cancel' : '取消',
-                      leading: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
-              ),
+      (
+        Icons.folder_open_rounded,
+        _isEnglish ? 'Open workspace' : '打开工作区',
+        _AgentSessionAction.workspace,
+      ),
+      (
+        Icons.drive_file_rename_outline_rounded,
+        _isEnglish ? 'Rename' : '重命名',
+        _AgentSessionAction.rename,
+      ),
+      (
+        session.archived ? Icons.unarchive_outlined : Icons.archive_outlined,
+        session.archived
+            ? (_isEnglish ? 'Unarchive' : '取消归档')
+            : (_isEnglish ? 'Archive' : '归档'),
+        session.archived
+            ? _AgentSessionAction.unarchive
+            : _AgentSessionAction.archive,
+      ),
+      (
+        Icons.copy_rounded,
+        _isEnglish ? 'Copy thread id' : '复制 Thread ID',
+        _AgentSessionAction.copyThreadId,
+      ),
+      if (session.cwd.trim().isNotEmpty)
+        (
+          Icons.content_copy_rounded,
+          _isEnglish ? 'Copy workspace path' : '复制工作区路径',
+          _AgentSessionAction.copyCwd,
+        ),
+    ];
+    final action = await showOmniMenu<_AgentSessionAction>(
+      context: context,
+      sourceContext: anchorContext,
+      anchor: anchor,
+      width: 300,
+      items: [
+        OmniPopupMenuItem(
+          enabled: false,
+          child: Text(
+            session.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        for (final (icon, label, value) in actions)
+          OmniPopupMenuItem(
+            value: value,
+            child: Row(
+              children: [
+                Icon(icon),
+                const SizedBox(width: OmniMenuStyle.iconGap),
+                Expanded(child: Text(label)),
+              ],
             ),
           ),
-        );
-      },
+      ],
     );
     if (!mounted || action == null) return;
     switch (action) {
@@ -455,21 +416,6 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
           _isEnglish ? 'Workspace path copied' : '已复制工作区路径',
         );
     }
-  }
-
-  Widget _buildSessionActionTile(
-    BuildContext sheetContext, {
-    required IconData icon,
-    required String label,
-    required _AgentSessionAction action,
-    bool destructive = false,
-  }) {
-    return OmniMenuItem(
-      onTap: () => Navigator.of(sheetContext).pop(action),
-      label: label,
-      leading: Icon(icon),
-      destructive: destructive,
-    );
   }
 
   Future<void> _renameSession(_AgentSessionSummary session) async {
@@ -902,13 +848,8 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                   ),
                 ),
               ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                constraints: const BoxConstraints.tightFor(
-                  width: 28,
-                  height: 28,
-                ),
-                padding: EdgeInsets.zero,
+              OmniCircleButton(
+                size: 32,
                 tooltip: _isEnglish ? 'Copy path' : '复制路径',
                 onPressed: () => unawaited(
                   _copyText(
@@ -916,11 +857,8 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                     _isEnglish ? 'Workspace path copied' : '已复制工作区路径',
                   ),
                 ),
-                icon: Icon(
-                  Icons.copy_rounded,
-                  size: 15,
-                  color: palette.textTertiary,
-                ),
+                icon: Icons.copy_rounded,
+                foregroundColor: palette.textTertiary,
               ),
             ],
           ),
@@ -1050,165 +988,162 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
     final palette = context.omniPalette;
     final opening = _openingThreadId == session.threadId;
     final statusColor = _statusColorForSession(session);
-    return Column(
-      children: [
-        Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
+    return Builder(
+      builder: (rowContext) => Column(
+        children: [
+          Material(
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(12),
-            onTap: opening ? null : () => unawaited(_openSession(session)),
-            onLongPress: () => unawaited(_showSessionActions(session)),
-            splashColor: palette.accentPrimary.withValues(alpha: 0.08),
-            highlightColor: Colors.transparent,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 14, 0, 14),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 7),
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: statusColor,
-                        shape: BoxShape.circle,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: opening ? null : () => unawaited(_openSession(session)),
+              onLongPress: () =>
+                  unawaited(_showSessionActions(session, rowContext)),
+              splashColor: palette.accentPrimary.withValues(alpha: 0.08),
+              highlightColor: Colors.transparent,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(4, 14, 0, 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 7),
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                session.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: palette.textPrimary,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.35,
-                                  fontFamily: 'PingFang SC',
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  session.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: palette.textPrimary,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.35,
+                                    fontFamily: 'PingFang SC',
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            _StatusPill(
-                              label: session.statusLabel,
-                              color: statusColor,
-                              compact: true,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _sessionMetaLine(session),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: palette.textSecondary,
-                            fontSize: 11,
-                            height: 1.35,
-                            fontFamily: 'PingFang SC',
+                              const SizedBox(width: 8),
+                              _StatusPill(
+                                label: session.statusLabel,
+                                color: statusColor,
+                                compact: true,
+                              ),
+                            ],
                           ),
-                        ),
-                        if (session.preview.isNotEmpty) ...[
-                          const SizedBox(height: 7),
+                          const SizedBox(height: 4),
                           Text(
-                            session.preview,
-                            maxLines: 2,
+                            _sessionMetaLine(session),
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: palette.textSecondary,
-                              fontSize: 12,
-                              height: 1.42,
+                              fontSize: 11,
+                              height: 1.35,
                               fontFamily: 'PingFang SC',
                             ),
                           ),
+                          if (session.preview.isNotEmpty) ...[
+                            const SizedBox(height: 7),
+                            Text(
+                              session.preview,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: palette.textSecondary,
+                                fontSize: 12,
+                                height: 1.42,
+                                fontFamily: 'PingFang SC',
+                              ),
+                            ),
+                          ],
+                          if (session.cwdLabel.isNotEmpty ||
+                              session.branch.isNotEmpty ||
+                              session.model.isNotEmpty ||
+                              session.timeLabel.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 6,
+                              children: [
+                                if (session.cwdLabel.isNotEmpty)
+                                  _SessionTag(
+                                    icon: Icons.folder_outlined,
+                                    label: session.cwdLabel,
+                                  ),
+                                if (session.branch.isNotEmpty)
+                                  _SessionTag(
+                                    icon: Icons.account_tree_outlined,
+                                    label: session.branch,
+                                  ),
+                                if (session.model.isNotEmpty)
+                                  _SessionTag(
+                                    icon: Icons.memory_rounded,
+                                    label: session.model,
+                                  ),
+                                if (session.timeLabel.isNotEmpty)
+                                  _SessionTag(
+                                    icon: Icons.schedule_rounded,
+                                    label: session.timeLabel,
+                                  ),
+                              ],
+                            ),
+                          ],
                         ],
-                        if (session.cwdLabel.isNotEmpty ||
-                            session.branch.isNotEmpty ||
-                            session.model.isNotEmpty ||
-                            session.timeLabel.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 6,
-                            children: [
-                              if (session.cwdLabel.isNotEmpty)
-                                _SessionTag(
-                                  icon: Icons.folder_outlined,
-                                  label: session.cwdLabel,
-                                ),
-                              if (session.branch.isNotEmpty)
-                                _SessionTag(
-                                  icon: Icons.account_tree_outlined,
-                                  label: session.branch,
-                                ),
-                              if (session.model.isNotEmpty)
-                                _SessionTag(
-                                  icon: Icons.memory_rounded,
-                                  label: session.model,
-                                ),
-                              if (session.timeLabel.isNotEmpty)
-                                _SessionTag(
-                                  icon: Icons.schedule_rounded,
-                                  label: session.timeLabel,
-                                ),
-                            ],
-                          ),
-                        ],
-                      ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  opening
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : IconButton(
-                          visualDensity: VisualDensity.compact,
-                          constraints: const BoxConstraints.tightFor(
-                            width: 34,
-                            height: 34,
+                    const SizedBox(width: 8),
+                    opening
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : OmniCircleButton.popup(
+                            size: 36,
+                            tooltip: _isEnglish
+                                ? 'Session actions'
+                                : 'Session 操作',
+                            onOpen: (buttonContext) => unawaited(
+                              _showSessionActions(session, buttonContext),
+                            ),
+                            icon: Icons.more_horiz_rounded,
+                            foregroundColor: palette.textTertiary,
                           ),
-                          padding: EdgeInsets.zero,
-                          tooltip: _isEnglish
-                              ? 'Session actions'
-                              : 'Session 操作',
-                          onPressed: () =>
-                              unawaited(_showSessionActions(session)),
-                          icon: Icon(
-                            Icons.more_horiz_rounded,
-                            color: palette.textTertiary,
-                          ),
-                        ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        if (!isLast)
-          Padding(
-            padding: const EdgeInsets.only(left: 24),
-            child: Divider(
-              height: 1,
-              color: palette.borderSubtle.withValues(
-                alpha: context.isDarkTheme ? 0.5 : 0.78,
+          if (!isLast)
+            Padding(
+              padding: const EdgeInsets.only(left: 24),
+              child: Divider(
+                height: 1,
+                color: palette.borderSubtle.withValues(
+                  alpha: context.isDarkTheme ? 0.5 : 0.78,
+                ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 

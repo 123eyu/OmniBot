@@ -27,7 +27,10 @@ extension _CompactComposerActions on _ChatInputAreaStateBase {
         widget.onPickImages != null ||
         widget.onPickAttachment != null ||
         _shouldShowAgentPermissionSelector;
-    return Builder(
+    return FlClashPopupSource(
+      glass: false,
+      color: Colors.transparent,
+      shape: const CircleBorder(),
       builder: (anchor) => IconButton(
         key: const ValueKey('chat-input-add-or-cancel-edit-button'),
         padding: EdgeInsets.zero,
@@ -69,7 +72,9 @@ extension _CompactComposerActions on _ChatInputAreaStateBase {
     final english = Localizations.localeOf(context).languageCode == 'en';
     final handle = showOverlayGlassPopup<_CompactComposerAction>(
       context: context,
+      sourceContext: anchorContext,
       anchor: anchor,
+      placementAnchor: anchor,
       preferBelow: false,
       builder: (handle) => TextFieldTapRegion(
         child: OmniMenuSurface(
@@ -109,6 +114,7 @@ extension _CompactComposerActions on _ChatInputAreaStateBase {
     _composerStateMachine.popupOpened(ChatComposerPopup.compactActions);
     try {
       final action = await handle.future;
+      await handle.closed;
       if (!mounted || !anchorContext.mounted) return;
       // Hold the layout through the native picker or the existing permission
       // popup. A handoff must not briefly collapse the focused text editor.

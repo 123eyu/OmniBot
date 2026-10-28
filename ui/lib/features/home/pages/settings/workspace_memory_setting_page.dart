@@ -1,3 +1,4 @@
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -18,8 +19,8 @@ class WorkspaceMemorySettingPage extends StatefulWidget {
       _WorkspaceMemorySettingPageState();
 }
 
-class _WorkspaceMemorySettingPageState
-    extends State<WorkspaceMemorySettingPage> {
+class _WorkspaceMemorySettingPageState extends State<WorkspaceMemorySettingPage>
+    with FlClashPageLoadMixin {
   final TextEditingController _soulController = TextEditingController();
   final TextEditingController _chatController = TextEditingController();
   final TextEditingController _memoryController = TextEditingController();
@@ -48,6 +49,7 @@ class _WorkspaceMemorySettingPageState
   }
 
   Future<void> _loadAll() async {
+    if (!await waitForPageReady() || !mounted) return;
     setState(() => _loading = true);
     try {
       final results = await Future.wait([
@@ -57,7 +59,7 @@ class _WorkspaceMemorySettingPageState
         WorkspaceMemoryService.getEmbeddingConfig(),
         WorkspaceMemoryService.getRollupStatus(),
       ]);
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       final soul = results[0] as String;
       final chatPrompt = results[1] as String;
       final memory = results[2] as String;
@@ -73,9 +75,10 @@ class _WorkspaceMemorySettingPageState
         _rollupEnabled = rollup.enabled;
       });
     } catch (e) {
+      if (!await waitForPageReady() || !mounted) return;
       showToast(context.l10n.workspaceMemoryLoadFailed, type: ToastType.error);
     } finally {
-      if (mounted) {
+      if (await waitForPageReady() && mounted) {
         setState(() => _loading = false);
       }
     }

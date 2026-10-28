@@ -13,7 +13,7 @@ extension _ChatPageUserMessageActions on _ChatPageStateBase {
     }
 
     final conversationMode = _activeMode;
-    await showModalBottomSheet<void>(
+    await showOmniGlassBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useRootNavigator: false,

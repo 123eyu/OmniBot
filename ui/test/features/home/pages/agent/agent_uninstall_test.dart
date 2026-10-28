@@ -82,7 +82,13 @@ void main() {
   }
 
   Future<void> confirmUninstall(WidgetTester tester, String id) async {
-    await tester.tap(find.byKey(Key('agent-uninstall-$id')));
+    final action = find.byKey(Key('agent-uninstall-$id'));
+    // The page admits its catalog read after the landing frame. An unrelated
+    // install keeps animating, so wait for the row instead of pumpAndSettle.
+    for (var frame = 0; frame < 10 && action.evaluate().isEmpty; frame++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.tap(action);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byKey(Key('agent-uninstall-confirm-action-$id')));
@@ -227,10 +233,10 @@ void main() {
         find.byKey(const Key('agent-navigation-pi-acp')),
       );
       expect(navigation.onTap, isNull);
-      final checkUpdates = tester.widget<TextButton>(
+      final checkUpdates = tester.widget<InkWell>(
         find.byKey(const Key('agent-check-updates')),
       );
-      expect(checkUpdates.onPressed, isNull);
+      expect(checkUpdates.onTap, isNull);
 
       installing.complete({'ok': true});
       await tester.pump();
@@ -239,7 +245,9 @@ void main() {
       expect(uninstallCalls, 1);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpWidget(page());
-      await tester.pump();
+      for (var frame = 0; frame < 5; frame++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       expect(find.text('卸载中'), findsOneWidget);
       expect(uninstallCalls, 1);
       installed = false;
