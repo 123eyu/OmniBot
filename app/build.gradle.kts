@@ -346,8 +346,11 @@ android {
 
     packaging {
         dex {
-            // Keep DEX directly mappable on API 29+ instead of inflating it during cold starts.
-            useLegacyPackaging = false
+            // Favor a small APK after Release R8 shrinking. Opt out for a
+            // directly mappable DEX comparison with -POMNIBOT_COMPRESS_DEX=false.
+            useLegacyPackaging = providers.gradleProperty("OMNIBOT_COMPRESS_DEX")
+                .map { it.toBooleanStrict() }
+                .getOrElse(true)
         }
         jniLibs {
             useLegacyPackaging = true
