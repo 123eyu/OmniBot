@@ -1,6 +1,7 @@
 package cn.com.omnimind.bot
 
 import BaseApplication
+import android.os.SystemClock
 import cn.com.omnimind.baselib.account.AccountCredentialStorageException
 import cn.com.omnimind.baselib.account.OmniAccount
 import cn.com.omnimind.baselib.database.DatabaseHelper
@@ -54,14 +55,14 @@ class App : BaseApplication() {
 
         fun getCachedMainEngine(): FlutterEngine {
             if (cachedMainEngine == null) {
-                val engineStart = System.currentTimeMillis()
+                val engineStart = SystemClock.elapsedRealtime()
                 OmniLog.d("AppStartup", "Creating main engine from FlutterEngineGroup")
 
                 cachedMainEngine = getFlutterEngineGroup().createAndRunDefaultEngine(instance)
 
                 OmniLog.d(
                     "AppStartup",
-                    "Main engine created, cost: ${System.currentTimeMillis() - engineStart}ms"
+                    "Main engine created, cost: ${SystemClock.elapsedRealtime() - engineStart}ms"
                 )
             }
             return cachedMainEngine!!
@@ -71,35 +72,39 @@ class App : BaseApplication() {
 
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate() {
-        val appStartTime = System.currentTimeMillis()
+        val appStartTime = SystemClock.elapsedRealtime()
         OmniLog.d("AppStartup", "App onCreate start")
         super.onCreate()
         OmniLog.d(
             "AppStartup",
-            "App super.onCreate cost: ${System.currentTimeMillis() - appStartTime}ms"
+            "App super.onCreate cost: ${SystemClock.elapsedRealtime() - appStartTime}ms"
         )
         instance = this
-        StartupThemeResolver.applyStoredApplicationNightMode(this)
-        AppLocaleManager.applyAppLocale(this)
+        measureStartupStep("Startup theme and locale") {
+            StartupThemeResolver.applyStoredApplicationNightMode(this)
+            AppLocaleManager.applyAppLocale(this)
+        }
         com.rk.libcommons.application = this
         Res.application = this
 
-        MMKV.initialize(this)
-        CredentialEndpointSecurity.configureDebugLoopback(BuildConfig.DEBUG)
-        AppSecretStore.initialize(this)
-        ModelProviderConfigStore.initialize(this)
-        cn.com.omnimind.baselib.llm.chatgpt.ChatGptOAuthManager.initialize(this)
-        DebugOmniMindProviderBootstrap.install(this)
-        OfficialOmniPluginProviders.register()
-        OmniAccount.initialize(
-            context = this,
-            baseUrl = BuildConfig.BASE_URL,
-            platformGatewayUrl = BuildConfig.AI_GATEWAY_URL,
-            allowInsecureLoopback = BuildConfig.DEBUG,
-            cloudServiceAccessProvider = {
-                AppUpdateManager.getCloudServiceAccessState(this)
-            },
-        )
+        measureStartupStep("Credentials and providers") {
+            MMKV.initialize(this)
+            CredentialEndpointSecurity.configureDebugLoopback(BuildConfig.DEBUG)
+            AppSecretStore.initialize(this)
+            ModelProviderConfigStore.initialize(this)
+            cn.com.omnimind.baselib.llm.chatgpt.ChatGptOAuthManager.initialize(this)
+            DebugOmniMindProviderBootstrap.install(this)
+            OfficialOmniPluginProviders.register()
+            OmniAccount.initialize(
+                context = this,
+                baseUrl = BuildConfig.BASE_URL,
+                platformGatewayUrl = BuildConfig.AI_GATEWAY_URL,
+                allowInsecureLoopback = BuildConfig.DEBUG,
+                cloudServiceAccessProvider = {
+                    AppUpdateManager.getCloudServiceAccessState(this)
+                },
+            )
+        }
         AgentPromptSettingsStore.initializeAndCleanupLegacyFiles(this)
         LegacyLocalModelDataCleanup.start(this)
         setupUncaughtExceptionHandler()
@@ -125,10 +130,15 @@ class App : BaseApplication() {
 
         NestedBackgroundStateUtil.init(this)
         cn.com.omnimind.baselib.llm.ModelSceneRegistry.init(this)
-        runCatching {
-            val workspaceManager = AgentWorkspaceManager(this)
-            workspaceManager.ensureRuntimeDirectories()
-            SkillIndexService(this, workspaceManager).seedBuiltinSkillsIfNeeded()
+        measureStartupStep("Workspace and built-in skills") {
+            runCatching {
+                val workspaceManager = AgentWorkspaceManager(this)
+                // Seeding resolves skillsRoot() before reading the registry, which
+                // already initializes the workspace. Avoid a duplicate asset scan.
+                SkillIndexService(this, workspaceManager).seedBuiltinSkillsIfNeeded()
+            }.onFailure { error ->
+                OmniLog.w("AppStartup", "Workspace preparation failed", error)
+            }
         }
         // Seed built-in skills before restoring enabled runtime-bundle plugins.
         // Both paths materialize files under the same skills directory; starting
@@ -168,8 +178,17 @@ class App : BaseApplication() {
         }
         OmniLog.d(
             "AppStartup",
-            "App onCreate total cost: ${System.currentTimeMillis() - appStartTime}ms"
+            "App onCreate total cost: ${SystemClock.elapsedRealtime() - appStartTime}ms"
         )
+    }
+
+    private inline fun <T> measureStartupStep(name: String, operation: () -> T): T {
+        val start = SystemClock.elapsedRealtime()
+        try {
+            return operation()
+        } finally {
+            OmniLog.i("AppStartup", "$name cost: ${SystemClock.elapsedRealtime() - start}ms")
+        }
     }
 
     private fun setupUncaughtExceptionHandler() {

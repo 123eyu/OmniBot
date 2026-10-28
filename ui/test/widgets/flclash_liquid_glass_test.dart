@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 import 'dart:typed_data';
 
@@ -13,6 +14,7 @@ Widget _scene({
   bool reducedMotion = false,
   bool twoPanes = false,
   Key? sceneKey,
+  VoidCallback? onTap,
 }) => MaterialApp(
   debugShowCheckedModeBanner: false,
   home: MediaQuery(
@@ -47,7 +49,11 @@ Widget _scene({
                               ColorScheme.fromSeed(seedColor: Colors.blue),
                             ),
                             pressed: pressed,
-                            child: const SizedBox(width: 120, height: 48),
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: onTap,
+                              child: const SizedBox(width: 120, height: 48),
+                            ),
                           ),
                       ],
                     ),
@@ -66,11 +72,13 @@ void main() {
   tearDown(() {
     LiquidGlassHost.debugLastCapture = null;
     LiquidGlassHost.debugCarryBandsOverride = null;
+    LiquidGlass.debugResetShaderLoading();
   });
 
   testWidgets('bundled fragment program compiles and warmup is reusable', (
     tester,
   ) async {
+    LiquidGlass.debugResetShaderLoading(waitForFirstFrame: () async {});
     await tester.runAsync(() async {
       final program = await ui.FragmentProgram.fromAsset(
         'shaders/liquid_glass.frag',
@@ -84,6 +92,95 @@ void main() {
       ui.ImageFilter.isShaderFilterSupported,
       reason: 'Non-Impeller tests use the upstream frost fallback',
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('first frame is interactive before the shared shader loads', (
+    tester,
+  ) async {
+    final program = (await tester.runAsync(
+      () => ui.FragmentProgram.fromAsset('shaders/liquid_glass.frag'),
+    ))!;
+    final firstFrame = Completer<void>();
+    final loaded = Completer<ui.FragmentProgram>();
+    var loads = 0;
+    var taps = 0;
+    LiquidGlass.debugResetShaderLoading(
+      waitForFirstFrame: () => firstFrame.future,
+      loadProgram: () {
+        loads++;
+        return loaded.future;
+      },
+    );
+
+    await tester.pumpWidget(_scene(twoPanes: true, onTap: () => taps++));
+    final warmUp = LiquidGlass.warmUp();
+    expect(loads, 0, reason: 'Painting must not load before rasterization');
+    expect(LiquidGlassHost.debugHeldCaptures, 2);
+    await tester.tap(find.byType(LiquidGlass).first);
+    expect(taps, 1);
+    expect(LiquidGlass.debugShaderReady, isFalse);
+
+    firstFrame.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(loads, 1, reason: 'Panes and warmup share one deferred load');
+    loaded.complete(program);
+    await tester.idle();
+    await warmUp;
+    expect(LiquidGlass.debugShaderReady, isTrue);
+    expect(tester.binding.hasScheduledFrame, isTrue);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(LiquidGlass).first);
+    expect(taps, 2);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('panes can be disposed while the shader is loading', (
+    tester,
+  ) async {
+    final program = (await tester.runAsync(
+      () => ui.FragmentProgram.fromAsset('shaders/liquid_glass.frag'),
+    ))!;
+    final loaded = Completer<ui.FragmentProgram>();
+    LiquidGlass.debugResetShaderLoading(
+      waitForFirstFrame: () async {},
+      loadProgram: () => loaded.future,
+    );
+    await tester.pumpWidget(_scene());
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    loaded.complete(program);
+    await tester.pumpAndSettle();
+    expect(LiquidGlass.debugShaderReady, isTrue);
+    expect(LiquidGlassHost.debugHeldCaptures, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shader failure retains interactive fallback without retries', (
+    tester,
+  ) async {
+    var loads = 0;
+    var taps = 0;
+    LiquidGlass.debugResetShaderLoading(
+      waitForFirstFrame: () async {},
+      loadProgram: () async {
+        loads++;
+        throw StateError('shader unavailable');
+      },
+    );
+    await tester.pumpWidget(_scene(onTap: () => taps++));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isA<StateError>());
+    await LiquidGlass.warmUp();
+    await tester.pumpWidget(_scene(pressed: true, onTap: () => taps++));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(LiquidGlass));
+    expect(taps, 1);
+    expect(loads, 1);
+    expect(LiquidGlass.debugShaderReady, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
     expect(tester.takeException(), isNull);
   });
 

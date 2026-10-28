@@ -732,13 +732,27 @@ class LiquidGlass extends StatelessWidget {
 
   final Widget? child;
 
-  /// Loads the bundled shader once before the first animated pane is needed.
+  /// Loads the bundled shader once, after the first frame reaches the screen.
   /// Uses the same program/cache as painting; unsupported engines retain the
   /// upstream frost fallback without trying to compile a shader filter.
   static Future<void> warmUp() => _GlassProgram.warmUp();
 
   @visibleForTesting
   static bool get debugShaderReady => _GlassProgram._program != null;
+
+  /// Overrides the engine boundary in tests. Call only with no load in flight.
+  @visibleForTesting
+  static void debugResetShaderLoading({
+    Future<void> Function()? waitForFirstFrame,
+    Future<ui.FragmentProgram> Function()? loadProgram,
+  }) {
+    _GlassProgram._program = null;
+    _GlassProgram._loading = null;
+    _GlassProgram._failed = false;
+    _GlassProgram._waiting.clear();
+    _GlassProgram._debugWaitForFirstFrame = waitForFirstFrame;
+    _GlassProgram._debugLoadProgram = loadProgram;
+  }
 
   /// Builds the scenes of [capture] without panes, for a snapshot: offscreen
   /// a pane has no backdrop to bend and comes out a flat tint.
@@ -1288,6 +1302,8 @@ class LiquidGlassPane {
 abstract final class _GlassProgram {
   static ui.FragmentProgram? _program;
   static Future<void>? _loading;
+  static Future<void> Function()? _debugWaitForFirstFrame;
+  static Future<ui.FragmentProgram> Function()? _debugLoadProgram;
 
   /// Final: a bundled shader that failed once fails again, and every attempt
   /// loads synchronously on the UI isolate.
@@ -1297,7 +1313,8 @@ abstract final class _GlassProgram {
   static ui.FragmentProgram? request(VoidCallback onLoaded) {
     if (_program != null ||
         _failed ||
-        !ui.ImageFilter.isShaderFilterSupported) {
+        (_debugLoadProgram == null &&
+            !ui.ImageFilter.isShaderFilterSupported)) {
       return _program;
     }
     _waiting.add(onLoaded);
@@ -1341,8 +1358,21 @@ abstract final class _GlassProgram {
 
   static void forget(VoidCallback onLoaded) => _waiting.remove(onLoaded);
 
-  static Future<ui.FragmentProgram> _load() =>
-      ui.FragmentProgram.fromAsset(_shaderAsset);
+  static Future<ui.FragmentProgram> _load() async {
+    // FragmentProgram.fromAsset does synchronous work on the UI isolate even
+    // though its API returns a Future. Painting must first submit a usable
+    // frost fallback; a post-frame callback alone does not guarantee that the
+    // raster thread has displayed it yet.
+    await (_debugWaitForFirstFrame?.call() ??
+        WidgetsBinding.instance.waitUntilFirstFrameRasterized);
+    // Yield out of the engine's first-frame notification before loading. An
+    // idle scheduler task can starve while the home page has a loading spinner.
+    return Future<ui.FragmentProgram>(
+      () =>
+          _debugLoadProgram?.call() ??
+          ui.FragmentProgram.fromAsset(_shaderAsset),
+    );
+  }
 }
 
 class _LiquidGlassLayer extends Layer {

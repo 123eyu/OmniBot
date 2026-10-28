@@ -11,6 +11,7 @@ import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/features/home/state/predictive_back_controller.dart';
 import 'package:ui/services/omnibot_resource_service.dart';
+import 'package:ui/services/models_dev_catalog_service.dart';
 import 'package:ui/services/app_background_service.dart';
 import 'package:ui/services/scheduled_task_scheduler_service.dart';
 import 'package:ui/services/storage_service.dart';
@@ -26,6 +27,7 @@ import 'core/router/go_router_manager.dart';
 import 'services/event_bus.dart';
 
 Future<void> bootstrapMain(List<String> args) async {
+  final startupWatch = Stopwatch()..start();
   String? initialRoute;
 
   // 可以在这里处理从原生传递过来的参数
@@ -78,25 +80,31 @@ Future<void> bootstrapMain(List<String> args) async {
     debugPrint('$stackTrace');
   }
 
-  // Load the shared shader before the first glass control is painted, so
-  // opening a page does not pay the synchronous shader-load cost.
-  if (container.read(liquidGlassSettingsProvider).enabled) {
-    await LiquidGlass.warmUp();
-  }
-
   runApp(
     UncontrolledProviderScope(
       container: container,
       child: MyApp(args: args),
     ),
   );
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(_initializeDeferredStartupServices());
-  });
+  unawaited(
+    WidgetsBinding.instance.waitUntilFirstFrameRasterized.then((_) async {
+      debugPrint(
+        '[FlutterStartup] Bootstrap to first rasterized frame: '
+        '${startupWatch.elapsedMilliseconds}ms',
+      );
+      // Submit the usable shell before optional services or legacy cache I/O
+      // compete with startup. Post-frame runs before rasterization completes.
+      await Future<void>(_initializeDeferredStartupServices);
+    }),
+  );
 }
 
 Future<void> _initializeDeferredStartupServices() async {
   await Future.wait(<Future<void>>[
+    _runDeferredStartupStep(
+      'ModelsDevCatalogService.migrateLegacyCache',
+      ModelsDevCatalogService.migrateLegacyCache,
+    ),
     _runDeferredStartupStep(
       'AppBackgroundService.load',
       AppBackgroundService.load,
