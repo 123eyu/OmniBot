@@ -5,6 +5,7 @@ import 'package:ui/l10n/l10n.dart';
 import 'package:ui/services/special_permission.dart';
 import 'package:ui/services/personal_context_service.dart';
 import 'package:ui/features/home/pages/authorize_setting/personal_context_labels.dart';
+import 'package:ui/features/home/pages/authorize_setting/root_access_setting.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/omni_menu.dart';
 import 'package:ui/utils/cache_util.dart';
@@ -196,6 +197,7 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
       ),
       _AuthorizeSettingSection(
         label: _localeText(zh: '扩展能力', en: 'Advanced Access'),
+        footer: const RootAccessSetting(),
         subtitle: _localeText(
           zh: '按需开启，可获得更完整的系统级能力与兼容性支持。',
           en: 'Enable when needed for broader system-level capabilities and compatibility.',
@@ -608,6 +610,7 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
             onTap: item.onTap,
             translateText: false,
           ),
+        if (section.footer != null) section.footer!,
       ],
     );
   }
@@ -645,11 +648,13 @@ class _AuthorizeSettingSection {
   final String label;
   final String? subtitle;
   final List<_AuthorizeSettingItem> items;
+  final Widget? footer;
 
   const _AuthorizeSettingSection({
     required this.label,
     this.subtitle,
     required this.items,
+    this.footer,
   });
 }
 
