@@ -147,7 +147,7 @@
         "managedInstallScriptPath": "/root/.local/share/omnibot/install-pi-acp.sh",
         "managedInstallCommandAsset": "acp/install/pi.sh",
         "managedAdapterHealthCommand": "PATH=/root/.npm-global/bin:$PATH; export PATH; omnibot-pi-acp --health",
-        "preparationRevision": "pi-1.4.0-a91684dddddf5916feb1"
+        "preparationRevision": "pi-1.4.0-d845427d0813d576fafa"
       }
     },
     {
