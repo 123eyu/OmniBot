@@ -63,6 +63,21 @@ void main() {
     }
   }
 
+  Future<void> finishDialogTransition(WidgetTester tester) async {
+    // The memory page has a repeating background animation. Wait only for
+    // the confirmation route so unrelated animation cannot stall this test.
+    await tester.pump();
+    final route = ModalRoute.of(tester.element(find.text('Delete').last))!;
+    for (
+      var frame = 0;
+      frame < 20 && route.animation?.status != AnimationStatus.completed;
+      frame++
+    ) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(route.animation?.status, AnimationStatus.completed);
+  }
+
   for (final batch in [false, true]) {
     testWidgets(
       '${batch ? 'batch' : 'single'} deletion confirms and refreshes persisted list',
@@ -77,7 +92,7 @@ void main() {
         tester
             .widget<SelectionBottomBar>(find.byType(SelectionBottomBar))
             .onDeletePressed!();
-        await tester.pump(const Duration(milliseconds: 300));
+        await finishDialogTransition(tester);
         expect(deletes, isEmpty);
         expect(find.text('删除短期记忆？'), findsOneWidget);
         await tester.tap(find.text('Delete').last);
@@ -116,9 +131,12 @@ void main() {
       tester
           .widget<SelectionBottomBar>(find.byType(SelectionBottomBar))
           .onDeletePressed!();
-      await tester.pump(const Duration(milliseconds: 300));
+      await finishDialogTransition(tester);
       await tester.tap(find.text('Cancel').last);
-      await tester.pump(const Duration(milliseconds: 300));
+      for (var frame = 0; frame < 10; frame++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.text('删除短期记忆？'), findsNothing);
       expect(deletes, isEmpty);
       expect(entries.length, 2);
       await tester.pumpWidget(const SizedBox());
@@ -135,7 +153,7 @@ void main() {
     tester
         .widget<SelectionBottomBar>(find.byType(SelectionBottomBar))
         .onDeletePressed!();
-    await tester.pump(const Duration(milliseconds: 300));
+    await finishDialogTransition(tester);
     await tester.tap(find.text('Delete').last);
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 100));
