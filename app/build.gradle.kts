@@ -346,7 +346,8 @@ android {
 
     packaging {
         dex {
-            useLegacyPackaging = true
+            // Keep DEX directly mappable on API 29+ instead of inflating it during cold starts.
+            useLegacyPackaging = false
         }
         jniLibs {
             useLegacyPackaging = true

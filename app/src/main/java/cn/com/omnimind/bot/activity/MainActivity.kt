@@ -57,6 +57,11 @@ class MainActivity : FlutterActivity() {
         applyResponsiveOrientation()
         applySoftInputResizeMode()
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Flutter's pre-draw gate keeps the splash until its first frame.
+            // Reveal that frame immediately instead of playing another exit animation.
+            splashScreen.setOnExitAnimationListener { splashView -> splashView.remove() }
+        }
         applyEdgeToEdgeWindow()
         TaskRuntimeSettings.attachActivity(this)
         TaskRuntimeSettings.consumeTaskCompletionNotificationIntent(this, intent)
