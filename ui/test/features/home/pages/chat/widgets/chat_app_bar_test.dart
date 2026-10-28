@@ -9,6 +9,7 @@ import 'package:ui/features/home/pages/chat/widgets/chat_widgets.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/services/app_background_service.dart';
 import 'package:ui/widgets/omni_circle_button.dart';
+import 'package:ui/widgets/flclash/popup.dart';
 
 class _SvgTestAssetBundle extends CachingAssetBundle {
   final _bytes = Uint8List.fromList(
@@ -45,9 +46,15 @@ Widget _app({
       AppBackgroundVisualProfile.defaultProfile,
   ChatSurfaceMode surface = ChatSurfaceMode.normal,
   List<ChatAppBarAction> actions = const [],
+  VisualDensity? buttonDensity,
 }) => DefaultAssetBundle(
   bundle: _SvgTestAssetBundle(),
   child: MaterialApp(
+    theme: ThemeData(
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(visualDensity: buttonDensity),
+      ),
+    ),
     home: Scaffold(
       body: Column(
         children: [
@@ -84,6 +91,73 @@ Future<void> _openActions(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'popup circle measures the visible surface with compact density',
+    (tester) async {
+      await tester.pumpWidget(_app(buttonDensity: VisualDensity.compact));
+      final trigger = find.byKey(const ValueKey('chat-app-bar-more-button'));
+      final circle = find.descendant(
+        of: trigger,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is Material && widget.shape is CircleBorder,
+        ),
+      );
+      final actual = tester.getRect(circle);
+      expect(actual.size, const Size.square(40));
+      expect(tester.getSize(trigger), const Size.square(40));
+      await tester.tap(trigger);
+      await tester.pumpAndSettle();
+      final transition = tester.widget<FlClashPopupTransition>(
+        find.byType(FlClashPopupTransition),
+      );
+      expect(transition.anchor, actual);
+      expect(
+        transition.source!.image.value!.width / tester.view.devicePixelRatio,
+        actual.width,
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('menu captures the visible circle and commits after returning', (
+    tester,
+  ) async {
+    var terminals = 0;
+    await tester.pumpWidget(_app(onTerminal: () => terminals++));
+    final trigger = find.byKey(const ValueKey('chat-app-bar-more-button'));
+    final touchBounds = tester.getRect(trigger);
+    final circleBounds = tester.getRect(
+      find.descendant(
+        of: trigger,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is Material && widget.shape is CircleBorder,
+        ),
+      ),
+    );
+    expect(touchBounds.size, const Size.square(48));
+    expect(circleBounds.size, const Size.square(40));
+    // The extra touch area continues to open the menu.
+    await tester.tapAt(touchBounds.centerLeft + const Offset(1, 0));
+    await tester.pumpAndSettle();
+    final transition = tester.widget<FlClashPopupTransition>(
+      find.byType(FlClashPopupTransition),
+    );
+    expect(transition.anchor, circleBounds);
+    final pixelRatio = tester.view.devicePixelRatio;
+    expect(transition.source!.image.value!.width / pixelRatio, 40);
+    expect(transition.source!.image.value!.height / pixelRatio, 40);
+    await tester.tap(find.text('Terminal'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(terminals, 0);
+    await tester.pumpAndSettle();
+    expect(terminals, 1);
+    expect(tester.getRect(trigger), touchBounds);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('mode mark precedes the title without a switch interaction', (
     tester,
   ) async {

@@ -1,3 +1,4 @@
+import 'package:ui/widgets/flclash/popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_switch/flutter_switch.dart';
@@ -790,6 +791,8 @@ class OmniSettingsDropdown<T> extends StatefulWidget {
 
 class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
     implements _OmniDropdownTapTarget {
+  final _sourceKey = GlobalKey();
+  final _fieldContentKey = GlobalKey();
   bool _fieldFocused = false;
   bool _opening = false;
 
@@ -803,23 +806,31 @@ class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
 
   @override
   void openPopover() {
-    _openPopover(context);
+    final anchorContext = _sourceKey.currentContext;
+    if (anchorContext != null) _openPopover(anchorContext);
   }
 
   Future<void> _openPopover(BuildContext anchorContext) async {
     if (!canOpenPopover) return;
+    final sourceRoute = ModalRoute.of(anchorContext);
+    bool sourceIsCurrent() =>
+        mounted &&
+        anchorContext.mounted &&
+        (sourceRoute == null ||
+            (sourceRoute.isActive && sourceRoute.isCurrent));
     _opening = true;
     try {
       final beforeOpen = widget.onBeforeOpen;
       if (beforeOpen != null) {
         await beforeOpen();
-        if (!mounted || !anchorContext.mounted) return;
+        if (!sourceIsCurrent()) return;
         // A caller may have setState in the async callback. Wait for that
         // rebuild so this route receives the refreshed options and callback.
         await WidgetsBinding.instance.endOfFrame;
       }
       if (!mounted ||
           !anchorContext.mounted ||
+          !sourceIsCurrent() ||
           widget.onChanged == null ||
           (widget.options.isEmpty && widget.searchHint == null)) {
         return;
@@ -838,6 +849,7 @@ class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
 
     final selected = await showGlassPopup<T>(
       context: anchorContext,
+      sourceContext: anchorContext,
       anchor: anchor,
       screenPadding: const EdgeInsets.all(16),
       child: LayoutBuilder(
@@ -875,8 +887,52 @@ class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
     }
   }
 
+  Rect? _fieldCaptureRect(BuildContext sourceContext) =>
+      glassPopupInputContainerRect(
+        sourceContext,
+        _fieldContentKey.currentContext,
+      );
+
   @override
   Widget build(BuildContext context) {
+    final palette = context.omniPalette;
+    final decoration = widget.decoration?.applyDefaults(
+      Theme.of(context).inputDecorationTheme,
+    );
+    final border = decoration == null
+        ? null
+        : widget.onChanged == null
+        ? decoration.disabledBorder ?? decoration.border
+        : _fieldFocused
+        ? decoration.focusedBorder ?? decoration.border
+        : decoration.enabledBorder ?? decoration.border;
+    return FlClashPopupSource(
+      glass: false,
+      shape: decoration == null
+          ? const RoundedRectangleBorder(
+              borderRadius: OmniMenuStyle.panelRadius,
+            )
+          : border ??
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      color: decoration == null
+          ? palette.surfaceSecondary.withValues(
+              alpha: context.isDarkTheme ? 0.72 : 0.8,
+            )
+          : decoration.filled == true
+          ? decoration.fillColor ?? Colors.transparent
+          : Colors.transparent,
+      captureRect: decoration == null ? null : _fieldCaptureRect,
+      captureOverflow: decoration == null
+          ? null
+          : (sourceContext) => glassPopupInputLabelRects(
+              sourceContext,
+              _fieldContentKey.currentContext,
+            ),
+      builder: (_) => Builder(key: _sourceKey, builder: _buildControl),
+    );
+  }
+
+  Widget _buildControl(BuildContext context) {
     final palette = context.omniPalette;
     final isDark = context.isDarkTheme;
     final enabled = widget.onChanged != null;
@@ -928,34 +984,37 @@ class _OmniSettingsDropdownState<T> extends State<OmniSettingsDropdown<T>>
               ),
               isEmpty: label.isEmpty,
               isFocused: _fieldFocused,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          (widget.style ??
-                                  Theme.of(context).textTheme.titleMedium)
-                              ?.copyWith(
-                                color: fieldEnabled
-                                    ? selectedOption == null
-                                          ? palette.textTertiary
-                                          : widget.style?.color ??
-                                                palette.textPrimary
-                                    : Theme.of(context).disabledColor,
-                              ),
+              child: Builder(
+                key: _fieldContentKey,
+                builder: (context) => Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            (widget.style ??
+                                    Theme.of(context).textTheme.titleMedium)
+                                ?.copyWith(
+                                  color: fieldEnabled
+                                      ? selectedOption == null
+                                            ? palette.textTertiary
+                                            : widget.style?.color ??
+                                                  palette.textPrimary
+                                      : Theme.of(context).disabledColor,
+                                ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.arrow_drop_down,
-                    color: fieldEnabled
-                        ? palette.textSecondary
-                        : Theme.of(context).disabledColor,
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.arrow_drop_down,
+                      color: fieldEnabled
+                          ? palette.textSecondary
+                          : Theme.of(context).disabledColor,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

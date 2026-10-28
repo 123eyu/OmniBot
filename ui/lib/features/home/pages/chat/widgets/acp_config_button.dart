@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ui/widgets/flclash/popup.dart';
 import 'package:flutter/material.dart';
 import 'package:ui/widgets/omni_menu.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -145,6 +146,7 @@ class AcpConfigButtonState extends State<AcpConfigButton> {
     final identity = widget.presentationIdentity;
     final handle = showOverlayGlassPopup<void>(
       context: context,
+      sourceContext: anchorContext,
       anchor: anchor,
       preferBelow: preferBelow,
       builder: (_) => AcpConfigPanel(
@@ -180,6 +182,7 @@ class AcpConfigButtonState extends State<AcpConfigButton> {
     widget.onVisibilityChanged?.call(true);
     try {
       await handle.future;
+      await handle.closed;
     } finally {
       if (_popup == handle) _popup = null;
       if (mounted && !_openingSharedSelector) {
@@ -199,7 +202,10 @@ class AcpConfigButtonState extends State<AcpConfigButton> {
         : rawLabel.split('/').last;
     final palette = context.omniPalette;
     return TextFieldTapRegion(
-      child: Builder(
+      child: FlClashPopupSource(
+        glass: false,
+        color: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         builder: (anchor) => Tooltip(
           message: rawLabel.isEmpty
               ? (english ? 'Model & settings' : '模型与参数')

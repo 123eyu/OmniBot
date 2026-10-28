@@ -44,10 +44,10 @@ void main() {
       await tester.pumpAndSettle();
       final label = find.byKey(OmniRootToolbar.titleKey);
       final style = tester.widget<Text>(label).style!;
-      expect(style.fontSize, 17);
+      expect(style.fontSize, 28);
       expect(style.fontWeight, FontWeight.w600);
-      expect(style.height, 1.3);
-      expect(tester.getRect(label).left, 28);
+      expect(style.height, 1.2);
+      expect(tester.getRect(label).left, 34);
       expect(tester.getCenter(label).dy, closeTo(60, .01));
       expect(toolbar.preferredSize.height, 72);
       expect(tester.getSize(find.byType(OmniRootToolbar)).height, 96);
@@ -79,7 +79,7 @@ void main() {
         ),
       ),
     );
-    expect(tester.getRect(find.byKey(OmniRootToolbar.titleKey)).left, 28);
+    expect(tester.getRect(find.byKey(OmniRootToolbar.titleKey)).left, 34);
     expect(
       tester.getCenter(find.byKey(OmniRootToolbar.titleKey)).dy,
       closeTo(60, .01),

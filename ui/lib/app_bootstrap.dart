@@ -17,6 +17,8 @@ import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme_controller.dart';
 import 'package:ui/theme/app_theme_mode.dart';
 import 'package:ui/theme/app_theme.dart';
+import 'package:ui/theme/liquid_glass_controller.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
 import 'package:ui/widgets/startup_account_prompt.dart';
 import 'package:ui/widgets/omnibot_error_widget.dart';
 
@@ -74,6 +76,12 @@ Future<void> bootstrapMain(List<String> args) async {
   } catch (error, stackTrace) {
     debugPrint('[FlutterStartup] system UI style setup failed: $error');
     debugPrint('$stackTrace');
+  }
+
+  // Load the shared shader before the first glass control is painted, so
+  // opening a page does not pay the synchronous shader-load cost.
+  if (container.read(liquidGlassSettingsProvider).enabled) {
+    await LiquidGlass.warmUp();
   }
 
   runApp(
@@ -172,6 +180,7 @@ class _MyAppState extends ConsumerState<MyApp> {
     final themeMode = ref.watch(appThemeModeProvider).materialThemeMode;
     final resolvedLocale = ref.watch(appResolvedLocaleProvider);
     final predictiveBackEnabled = ref.watch(predictiveBackEnabledProvider);
+    final glass = ref.watch(liquidGlassSettingsProvider);
     // Imperative Material routes share the GoRouter motion and geometry.
     final pageTransitionsTheme = PageTransitionsTheme(
       builders: {
@@ -209,14 +218,21 @@ class _MyAppState extends ConsumerState<MyApp> {
           value: AppTheme.overlayStyleForBrightness(brightness),
           child: ColoredBox(
             color: theme.scaffoldBackgroundColor,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                StartupAccountPrompt(
-                  routeListenable: _router.routeInformationProvider,
-                  child: child ?? const SizedBox.shrink(),
+            child: LiquidGlassScope(
+              enabled: glass.enabled,
+              quality: glass.quality,
+              child: LiquidGlassHost(
+                enabled: glass.enabled,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    StartupAccountPrompt(
+                      routeListenable: _router.routeInformationProvider,
+                      child: child ?? const SizedBox.shrink(),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         );

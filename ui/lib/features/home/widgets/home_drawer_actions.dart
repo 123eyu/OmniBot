@@ -430,6 +430,8 @@ extension _HomeDrawerActions on HomeDrawerState {
     BuildContext rowContext,
     ConversationModel conversation, {
     bool includePinAction = true,
+    String? previewOverride,
+    bool showArchivedBadge = false,
   }) async {
     if (_busyConversationKeys.contains(conversation.threadKey)) {
       return;
@@ -469,6 +471,20 @@ extension _HomeDrawerActions on HomeDrawerState {
           onDismiss: () => Navigator.of(dialogContext).pop(),
           anchor: Rect.fromPoints(rowTopLeft, rowBottomRight),
           title: _resolveConversationTitle(conversation),
+          preview: widget.homePage
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: HomeConversationTileContent(
+                    conversation: conversation,
+                    title: _resolveConversationTitle(conversation),
+                    previewOverride: previewOverride,
+                    badge: showArchivedBadge ? _buildArchivedBadge() : null,
+                    isExecuting: _runtimeCoordinator.isAgentConversationActive(
+                      conversation.id,
+                    ),
+                  ),
+                )
+              : null,
           actions: [
             if (includePinAction)
               _buildConversationMenuOption(
@@ -525,20 +541,37 @@ extension _HomeDrawerActions on HomeDrawerState {
         child: child,
       ),
     );
-    final selectedAction = await Navigator.of(
+    var sourceRestored = false;
+    void restoreSource() {
+      if (sourceRestored) return;
+      sourceRestored = true;
+      if (mounted && _activeContextMenuThreadKey == conversation.threadKey) {
+        setState(() => _activeContextMenuThreadKey = null);
+      }
+    }
+
+    final selection = Navigator.of(
       rowContext,
       rootNavigator: true,
     ).push<_ConversationContextAction>(route);
-    // push completes when pop starts. Keep the original row hidden until the
-    // focused preview has returned to its anchor and its overlay is removed.
-    await route.completed;
+    final animation = route.animation!;
+    void restoreWhenReturned() {
+      if (animation.value == 0 && animation.status != AnimationStatus.forward) {
+        restoreSource();
+      }
+    }
 
-    if (mounted) {
-      setState(() {
-        if (_activeContextMenuThreadKey == conversation.threadKey) {
-          _activeContextMenuThreadKey = null;
-        }
-      });
+    // Restore in the animation tick before its final frame is painted. Waiting
+    // only for route.completed leaves one frame with neither row nor preview.
+    animation.addListener(restoreWhenReturned);
+    _ConversationContextAction? selectedAction;
+    try {
+      selectedAction = await selection;
+      // Actions still wait for the overlay to be removed, not merely popped.
+      await route.completed;
+    } finally {
+      animation.removeListener(restoreWhenReturned);
+      restoreSource();
     }
 
     if (!mounted || selectedAction == null) return;

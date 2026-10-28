@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:ui/theme/omni_theme_palette.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
 
-/// Shared opaque menu and dialog surface.
-///
-/// The legacy name keeps existing popup callers source compatible. Surfaces
-/// follow the same neutral palette as pages, without backdrop blur, reflective
-/// highlights, or accent glow. Popup positioning and transitions stay separate.
+/// Shared dialog surface using the app's selected glass quality.
 class OmniGlassPanel extends StatelessWidget {
   const OmniGlassPanel({
     super.key,
@@ -27,8 +24,36 @@ class OmniGlassPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (LiquidGlassSurfaceScope.of(context)) {
+      return SizedBox(
+        width: width,
+        height: height,
+        child: ClipRRect(
+          borderRadius: borderRadius,
+          child: Padding(padding: padding, child: child),
+        ),
+      );
+    }
     final palette = forceDark ? OmniThemePalette.dark : context.omniPalette;
     final isDark = forceDark || context.isDarkTheme;
+    if (LiquidGlassScope.of(context)) {
+      final scheme = Theme.of(context).colorScheme;
+      final resolvedScheme = forceDark
+          ? scheme.copyWith(brightness: Brightness.dark)
+          : scheme;
+      return SizedBox(
+        width: width,
+        height: height,
+        child: LiquidGlass(
+          style: LiquidGlassStyle.alert(resolvedScheme),
+          borderRadius: borderRadius,
+          child: ClipRRect(
+            borderRadius: borderRadius,
+            child: Padding(padding: padding, child: child),
+          ),
+        ),
+      );
+    }
     return Container(
       width: width,
       height: height,

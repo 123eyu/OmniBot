@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:ui/widgets/flclash/popup.dart';
 import 'package:flutter/material.dart';
 import 'package:ui/widgets/omni_menu.dart';
 import 'package:flutter_svg/flutter_svg.dart';

@@ -15,6 +15,7 @@ import 'package:ui/theme/theme_context.dart';
 import 'deferred_push.dart';
 import 'drag_back.dart';
 import 'keyboard_inset_hold.dart';
+import 'route_activation.dart';
 
 const flClashContainerExtraKey = '_flclashContainer';
 
@@ -198,7 +199,10 @@ class _HideableState extends State<_Hideable> {
 }
 
 class _OpenContainerRoute<T> extends PageRoute<T>
-    with DragBackRouteMixin<T>, DeferredPushRouteMixin<T> {
+    with
+        DragBackRouteMixin<T>,
+        DeferredPushRouteMixin<T>,
+        FlClashRouteLoadActivityMixin<T> {
   _OpenContainerRoute({
     required this.closedColor,
     required ShapeBorder? closedShape,

@@ -11,16 +11,19 @@ Path gooPairOutline(
   Rect b,
   double blend, {
   bool coarse = false,
+  Path? secondOutline,
+  double? secondRadius,
 }) {
   final platter = Path()
     ..addRSuperellipse(
       RSuperellipse.fromRectAndRadius(a, Radius.circular(radius)),
     );
-  final pillRadius = b.shortestSide / 2;
-  final pill = Path()
-    ..addRSuperellipse(
-      RSuperellipse.fromRectAndRadius(b, Radius.circular(pillRadius)),
-    );
+  final pillRadius = secondRadius ?? b.shortestSide / 2;
+  final pill =
+      secondOutline ??
+      (Path()..addRSuperellipse(
+        RSuperellipse.fromRectAndRadius(b, Radius.circular(pillRadius)),
+      ));
   if (gooPairDepth(a, radius, b, blend) >= 0) {
     return platter;
   }
@@ -28,8 +31,24 @@ Path gooPairOutline(
     return pill;
   }
   final bridge = coarse
-      ? _bridge(a, radius, b, blend, turns: 64, tolerance: 0.15)
-      : _bridge(a, radius, b, blend, turns: 128, tolerance: 0.05);
+      ? _bridge(
+          a,
+          radius,
+          b,
+          blend,
+          radiusB: pillRadius,
+          turns: 64,
+          tolerance: 0.15,
+        )
+      : _bridge(
+          a,
+          radius,
+          b,
+          blend,
+          radiusB: pillRadius,
+          turns: 128,
+          tolerance: 0.05,
+        );
   return bridge == null
       ? Path.combine(PathOperation.union, platter, pill)
       : Path.combine(
@@ -50,9 +69,6 @@ double gooPairDepth(Rect a, double radius, Rect b, double blend) {
   ].map((corner) => _roundedDistance(a, radius, corner)).reduce(math.max);
   return -outermost - blend;
 }
-
-double _pillDistance(Rect pill, Offset point) =>
-    _roundedDistance(pill, pill.shortestSide / 2, point);
 
 double _roundedDistance(Rect rect, double radius, Offset point) {
   final round = math.min(radius, rect.shortestSide / 2);
@@ -77,6 +93,7 @@ Path? _bridge(
   double radius,
   Rect b,
   double blend, {
+  required double radiusB,
   required int turns,
   required double tolerance,
 }) {
@@ -85,7 +102,7 @@ Path? _bridge(
   }
   double toA(Offset point) => _roundedDistance(a, radius, point);
   double field(Offset point) =>
-      _smoothMin(toA(point), _pillDistance(b, point), blend);
+      _smoothMin(toA(point), _roundedDistance(b, radiusB, point), blend);
   final center = b.center;
   final limit = b.longestSide / 2 + a.longestSide + blend;
   Offset reach(Offset direction) {
@@ -96,7 +113,11 @@ Path? _bridge(
       if (platter < -blend) {
         return point;
       }
-      final depth = _smoothMin(platter, _pillDistance(b, point), blend);
+      final depth = _smoothMin(
+        platter,
+        _roundedDistance(b, radiusB, point),
+        blend,
+      );
       if (depth >= 0) {
         var outside = distance;
         for (var step = 0; step < 4; step++) {

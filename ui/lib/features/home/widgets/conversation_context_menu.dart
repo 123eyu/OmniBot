@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
 
 /// A focused preview and action surface for the selected conversation.
 /// The caller retains all action and conversation ownership.
@@ -15,6 +16,7 @@ class ConversationContextMenu extends StatelessWidget {
     required this.actions,
     required this.animation,
     required this.onDismiss,
+    this.preview,
   });
 
   final Rect anchor;
@@ -22,6 +24,11 @@ class ConversationContextMenu extends StatelessWidget {
   final List<Widget> actions;
   final Animation<double> animation;
   final VoidCallback onDismiss;
+
+  /// Optional conversation row content, including its own padding. The menu
+  /// supplies the single surface; this content should not add a card background.
+  /// Keeping it noninteractive preserves the long-press route's action owner.
+  final Widget? preview;
 
   void _dismiss(BuildContext context) {
     // Check synchronously too: a second pointer can arrive before the first
@@ -38,6 +45,7 @@ class ConversationContextMenu extends StatelessWidget {
     final palette = context.omniPalette;
     final media = MediaQuery.of(context);
     final isDark = context.isDarkTheme;
+    final glass = LiquidGlassScope.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         const margin = 24.0;
@@ -79,6 +87,28 @@ class ConversationContextMenu extends StatelessWidget {
               0.25,
               curve: Curves.easeOutCubic,
             ).transform(progress);
+            final actions = LiquidGlassFade(
+              key: const ValueKey('conversation-context-actions-opacity'),
+              opacity: AlwaysStoppedAnimation(reveal),
+              child: Transform.translate(
+                offset: Offset(0, -8 * (1 - reveal)),
+                child: menu,
+              ),
+            );
+            // A directional reveal cuts through the glass outline during the
+            // closing tail. Keep the complete pane rounded as it fades; the
+            // scroll viewport still clips content to the available safe area.
+            final revealedActions = glass
+                ? Transform.scale(
+                    key: const ValueKey('conversation-context-actions-scale'),
+                    scale: 0.96 + 0.04 * reveal,
+                    alignment: Alignment.topLeft,
+                    child: actions,
+                  )
+                : ClipRect(
+                    clipper: _ConversationMenuReveal(reveal),
+                    child: actions,
+                  );
             return AbsorbPointer(
               absorbing: animation.status == AnimationStatus.reverse,
               child: Stack(
@@ -126,11 +156,11 @@ class ConversationContextMenu extends StatelessWidget {
                             Transform.scale(
                               scale: 0.97 + 0.03 * lift,
                               alignment: Alignment.topLeft,
-                              child: Opacity(
+                              child: LiquidGlassFade(
                                 key: const ValueKey(
                                   'conversation-context-preview-opacity',
                                 ),
-                                opacity: previewOpacity,
+                                opacity: AlwaysStoppedAnimation(previewOpacity),
                                 child: preview,
                               ),
                             ),
@@ -139,19 +169,7 @@ class ConversationContextMenu extends StatelessWidget {
                               ignoring: reveal == 0,
                               child: ExcludeSemantics(
                                 excluding: reveal < 1,
-                                child: ClipRect(
-                                  clipper: _ConversationMenuReveal(reveal),
-                                  child: Opacity(
-                                    key: const ValueKey(
-                                      'conversation-context-actions-opacity',
-                                    ),
-                                    opacity: reveal,
-                                    child: Transform.translate(
-                                      offset: Offset(0, -8 * (1 - reveal)),
-                                      child: menu,
-                                    ),
-                                  ),
-                                ),
+                                child: revealedActions,
                               ),
                             ),
                           ],
@@ -177,41 +195,45 @@ class ConversationContextMenu extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {},
-      child: Container(
+      child: _buildSurface(
+        context,
         key: const ValueKey('conversation-context-preview'),
         width: width,
-        constraints: const BoxConstraints(minHeight: 54),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: palette.surfacePrimary,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: shadow,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: palette.borderStrong,
-                shape: BoxShape.circle,
+        minHeight: 54,
+        padding: preview == null
+            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 14)
+            : EdgeInsets.zero,
+        borderRadius: BorderRadius.circular(18),
+        shadow: shadow,
+        child: IgnorePointer(
+          child:
+              preview ??
+              Row(
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: palette.borderStrong,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.textPrimary,
+                        fontSize: 15,
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: palette.textPrimary,
-                  fontSize: 15,
-                  height: 1.4,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -222,25 +244,63 @@ class ConversationContextMenu extends StatelessWidget {
     double width,
     List<BoxShadow> shadow,
   ) {
-    final palette = context.omniPalette;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {},
-      child: Container(
+      child: _buildSurface(
+        context,
         key: const ValueKey('conversation-context-actions'),
         width: math.min(width, 250),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: palette.surfacePrimary,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: shadow,
-        ),
+        borderRadius: BorderRadius.circular(20),
+        shadow: shadow,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: actions,
         ),
       ),
+    );
+  }
+
+  Widget _buildSurface(
+    BuildContext context, {
+    required Key key,
+    required double width,
+    required BorderRadius borderRadius,
+    required EdgeInsets padding,
+    required List<BoxShadow> shadow,
+    required Widget child,
+    double minHeight = 0,
+  }) {
+    final content = LiquidGlassSurfaceScope(
+      enabled: true,
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: minHeight),
+          child: Padding(padding: padding, child: child),
+        ),
+      ),
+    );
+    return SizedBox(
+      key: key,
+      width: width,
+      child: LiquidGlassScope.of(context)
+          ? LiquidGlass(
+              style: LiquidGlassStyle.menu(Theme.of(context).colorScheme),
+              borderRadius: borderRadius,
+              shadows: shadow,
+              child: content,
+            )
+          : DecoratedBox(
+              decoration: BoxDecoration(
+                color: context.omniPalette.surfacePrimary,
+                borderRadius: borderRadius,
+                boxShadow: shadow,
+              ),
+              child: content,
+            ),
     );
   }
 }

@@ -2,15 +2,15 @@
 // menuShadows helper in liquid_glass.dart at
 // 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7.
 // Keeps the upstream source snapshot, pointer-down activation, 450/500 ms
-// spring clocks and solid platter/content morph. Nested menus and the optional
-// glass renderer are omitted; menu contents and actions remain caller-owned.
+// spring clocks and platter/content morph, including the shader glass branch.
+// Nested menus are caller-owned; all popup owners share one surface renderer.
 // See docs/third-party/flclash-NOTICE.md.
 // SPDX-License-Identifier: GPL-3.0-only
 // ignore_for_file: prefer_initializing_formals
 
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' as ui show Image;
+import 'dart:ui' as ui show Image, PictureRecorder;
 import 'dart:ui' show ImageFilter, SemanticsRole, lerpDouble;
 
 import 'package:flutter/foundation.dart';
@@ -21,6 +21,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/omni_menu.dart';
+
+import 'liquid_glass.dart';
 
 part 'popup_geometry.dart';
 
@@ -58,7 +60,25 @@ List<BoxShadow> _menuShadows(ColorScheme scheme) => [
 RoundedSuperellipseBorder _shape(double radius) =>
     RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(radius));
 
+// LiquidGlassPane clamps its corner radii before building the visible pane.
+// Use that same contour for a glass source; a button's outer hit/ink shape can
+// contain a much larger radius and is not necessarily its painted glass path.
+ShapeBorder _visibleSourceShape(ShapeBorder shape, Rect rect, bool glass) {
+  if (!glass || shape is! RoundedSuperellipseBorder) return shape;
+  final corners = shape.borderRadius.resolve(TextDirection.ltr);
+  final limit = Radius.circular(rect.shortestSide / 2);
+  return RoundedSuperellipseBorder(
+    borderRadius: BorderRadius.only(
+      topLeft: corners.topLeft.clamp(maximum: limit),
+      topRight: corners.topRight.clamp(maximum: limit),
+      bottomLeft: corners.bottomLeft.clamp(maximum: limit),
+      bottomRight: corners.bottomRight.clamp(maximum: limit),
+    ),
+  );
+}
+
 const _maxContentBlur = 8.0;
+const _overshootPerLongestSide = 0.1;
 
 const _openDuration = Duration(milliseconds: 450);
 
@@ -113,44 +133,344 @@ const _dropletShare = 0.25;
 const _rimDepth = 8.0;
 const _glyphUnderAt = 0.25;
 
-/// Internal route; [FlClashPopupBox] owns its source snapshot and lifecycle.
-class _FlClashPopupRoute<T> extends PopupRoute<T> {
-  _FlClashPopupRoute({
+/// Shared clocks for the route and focus-preserving overlay menu owners.
+abstract final class FlClashPopupMotion {
+  static const openingDuration = _openDuration;
+  static const closingDuration = _dismissDuration;
+
+  static Future<void> close(
+    AnimationController controller, {
+    Duration duration = closingDuration,
+  }) async {
+    // AnimationController.reverse normally shortens an interrupted return.
+    // Upstream returns from the captured visible frame over the full 500 ms.
+    controller.reverseDuration =
+        duration * (1 / math.max(controller.value, 1e-3));
+    await controller.reverse().orCancel;
+  }
+}
+
+/// Captures the complete control, even when only one segment opens its menu.
+/// Keep background and all glyphs inside [builder]. A descendant popup box or
+/// the shared show* APIs consume this source via their sourceContext argument.
+class FlClashPopupSource extends StatefulWidget {
+  const FlClashPopupSource({
+    super.key,
     required this.builder,
-    required this.anchorOf,
-    required this.barrierLabel,
-    required this.sourceColor,
-    required this.sourceImage,
-    this.placement = FlClashPopupPlacement.overAnchorEnd,
+    this.color,
+    this.shape,
+    this.glass,
+    this.captureInsets = EdgeInsets.zero,
+    this.captureRect,
+    this.captureOverflow,
+    this.preserveOutsideCapture = true,
   });
 
   final WidgetBuilder builder;
-  final _PopupAnchorResolver anchorOf;
-  final FlClashPopupPlacement placement;
-  final Color sourceColor;
-  final ValueListenable<ui.Image?> sourceImage;
-  @override
-  final String? barrierLabel;
-  @override
-  Color? get barrierColor => null;
-  @override
-  bool get barrierDismissible => true;
-  @override
-  Duration get transitionDuration => _openDuration;
-  @override
-  Duration get reverseTransitionDuration => _dismissDuration;
+  final Color? color;
+  final ShapeBorder? shape;
+  final bool? glass;
+  final EdgeInsets captureInsets;
 
-  // A reversal must retain its full 500 ms even when opening was interrupted.
-  @override
-  bool didPop(T? result) {
-    controller!.reverseDuration =
-        reverseTransitionDuration * (1 / math.max(controller!.value, 1e-3));
-    return super.didPop(result);
+  /// Keep helper/counter content outside a field's capture visible. Controls
+  /// with visual padding or shadows can instead hide their complete subtree.
+  final bool preserveOutsideCapture;
+
+  /// Visible source bounds in this wrapper's local coordinates. This can omit
+  /// an InputDecorator's helper/counter without changing its hit or focus owner.
+  final Rect? Function(BuildContext sourceContext)? captureRect;
+
+  /// Painted adornments that extend outside [captureRect], such as a floating
+  /// input label. They travel with the snapshot without enlarging its material
+  /// contour or anchor. Rectangles use this wrapper's local coordinates.
+  final List<Rect> Function(BuildContext sourceContext)? captureOverflow;
+
+  static FlClashPopupSourceLease? captureOf(BuildContext? context) {
+    if (context == null || !context.mounted) return null;
+    return context
+        .findAncestorStateOfType<_FlClashPopupSourceState>()
+        ?._capture();
   }
 
-  final _platter = ValueNotifier<bool>(true);
-  final _pin = _PopupPin();
-  final _press = _CarriedPress();
+  @override
+  State<FlClashPopupSource> createState() => _FlClashPopupSourceState();
+}
+
+/// A presentation lease. The menu owner releases it only after reverse/remove;
+/// it never owns route identity, focus, selection or the action's lifecycle.
+class FlClashPopupSourceLease {
+  FlClashPopupSourceLease._(
+    this._source,
+    this.color,
+    this.shape,
+    this.glass,
+    this.captureRect,
+    this.captureOverflow,
+    this._lastGlobalRect,
+  );
+
+  _FlClashPopupSourceState? _source;
+  final Color color;
+  final ShapeBorder shape;
+  final bool glass;
+  final Rect captureRect;
+  final List<Rect> captureOverflow;
+  final image = ValueNotifier<ui.Image?>(null);
+  Rect? _lastGlobalRect;
+  bool _released = false;
+  bool _revealed = false;
+
+  Rect? rectIn(RenderBox? overlay) {
+    final current = _source?._globalRect();
+    if (current != null) _lastGlobalRect = current;
+    final rect = _lastGlobalRect;
+    if (rect == null) return null;
+    return overlay == null
+        ? rect
+        : rect.shift(-overlay.localToGlobal(Offset.zero));
+  }
+
+  void reveal() {
+    _revealed = true;
+    final source = _source;
+    if (source != null && source.mounted && identical(source._lease, this)) {
+      source._hidden.value = false;
+    }
+  }
+
+  void release() {
+    if (_released) return;
+    _released = true;
+    reveal();
+    final source = _source;
+    if (source != null && source.mounted && identical(source._lease, this)) {
+      source._releaseLease(this);
+    }
+    _source = null;
+    image.value?.dispose();
+    image.dispose();
+  }
+}
+
+class _FlClashPopupSourceState extends State<FlClashPopupSource> {
+  final _boundary = GlobalKey();
+  final _hidden = ValueNotifier(false);
+  FlClashPopupSourceLease? _lease;
+
+  Rect? _globalRect() {
+    final box = _boundary.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return null;
+    return _localCaptureRect(box).shift(box.localToGlobal(Offset.zero));
+  }
+
+  Rect _localCaptureRect(RenderBox box) {
+    final bounds = Offset.zero & box.size;
+    return (widget.captureRect?.call(_boundary.currentContext!) ??
+            widget.captureInsets.deflateRect(bounds))
+        .intersect(bounds);
+  }
+
+  FlClashPopupSourceLease? _capture() {
+    if (_lease != null) return null;
+    final rect = _globalRect();
+    if (rect == null || rect.isEmpty) return null;
+    final box = _boundary.currentContext!.findRenderObject()! as RenderBox;
+    final glass = widget.glass ?? LiquidGlassScope.of(context);
+    final lease = FlClashPopupSourceLease._(
+      this,
+      widget.color ??
+          (glass ? Colors.transparent : context.omniPalette.surfacePrimary),
+      _visibleSourceShape(widget.shape ?? _shape(1000), rect, glass),
+      glass,
+      _localCaptureRect(box),
+      List.unmodifiable(
+        widget.captureOverflow?.call(_boundary.currentContext!) ??
+            const <Rect>[],
+      ),
+      rect,
+    );
+    setState(() => _lease = lease);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !identical(_lease, lease) ||
+          lease._released ||
+          lease._revealed) {
+        return;
+      }
+      final boundary = _boundary.currentContext?.findRenderObject();
+      if (boundary is! _RenderPopupSourceBoundary || !boundary.hasSize) return;
+      lease.image.value = _captureShapedSource(
+        boundary,
+        lease.captureRect,
+        lease.shape,
+        MediaQuery.devicePixelRatioOf(context),
+        overflow: lease.captureOverflow,
+      );
+      _hidden.value = true;
+    });
+    return lease;
+  }
+
+  void _releaseLease(FlClashPopupSourceLease lease) {
+    if (identical(_lease, lease)) setState(() => _lease = null);
+  }
+
+  @override
+  void dispose() {
+    _lease?._source = null;
+    _hidden.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    ignoring: _lease != null,
+    child: ValueListenableBuilder<bool>(
+      valueListenable: _hidden,
+      builder: (_, hidden, child) {
+        final lease = _lease;
+        final box = _boundary.currentContext?.findRenderObject();
+        final partial =
+            widget.preserveOutsideCapture &&
+            widget.captureRect != null &&
+            lease != null &&
+            box is RenderBox &&
+            box.hasSize &&
+            lease.captureRect != (Offset.zero & box.size);
+        return Opacity(
+          opacity: hidden && !partial ? 0 : 1,
+          child: ClipPath(
+            clipBehavior: hidden && partial ? Clip.antiAlias : Clip.none,
+            clipper: _SourceExclusionClipper(
+              lease?.captureRect ?? Rect.zero,
+              lease?.shape ?? const RoundedRectangleBorder(),
+              lease?.captureOverflow ?? const [],
+            ),
+            child: child,
+          ),
+        );
+      },
+      child: _PopupSourceBoundary(
+        key: _boundary,
+        child: Builder(builder: widget.builder),
+      ),
+    ),
+  );
+}
+
+class _PopupSourceBoundary extends SingleChildRenderObjectWidget {
+  const _PopupSourceBoundary({super.key, required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderPopupSourceBoundary();
+}
+
+class _RenderPopupSourceBoundary extends RenderRepaintBoundary {
+  ui.Image capture(Rect bounds, double pixelRatio) =>
+      (layer! as OffsetLayer).toImageSync(bounds, pixelRatio: pixelRatio);
+}
+
+Rect _sourceCaptureBounds(Rect rect, List<Rect> overflow) =>
+    overflow.fold(rect, (bounds, region) => bounds.expandToInclude(region));
+
+Path _sourceCapturePath(Rect rect, ShapeBorder shape, List<Rect> overflow) {
+  var path = shape.getOuterPath(rect);
+  for (final region in overflow) {
+    path = Path.combine(PathOperation.union, path, Path()..addRect(region));
+  }
+  return path;
+}
+
+ui.Image _captureShapedSource(
+  _RenderPopupSourceBoundary boundary,
+  Rect rect,
+  ShapeBorder shape,
+  double pixelRatio, {
+  List<Rect> overflow = const [],
+}) {
+  final bounds = _sourceCaptureBounds(rect, overflow);
+  final full = LiquidGlass.withoutPanes(
+    // Unlike RenderRepaintBoundary.toImageSync, the layer API can retain a
+    // floating label painted above the boundary's own layout bounds.
+    () => boundary.capture(bounds, pixelRatio),
+  );
+  final clippedRecorder = ui.PictureRecorder();
+  final clippedCanvas = Canvas(clippedRecorder)..scale(pixelRatio);
+  clippedCanvas.clipPath(
+    _sourceCapturePath(rect, shape, overflow).shift(-bounds.topLeft),
+  );
+  clippedCanvas.drawImageRect(
+    full,
+    Offset.zero & Size(full.width.toDouble(), full.height.toDouble()),
+    Offset.zero & bounds.size,
+    Paint()..filterQuality = FilterQuality.medium,
+  );
+  final clippedPicture = clippedRecorder.endRecording();
+  try {
+    return clippedPicture.toImageSync(
+      math.max(1, (bounds.width * pixelRatio).ceil()),
+      math.max(1, (bounds.height * pixelRatio).ceil()),
+    );
+  } finally {
+    clippedPicture.dispose();
+    full.dispose();
+  }
+}
+
+class _SourceExclusionClipper extends CustomClipper<Path> {
+  const _SourceExclusionClipper(this.rect, this.shape, this.overflow);
+  final Rect rect;
+  final ShapeBorder shape;
+  final List<Rect> overflow;
+
+  @override
+  Path getClip(Size size) => Path.combine(
+    PathOperation.difference,
+    Path()..addRect(_sourceCaptureBounds(Offset.zero & size, overflow)),
+    _sourceCapturePath(rect, shape, overflow),
+  );
+
+  @override
+  bool shouldReclip(_SourceExclusionClipper oldClipper) =>
+      rect != oldClipper.rect ||
+      shape != oldClipper.shape ||
+      !listEquals(overflow, oldClipper.overflow);
+}
+
+/// The one FlClash paint-only spring/blur/source-return implementation.
+/// [anchor] is in the parent CustomSingleChildLayout's coordinate system.
+/// Keeping this directly below that layout preserves the measured offset.
+class FlClashPopupTransition extends StatefulWidget {
+  const FlClashPopupTransition({
+    super.key,
+    required this.anchor,
+    required this.animation,
+    required this.child,
+    this.source,
+    this.sourceImage,
+    this.sourceColor,
+    this.sourceShape,
+    this.sourceGlass,
+    this.sourceOverflow = const [],
+  });
+
+  final Rect anchor;
+  final Animation<double> animation;
+  final Widget child;
+  final FlClashPopupSourceLease? source;
+  final ValueListenable<ui.Image?>? sourceImage;
+  final Color? sourceColor;
+  final ShapeBorder? sourceShape;
+  final bool? sourceGlass;
+  final List<Rect> sourceOverflow;
+
+  @override
+  State<FlClashPopupTransition> createState() => _FlClashPopupTransitionState();
+}
+
+class _FlClashPopupTransitionState extends State<FlClashPopupTransition> {
+  final _platter = ValueNotifier(true);
   final _surface = _PopupSurface();
 
   @override
@@ -160,12 +480,129 @@ class _FlClashPopupRoute<T> extends PopupRoute<T> {
   }
 
   @override
+  Widget build(BuildContext context) {
+    final glass = LiquidGlassScope.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    if (reducedMotion && !glass) return widget.child;
+    return _PopupMorph(
+      anchor: widget.anchor,
+      animation: reducedMotion
+          ? const AlwaysStoppedAnimation(1.0)
+          : widget.animation,
+      platter: _platter,
+      surface: _surface,
+      sourceColor:
+          widget.source?.color ??
+          widget.sourceColor ??
+          (glass ? Colors.transparent : context.omniPalette.surfacePrimary),
+      sourceImage: widget.source?.image ?? widget.sourceImage,
+      sourceShape:
+          widget.source?.shape ??
+          _visibleSourceShape(
+            widget.sourceShape ?? _shape(1000),
+            widget.anchor,
+            widget.sourceGlass ?? glass,
+          ),
+      sourceOverflow: widget.source == null
+          ? widget.sourceOverflow
+          : widget.source!.captureOverflow
+                .map((rect) => rect.shift(-widget.source!.captureRect.topLeft))
+                .toList(growable: false),
+      surfaceColor: context.omniPalette.surfacePrimary,
+      shadows: _menuShadows(scheme),
+      glass: glass
+          ? (
+              from: LiquidGlassStyle.regular(scheme).scale(
+                (widget.source?.glass ?? widget.sourceGlass ?? glass) ? 1 : 0,
+              ),
+              to: LiquidGlassStyle.menu(scheme),
+              rim: LiquidGlassRim.menu(scheme),
+              coarse:
+                  LiquidGlassScope.qualityOf(context) ==
+                  LiquidGlassQuality.standard,
+            )
+          : null,
+      child: LiquidGlassSurfaceScope(
+        enabled: glass,
+        child: AnimatedBuilder(
+          animation: widget.animation,
+          child: RepaintBoundary(child: widget.child),
+          builder: (_, child) => IgnorePointer(
+            ignoring: widget.animation.status == AnimationStatus.reverse,
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+typedef _PlatterGlass = ({
+  LiquidGlassStyle from,
+  LiquidGlassStyle to,
+  LiquidGlassRim rim,
+  bool coarse,
+});
+
+/// Internal route; [FlClashPopupBox] owns its source snapshot and lifecycle.
+class _FlClashPopupRoute<T> extends PopupRoute<T> {
+  _FlClashPopupRoute({
+    required this.builder,
+    required this.anchorOf,
+    required this.barrierLabel,
+    required this.sourceColor,
+    required this.sourceImage,
+    required this.sourceShape,
+    required this.sourceGlass,
+    this.sourceOverflow = const [],
+    this.placement = FlClashPopupPlacement.overAnchorEnd,
+    this.reduceMotion = false,
+  });
+
+  final bool reduceMotion;
+  final WidgetBuilder builder;
+  final _PopupAnchorResolver anchorOf;
+  final FlClashPopupPlacement placement;
+  final Color sourceColor;
+  final ValueListenable<ui.Image?> sourceImage;
+  final ShapeBorder sourceShape;
+  final bool sourceGlass;
+  final List<Rect> sourceOverflow;
+  @override
+  final String? barrierLabel;
+  @override
+  Color? get barrierColor => null;
+  @override
+  bool get barrierDismissible => true;
+  @override
+  Duration get transitionDuration =>
+      reduceMotion ? Duration.zero : _openDuration;
+  @override
+  Duration get reverseTransitionDuration =>
+      reduceMotion ? Duration.zero : _dismissDuration;
+
+  // A reversal must retain its full 500 ms even when opening was interrupted.
+  @override
+  bool didPop(T? result) {
+    controller!.reverseDuration =
+        reverseTransitionDuration * (1 / math.max(controller!.value, 1e-3));
+    return super.didPop(result);
+  }
+
+  final _pin = _PopupPin();
+  final _press = _CarriedPress();
+
+  @override
   Widget buildPage(
     BuildContext context,
     Animation<double> animation,
     Animation<double> secondaryAnimation,
   ) {
-    final color = context.omniPalette.surfacePrimary;
+    final glass = LiquidGlassScope.of(context);
+    final color = glass
+        ? Colors.transparent
+        : context.omniPalette.surfacePrimary;
     return FocusScope(
       autofocus: navigator?.widget.requestFocus ?? true,
       child: FocusTraversalGroup(
@@ -180,7 +617,9 @@ class _FlClashPopupRoute<T> extends PopupRoute<T> {
             decoration: ShapeDecoration(
               color: color,
               shape: _shape(_cardRadius),
-              shadows: _menuShadows(Theme.of(context).colorScheme),
+              shadows: glass
+                  ? null
+                  : _menuShadows(Theme.of(context).colorScheme),
             ),
             child: Material(
               type: MaterialType.transparency,
@@ -221,15 +660,14 @@ class _FlClashPopupRoute<T> extends PopupRoute<T> {
               placement: placement,
               pin: _pin,
             ),
-            child: _PopupMorph(
+            child: FlClashPopupTransition(
               anchor: anchor,
               animation: animation,
-              platter: _platter,
-              surface: _surface,
               sourceColor: sourceColor,
               sourceImage: sourceImage,
-              surfaceColor: context.omniPalette.surfacePrimary,
-              shadows: _menuShadows(Theme.of(context).colorScheme),
+              sourceShape: sourceShape,
+              sourceGlass: sourceGlass,
+              sourceOverflow: sourceOverflow,
               child: child,
             ),
           ),
@@ -456,8 +894,11 @@ class _PopupMorph extends SingleChildRenderObjectWidget {
     required this.surface,
     required this.sourceColor,
     required this.sourceImage,
+    required this.sourceShape,
+    required this.sourceOverflow,
     required this.surfaceColor,
     required this.shadows,
+    required this.glass,
     super.child,
   });
 
@@ -467,8 +908,14 @@ class _PopupMorph extends SingleChildRenderObjectWidget {
   final _PopupSurface surface;
   final Color sourceColor;
   final ValueListenable<ui.Image?>? sourceImage;
+  final ShapeBorder sourceShape;
+  final List<Rect> sourceOverflow;
   final Color surfaceColor;
   final List<BoxShadow> shadows;
+
+  /// The platter's glass as it leaves the anchor and as it lands on the card,
+  /// or null for a [surfaceColor] fill.
+  final _PlatterGlass? glass;
 
   @override
   _RenderPopupMorph createRenderObject(BuildContext context) {
@@ -479,8 +926,11 @@ class _PopupMorph extends SingleChildRenderObjectWidget {
       surface: surface,
       sourceColor: sourceColor,
       sourceImage: sourceImage,
+      sourceShape: sourceShape,
+      sourceOverflow: sourceOverflow,
       surfaceColor: surfaceColor,
       shadows: shadows,
+      glass: glass,
     );
   }
 
@@ -496,8 +946,11 @@ class _PopupMorph extends SingleChildRenderObjectWidget {
       ..surface = surface
       ..sourceColor = sourceColor
       ..sourceImage = sourceImage
+      ..sourceShape = sourceShape
+      ..sourceOverflow = sourceOverflow
       ..surfaceColor = surfaceColor
-      ..shadows = shadows;
+      ..shadows = shadows
+      ..glass = glass;
   }
 }
 
@@ -522,15 +975,23 @@ class _RenderPopupMorph extends RenderProxyBox {
     required this.surface,
     required Color sourceColor,
     required ValueListenable<ui.Image?>? sourceImage,
+    required ShapeBorder sourceShape,
+    required List<Rect> sourceOverflow,
     required Color surfaceColor,
     required List<BoxShadow> shadows,
+    required _PlatterGlass? glass,
   }) : _anchor = anchor,
        _animation = animation,
        _platter = platter,
        _sourceColor = sourceColor,
        _sourceImage = sourceImage,
+       _sourceShape = sourceShape,
+       _sourceOverflow = sourceOverflow,
        _surfaceColor = surfaceColor,
-       _shadows = shadows;
+       _shadows = shadows,
+       _glass = glass;
+
+  late final _pane = LiquidGlassPane(markNeedsPaint);
 
   _PopupSurface surface;
 
@@ -562,14 +1023,18 @@ class _RenderPopupMorph extends RenderProxyBox {
     markNeedsPaint();
   }
 
+  bool _closing = false;
   _MorphFrame? _closingFrame;
   double _closingFrom = 1;
   Rect? _closingSurface;
 
   void _handleStatusChanged(AnimationStatus status) {
-    if (status != AnimationStatus.reverse) {
-      return;
+    if (status == AnimationStatus.forward ||
+        status == AnimationStatus.completed) {
+      _closing = false;
     }
+    if (status != AnimationStatus.reverse) return;
+    _closing = true;
     _closingFrom = _animation.value;
     _closingFrame = _frame();
     _closingSurface = hasSize ? surface.rectIn?.call(this) : null;
@@ -621,6 +1086,66 @@ class _RenderPopupMorph extends RenderProxyBox {
     markNeedsPaint();
   }
 
+  ShapeBorder _sourceShape;
+
+  set sourceShape(ShapeBorder value) {
+    if (value == _sourceShape) return;
+    _sourceShape = value;
+    markNeedsPaint();
+  }
+
+  Path _sourceOutline(Rect rect) => _sourceShape
+      .scale(rect.shortestSide / math.max(_localAnchor.shortestSide, 1e-3))
+      .getOuterPath(rect);
+
+  List<Rect> _sourceOverflow;
+
+  set sourceOverflow(List<Rect> value) {
+    if (listEquals(value, _sourceOverflow)) return;
+    _sourceOverflow = value;
+    markNeedsPaint();
+  }
+
+  List<Rect> _imageOverflow(Rect rect) {
+    final scaleX = rect.width / math.max(_localAnchor.width, 1e-3);
+    final scaleY = rect.height / math.max(_localAnchor.height, 1e-3);
+    return _sourceOverflow
+        .map(
+          (region) => Rect.fromLTRB(
+            rect.left + region.left * scaleX,
+            rect.top + region.top * scaleY,
+            rect.left + region.right * scaleX,
+            rect.top + region.bottom * scaleY,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  double _sourceRadius(Rect rect) {
+    final radius = switch (_sourceShape) {
+      RoundedRectangleBorder(:final borderRadius) ||
+      RoundedSuperellipseBorder(
+        :final borderRadius,
+      ) => borderRadius.resolve(TextDirection.ltr).topLeft.x,
+      OutlineInputBorder(:final borderRadius) => borderRadius.topLeft.x,
+      _ => _localAnchor.shortestSide / 2,
+    };
+    return math.min(
+      rect.shortestSide / 2,
+      radius * rect.shortestSide / math.max(_localAnchor.shortestSide, 1e-3),
+    );
+  }
+
+  // The snapshot already contains its original fill. Compensate its underlay
+  // with source-over algebra, so a translucent field does not become opaque.
+  Color _underSnapshot(Color fill, double opacity) {
+    final imageAlpha = fill.a * opacity;
+    final alpha = imageAlpha >= 1
+        ? 0.0
+        : fill.a * (1 - opacity) / (1 - imageAlpha);
+    return fill.withValues(alpha: alpha.clamp(0, 1));
+  }
+
   Color _surfaceColor;
 
   set surfaceColor(Color value) {
@@ -638,6 +1163,16 @@ class _RenderPopupMorph extends RenderProxyBox {
       return;
     }
     _shadows = value;
+    markNeedsPaint();
+  }
+
+  _PlatterGlass? _glass;
+
+  set glass(_PlatterGlass? value) {
+    if (value == _glass) {
+      return;
+    }
+    _glass = value;
     markNeedsPaint();
   }
 
@@ -662,6 +1197,12 @@ class _RenderPopupMorph extends RenderProxyBox {
   }
 
   @override
+  void dispose() {
+    _pane.dispose();
+    super.dispose();
+  }
+
+  @override
   bool get alwaysNeedsCompositing => child != null;
 
   /// The anchor in this box's coordinates; it comes in those of the layout
@@ -672,6 +1213,12 @@ class _RenderPopupMorph extends RenderProxyBox {
   @override
   void paint(PaintingContext context, Offset offset) {
     if (child == null) {
+      return;
+    }
+    // Owners reveal the real source on dismissed, before this frame paints.
+    // Do not restart the t=0 opening platter or paint a duplicate source pane.
+    if (_closing && _animation.status == AnimationStatus.dismissed) {
+      _pane.clear();
       return;
     }
     if (_animation.status != AnimationStatus.reverse) {
@@ -701,7 +1248,8 @@ class _RenderPopupMorph extends RenderProxyBox {
       needsCompositing,
       offset,
       transform,
-      (context, offset) => context.pushOpacity(
+      (context, offset) => LiquidGlassFade.push(
+        context,
         offset,
         Color.getAlphaFromOpacity(1 - shrink),
         (context, offset) => _paintFrame(context, offset, frame),
@@ -766,9 +1314,27 @@ class _RenderPopupMorph extends RenderProxyBox {
   void _paintFrame(PaintingContext context, Offset offset, _MorphFrame? frame) {
     final child = this.child!;
     if (frame == null || size.isEmpty) {
+      final glass = _glass;
+      if (glass == null || size.isEmpty) {
+        _pane.clear();
+      } else {
+        // A shared popup owner keeps one pane after the morph settles, so its
+        // generic menu contents never add a second capture or an opaque fill.
+        final rect = offset & size;
+        _pane.paint(
+          context,
+          rect,
+          shape: LiquidGlassCorners.circular(_cardRadius),
+          style: glass.to,
+          shadows: _shadows,
+          rim: glass.rim,
+        );
+        glass.rim.paintLine(context.canvas, rect, _cardRadius);
+      }
       context.paintChild(child, offset);
       return;
     }
+    final anchor = _localAnchor;
     final bounds = Offset.zero & size;
     final (:platter, :radius, :droplet, :progress) = _openingOf(
       frame.time,
@@ -786,6 +1352,7 @@ class _RenderPopupMorph extends RenderProxyBox {
     // sub menu leaves the root's bounds, the platter steps aside instead of
     // clipping the levels until the springs settle.
     if (!frame.platter) {
+      _pane.clear();
       context.pushTransform(
         needsCompositing,
         offset,
@@ -794,6 +1361,7 @@ class _RenderPopupMorph extends RenderProxyBox {
       );
       return;
     }
+    final glass = _glass;
     final settled = progress.clamp(0.0, 1.0);
     final clip = _shape(radius).getOuterPath(platter);
     final depth = droplet == null
@@ -802,11 +1370,59 @@ class _RenderPopupMorph extends RenderProxyBox {
     final merged = depth >= 0;
     final outline = merged
         ? clip
-        : gooPairOutline(platter, radius, droplet!, _dropletBlend);
+        : gooPairOutline(
+            platter,
+            radius,
+            droplet!,
+            _dropletBlend,
+            coarse: glass?.coarse ?? false,
+            secondOutline: _sourceOutline(droplet),
+            secondRadius: _sourceRadius(droplet),
+          );
+    final rim = merged
+        ? glass?.rim.scale(settled * math.min(1.0, depth / _rimDepth))
+        : null;
     final path = outline.shift(offset);
+    if (glass != null) {
+      final shape = outline.getBounds();
+      // Frosted as the card and shadowed after, so one capture serves the morph.
+      _pane.paint(
+        context,
+        (merged ? platter : shape).shift(offset),
+        shape: merged
+            ? LiquidGlassCorners.circular(radius)
+            : LiquidGlassGoo(
+                outline.shift(-shape.topLeft),
+                [platter.shift(-shape.topLeft), droplet!.shift(-shape.topLeft)],
+                const [_dropletBlend],
+                firstRadius: math.max(radius, 1e-3),
+              ),
+        style: LiquidGlassStyle.lerp(
+          glass.from,
+          glass.to,
+          settled,
+        ).copyWith(blur: glass.to.blur),
+        hold: bounds
+            .expandToInclude(anchor)
+            .inflate(size.longestSide * _overshootPerLongestSide)
+            .shift(offset),
+        rim: rim,
+      );
+    }
     _paintShadows(context.canvas, path, platter.shift(offset), radius, settled);
-    final fill = Color.lerp(_sourceColor, _surfaceColor, settled)!;
-    context.canvas.drawPath(path, Paint()..color = fill);
+    final Color fill;
+    if (glass == null) {
+      fill = Color.lerp(_sourceColor, _surfaceColor, settled)!;
+    } else {
+      fill = _sourceColor.withValues(alpha: _sourceColor.a * (1 - settled));
+    }
+    final sourceOpacity = 1.0 - math.min(1.0, settled / _glyphUnderAt);
+    context.canvas.drawPath(
+      path,
+      Paint()
+        ..color = image == null ? fill : _underSnapshot(fill, sourceOpacity),
+    );
+    rim?.paintLine(context.canvas, platter.shift(offset), radius);
     if (image != null && droplet != null) {
       final under = math.min(1.0, settled / _glyphUnderAt);
       _paintSource(
@@ -855,6 +1471,7 @@ class _RenderPopupMorph extends RenderProxyBox {
     final bounds = Offset.zero & size;
     final card = _closingSurface ?? bounds;
     if (card.isEmpty) {
+      _pane.clear();
       return;
     }
     final opening = start == null ? null : _openingOf(start.time, card);
@@ -910,7 +1527,17 @@ class _RenderPopupMorph extends RenderProxyBox {
       (time / _dismissSeconds).clamp(0.0, 1.0),
     );
     final blend = _dropletBlend * math.min(1.0, time / 0.05) * (1 - absorbed);
-    final outline = gooPairOutline(platter, platterRadius, droplet, blend);
+    final glass = _glass;
+    final outline = gooPairOutline(
+      platter,
+      platterRadius,
+      droplet,
+      blend,
+      coarse: glass?.coarse ?? false,
+      secondOutline: _sourceOutline(droplet),
+      secondRadius: _sourceRadius(droplet),
+    );
+    final shape = outline.getBounds();
     final reveal =
         (opening?.progress.clamp(0.0, 1.0) ?? 1) *
         (1 -
@@ -919,6 +1546,35 @@ class _RenderPopupMorph extends RenderProxyBox {
             ));
     final remaining = (1 - progress).clamp(0.0, 1.0);
     final path = outline.shift(offset);
+    if (glass != null) {
+      _pane.paint(
+        context,
+        shape.shift(offset),
+        // Once the platter is inside its source, use the source pane's exact
+        // analytic corners. A sampled radial outline is unnecessary here and
+        // can become unstable when the goo union changes contour count.
+        shape:
+            gooPairDepth(droplet, _sourceRadius(droplet), platter, blend) >= 0
+            ? LiquidGlassCorners.circular(_sourceRadius(droplet))
+            : LiquidGlassGoo(
+                outline.shift(-shape.topLeft),
+                [platter.shift(-shape.topLeft), droplet.shift(-shape.topLeft)],
+                [blend],
+                firstRadius: math.max(platterRadius, 1e-3),
+              ),
+        style: LiquidGlassStyle.lerp(
+          glass.from,
+          glass.to,
+          remaining,
+        ).copyWith(blur: lerpDouble(glass.to.blur, glass.from.blur, absorbed)),
+        hold: bounds
+            .expandToInclude(from)
+            .expandToInclude(anchor.inflate(anchor.longestSide))
+            .inflate(size.longestSide * _overshootPerLongestSide)
+            .shift(offset),
+        holdFrost: absorbed > 0 ? glass.from.blur : null,
+      );
+    }
     // Returning cards keep their own shadow as they fade into the platter's,
     // which fills under them from the start so the page does not show
     // through; on glass they stand bare and the platter holds throughout.
@@ -927,20 +1583,24 @@ class _RenderPopupMorph extends RenderProxyBox {
       path,
       platter.shift(offset),
       platterRadius,
-      remaining * (1 - reveal),
+      remaining * (glass == null ? 1 - reveal : 1.0),
     );
-    final fill = Color.lerp(_surfaceColor, _sourceColor, progress)!;
-    context.canvas.drawPath(path, Paint()..color = fill);
-    _paintSource(
-      context.canvas,
-      image,
-      droplet.shift(offset),
-      lerpDouble(
-        0.2,
-        1,
-        _dropletGlyphCurve.transform((time / _dropletGlyphIn).clamp(0.0, 1.0)),
-      )!,
+    final Color fill;
+    if (glass == null) {
+      fill = Color.lerp(_surfaceColor, _sourceColor, progress)!;
+    } else {
+      fill = _sourceColor.withValues(alpha: _sourceColor.a * (1 - remaining));
+    }
+    final sourceOpacity = lerpDouble(
+      0.2,
+      1,
+      _dropletGlyphCurve.transform((time / _dropletGlyphIn).clamp(0.0, 1.0)),
+    )!;
+    context.canvas.drawPath(
+      path,
+      Paint()..color = _underSnapshot(fill, sourceOpacity),
     );
+    _paintSource(context.canvas, image, droplet.shift(offset), sourceOpacity);
     if (reveal > 0 && !size.isEmpty) {
       _paintContent(
         context,
@@ -998,10 +1658,17 @@ class _RenderPopupMorph extends RenderProxyBox {
     if (Color.getAlphaFromOpacity(opacity) == 0) {
       return;
     }
+    canvas.save();
+    final overflow = _imageOverflow(rect);
+    var clip = _sourceOutline(rect);
+    for (final region in overflow) {
+      clip = Path.combine(PathOperation.union, clip, Path()..addRect(region));
+    }
+    canvas.clipPath(clip);
     canvas.drawImageRect(
       image,
       Offset.zero & Size(image.width.toDouble(), image.height.toDouble()),
-      rect,
+      _sourceCaptureBounds(rect, overflow),
       Paint()
         ..color = Color.fromRGBO(0, 0, 0, opacity)
         ..filterQuality = FilterQuality.medium
@@ -1009,6 +1676,7 @@ class _RenderPopupMorph extends RenderProxyBox {
             ? ImageFilter.blur(sigmaX: blur, sigmaY: blur)
             : null,
     );
+    canvas.restore();
   }
 
   void _paintContent(
@@ -1220,7 +1888,7 @@ class _PopupPin {
   }
 }
 
-/// FlClash's solid popup opening from a single target (normally 44 dp).
+/// FlClash's popup opening from a single target (normally 44 dp).
 /// [popupBuilder] supplies content only: this route paints the surface/clip.
 /// Choose with `Navigator.of(context).pop<T>(value)`; [onSelected] runs once
 /// the source has reappeared. Use nonblocking [onOpened] for refreshing data.
@@ -1232,6 +1900,7 @@ class FlClashPopupBox<T> extends StatefulWidget {
     this.placement = FlClashPopupPlacement.overAnchorEnd,
     this.onOpened,
     this.onSelected,
+    this.sourceShape,
   });
 
   final Widget Function(BuildContext context, VoidCallback open) targetBuilder;
@@ -1245,6 +1914,7 @@ class FlClashPopupBox<T> extends StatefulWidget {
   final WidgetBuilder popupBuilder;
 
   final FlClashPopupPlacement placement;
+  final ShapeBorder? sourceShape;
 
   @override
   State<FlClashPopupBox<T>> createState() => _FlClashPopupBoxState<T>();
@@ -1298,7 +1968,9 @@ class _FlClashPopupBoxState<T> extends State<FlClashPopupBox<T>> {
     if (resolved != null && resolved.a > 0) {
       return resolved;
     }
-    return context.omniPalette.surfacePrimary;
+    return LiquidGlassScope.of(context)
+        ? Colors.transparent
+        : context.omniPalette.surfacePrimary;
   }
 
   void _captureSource(
@@ -1309,11 +1981,20 @@ class _FlClashPopupBoxState<T> extends State<FlClashPopupBox<T>> {
       return;
     }
     final boundary = _sourceKey.currentContext?.findRenderObject();
-    if (boundary is! RenderRepaintBoundary || !boundary.hasSize) {
+    if (boundary is! _RenderPopupSourceBoundary || !boundary.hasSize) {
       return;
     }
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
-    snapshot.value = boundary.toImageSync(pixelRatio: pixelRatio);
+    snapshot.value = _captureShapedSource(
+      boundary,
+      Offset.zero & boundary.size,
+      _visibleSourceShape(
+        widget.sourceShape ?? _shape(1000),
+        Offset.zero & boundary.size,
+        LiquidGlassScope.of(context),
+      ),
+      pixelRatio,
+    );
     _sourceHidden.value = true;
   }
 
@@ -1392,18 +2073,32 @@ class _FlClashPopupBoxState<T> extends State<FlClashPopupBox<T>> {
     if (_route != null) {
       return;
     }
-    final snapshot = ValueNotifier<ui.Image?>(null);
+    final sharedSource = FlClashPopupSource.captureOf(context);
+    final snapshot = sharedSource?.image ?? ValueNotifier<ui.Image?>(null);
+    final navigatorBox =
+        Navigator.of(context).context.findRenderObject() as RenderBox?;
     final route = _route = _FlClashPopupRoute<T>(
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       builder: (context) => widget.popupBuilder(context),
-      anchorOf: _sourceRect,
+      anchorOf: sharedSource == null
+          ? _sourceRect
+          : () => sharedSource.rectIn(navigatorBox),
       placement: widget.placement,
-      sourceColor: _sourceColor(),
+      reduceMotion: MediaQuery.disableAnimationsOf(context),
+      sourceColor: sharedSource?.color ?? _sourceColor(),
       sourceImage: snapshot,
+      sourceShape: sharedSource?.shape ?? widget.sourceShape ?? _shape(1000),
+      sourceGlass: sharedSource?.glass ?? LiquidGlassScope.of(context),
+      sourceOverflow:
+          sharedSource?.captureOverflow
+              .map((rect) => rect.shift(-sharedSource.captureRect.topLeft))
+              .toList(growable: false) ??
+          const [],
     );
     unawaited(Navigator.of(context).push(route));
     widget.onOpened?.call();
     void reveal() {
+      sharedSource?.reveal();
       if (mounted) {
         _sourceHidden.value = false;
       }
@@ -1418,16 +2113,22 @@ class _FlClashPopupBoxState<T> extends State<FlClashPopupBox<T>> {
       route.completed.then((value) {
         if (identical(_route, route)) _route = null;
         reveal();
-        snapshot.value?.dispose();
-        snapshot.dispose();
+        if (sharedSource != null) {
+          sharedSource.release();
+        } else {
+          snapshot.value?.dispose();
+          snapshot.dispose();
+        }
         if (mounted && value != null) widget.onSelected?.call(value);
       }),
     );
     // The control repaints its ink as it is tapped, so it can only be
     // captured once that frame has been painted.
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _captureSource(route, snapshot),
-    );
+    if (sharedSource == null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _captureSource(route, snapshot),
+      );
+    }
   }
 
   @override
@@ -1453,7 +2154,7 @@ class _FlClashPopupBoxState<T> extends State<FlClashPopupBox<T>> {
         valueListenable: _sourceHidden,
         builder: (_, hidden, child) =>
             Opacity(opacity: hidden ? 0 : 1, child: child),
-        child: RepaintBoundary(
+        child: _PopupSourceBoundary(
           key: _sourceKey,
           child: widget.targetBuilder(context, _open),
         ),

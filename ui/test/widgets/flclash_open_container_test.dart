@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,8 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/services/storage_service.dart';
+import 'package:ui/features/home/pages/tools/tools_page.dart';
+import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/widgets/flclash/open_container.dart';
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:ui/widgets/flclash/drag_back.dart';
 import 'package:ui/widgets/predictive_back_route.dart';
 
@@ -15,6 +20,192 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await StorageService.init();
   });
+
+  testWidgets(
+    'real Tools settings defer both native catalogs through the container',
+    (tester) async {
+      const local = MethodChannel('cn.com.omnimind.bot/PluginPlatform');
+      const remote = MethodChannel('cn.com.omnimind.bot/RemoteMcpConfig');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      final reads = <String>[];
+      for (final channel in [local, remote]) {
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          reads.add(call.method);
+          return [];
+        });
+      }
+      addTearDown(() {
+        messenger.setMockMethodCallHandler(local, null);
+        messenger.setMockMethodCallHandler(remote, null);
+      });
+      final harness = _Harness(page: const ToolsPage());
+      await tester.pumpWidget(harness.app);
+      await tester.tap(find.text('Open settings'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byType(ToolsPage), findsOneWidget);
+      expect(reads, isEmpty);
+      await tester.pumpAndSettle();
+      expect(reads, unorderedEquals(['listTools', 'listToolCatalog']));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      harness.router.dispose();
+    },
+  );
+
+  testWidgets('settings reads wait for the actual container landing frame', (
+    tester,
+  ) async {
+    var reads = 0;
+    var builds = 0;
+    final data = Completer<String>();
+    final harness = _Harness(
+      page: _LoadingDetail(
+        read: () {
+          reads++;
+          return data.future;
+        },
+        onBuild: () => builds++,
+      ),
+    );
+    await tester.pumpWidget(harness.app);
+    await tester.tap(find.text('Open settings'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Loading detail'), findsOneWidget);
+    expect(reads, 0);
+    final initialBuilds = builds;
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(reads, 0);
+    expect(builds, initialBuilds);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(reads, 0);
+    await tester.pumpAndSettle();
+    expect(reads, 1);
+    data.complete('Loaded detail');
+    await tester.pumpAndSettle();
+    expect(find.text('Loaded detail'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    harness.router.dispose();
+  });
+
+  testWidgets('abandoning an opening settings page cancels unread work', (
+    tester,
+  ) async {
+    var reads = 0;
+    final harness = _Harness(
+      page: _LoadingDetail(
+        read: () async {
+          reads++;
+          return 'Loaded detail';
+        },
+      ),
+    );
+    await tester.pumpWidget(harness.app);
+    await tester.tap(find.text('Open settings'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    harness.router.pop();
+    await tester.pumpAndSettle();
+    expect(reads, 0);
+    expect(find.text('Open settings'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    harness.router.dispose();
+  });
+
+  testWidgets('a late settings reply never rebuilds the closing container', (
+    tester,
+  ) async {
+    final data = Completer<String>();
+    final published = <String>[];
+    final harness = _Harness(
+      page: _LoadingDetail(read: () => data.future, onPublished: published.add),
+    );
+    await tester.pumpWidget(harness.app);
+    await tester.tap(find.text('Open settings'));
+    await tester.pumpAndSettle();
+    harness.router.pop();
+    await tester.pump();
+    data.complete('Too late');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(published, isEmpty);
+    expect(find.text('Too late'), findsNothing);
+    await tester.pumpAndSettle();
+    expect(published, isEmpty);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    harness.router.dispose();
+  });
+
+  testWidgets(
+    'covered settings publish only after the departing popup completes',
+    (tester) async {
+      final data = Completer<String>();
+      final published = <String>[];
+      final harness = _Harness(
+        page: _LoadingDetail(
+          read: () => data.future,
+          onPublished: published.add,
+        ),
+      );
+      await tester.pumpWidget(harness.app);
+      await tester.tap(find.text('Open settings'));
+      await tester.pumpAndSettle();
+      final detailContext = tester.element(find.text('Loading detail'));
+      final route = ModalRoute.of(detailContext)!;
+      final popup = DialogRoute<void>(
+        context: detailContext,
+        builder: (_) => const AlertDialog(content: Text('Covering popup')),
+      );
+      unawaited(route.navigator!.push(popup));
+      await tester.pumpAndSettle();
+      data.complete('Loaded detail');
+      await tester.pumpAndSettle();
+      expect(published, isEmpty);
+      route.navigator!.pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(route.isCurrent, isTrue);
+      expect(route.secondaryAnimation!.isDismissed, isTrue);
+      expect(popup.animation!.isAnimating, isTrue);
+      expect(published, isEmpty);
+      await tester.pumpAndSettle();
+      expect(published, ['Loaded detail']);
+      expect(find.text('Loaded detail'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      harness.router.dispose();
+    },
+  );
+
+  testWidgets(
+    'reduced-motion detail loads after layout without a timer delay',
+    (tester) async {
+      var reads = 0;
+      final harness = _Harness(
+        disableAnimations: true,
+        page: _LoadingDetail(
+          readinessChecks: 8,
+          read: () async {
+            reads++;
+            return 'Loaded detail';
+          },
+        ),
+      );
+      await tester.pumpWidget(harness.app);
+      await tester.tap(find.text('Open settings'));
+      for (var frame = 0; frame < 4; frame++) {
+        await tester.pump();
+      }
+      expect(reads, 1);
+      expect(find.text('Loaded detail'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      harness.router.dispose();
+    },
+  );
 
   testWidgets('expands a row without relaying out its page on every frame', (
     tester,
@@ -661,6 +852,8 @@ class _Harness {
 
   Widget get app => MaterialApp.router(
     theme: AppTheme.lightTheme,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     routerConfig: router,
     builder: (context, child) => MediaQuery(
       data: MediaQuery.of(context)
@@ -668,4 +861,44 @@ class _Harness {
       child: child!,
     ),
   );
+}
+
+class _LoadingDetail extends StatefulWidget {
+  const _LoadingDetail({
+    required this.read,
+    this.onBuild,
+    this.onPublished,
+    this.readinessChecks = 1,
+  });
+  final Future<String> Function() read;
+  final int readinessChecks;
+  final VoidCallback? onBuild;
+  final ValueChanged<String>? onPublished;
+  @override
+  State<_LoadingDetail> createState() => _LoadingDetailState();
+}
+
+class _LoadingDetailState extends State<_LoadingDetail>
+    with FlClashPageLoadMixin {
+  String _label = 'Loading detail';
+  @override
+  void initState() {
+    super.initState();
+    unawaited(
+      runPageLoad(#detail, () async {
+        final value = await widget.read();
+        for (var check = 0; check < widget.readinessChecks; check++) {
+          if (!await waitForPageReady()) return;
+        }
+        setState(() => _label = value);
+        widget.onPublished?.call(value);
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    widget.onBuild?.call();
+    return Scaffold(body: Text(_label));
+  }
 }

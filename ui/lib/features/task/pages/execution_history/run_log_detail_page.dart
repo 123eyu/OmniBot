@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/omni_glass_floating_action_button.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ui/features/task/pages/execution_history/widgets/run_log_timeline_components.dart';
@@ -160,31 +161,40 @@ class _RunLogDetailPageState extends State<RunLogDetailPage> {
       ),
       floatingActionButton: _runLog == null
           ? null
-          : FloatingActionButton.extended(
-              key: ValueKey(
-                _functionId?.isNotEmpty == true
-                    ? 'run-log-view-function'
-                    : 'run-log-register-function',
-              ),
-              onPressed: _converting
-                  ? null
-                  : (_functionId?.isNotEmpty == true
-                        ? _openFunction
-                        : _convert),
-              icon: _converting
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(
-                      _functionId?.isNotEmpty == true
-                          ? Icons.account_tree_outlined
-                          : Icons.add_task_rounded,
-                    ),
-              label: Text(
-                _functionId?.isNotEmpty == true
-                    ? _text(context, '查看复用指令', 'View Function')
-                    : _text(context, '注册为复用指令', 'Register Function'),
+          : OmniGlassFloatingActionButton(
+              builder: (context, glass) => FloatingActionButton.extended(
+                backgroundColor: glass ? Colors.transparent : null,
+                foregroundColor: glass ? context.omniPalette.textPrimary : null,
+                elevation: glass ? 0 : null,
+                focusElevation: glass ? 0 : null,
+                hoverElevation: glass ? 0 : null,
+                highlightElevation: glass ? 0 : null,
+                disabledElevation: glass ? 0 : null,
+                key: ValueKey(
+                  _functionId?.isNotEmpty == true
+                      ? 'run-log-view-function'
+                      : 'run-log-register-function',
+                ),
+                onPressed: _converting
+                    ? null
+                    : (_functionId?.isNotEmpty == true
+                          ? _openFunction
+                          : _convert),
+                icon: _converting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        _functionId?.isNotEmpty == true
+                            ? Icons.account_tree_outlined
+                            : Icons.add_task_rounded,
+                      ),
+                label: Text(
+                  _functionId?.isNotEmpty == true
+                      ? _text(context, '查看复用指令', 'View Function')
+                      : _text(context, '注册为复用指令', 'Register Function'),
+                ),
               ),
             ),
       body: _buildBody(),

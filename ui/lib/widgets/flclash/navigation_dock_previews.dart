@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:ui/theme/omni_theme_palette.dart';
 
 import 'navigation_dock.dart';
+import 'liquid_glass.dart';
+import 'liquid_glass_preview_frame.dart';
 
 @Preview(name: 'FlClash navigation · light', size: Size(390, 240))
 Widget flClashNavigationLightPreview() => const _DockPreview();
@@ -11,10 +12,41 @@ Widget flClashNavigationLightPreview() => const _DockPreview();
 @Preview(name: 'FlClash navigation · dark', size: Size(390, 240))
 Widget flClashNavigationDarkPreview() => const _DockPreview(dark: true);
 
+@Preview(
+  name: 'FlClash navigation glass · light · standard',
+  size: Size(390, 300),
+)
+Widget flClashNavigationGlassLightStandardPreview() =>
+    const _DockPreview(glass: true, quality: LiquidGlassQuality.standard);
+
+@Preview(name: 'FlClash navigation glass · light · ultra', size: Size(390, 300))
+Widget flClashNavigationGlassLightUltraPreview() =>
+    const _DockPreview(glass: true);
+
+@Preview(
+  name: 'FlClash navigation glass · dark · standard',
+  size: Size(390, 300),
+)
+Widget flClashNavigationGlassDarkStandardPreview() => const _DockPreview(
+  dark: true,
+  glass: true,
+  quality: LiquidGlassQuality.standard,
+);
+
+@Preview(name: 'FlClash navigation glass · dark · ultra', size: Size(390, 300))
+Widget flClashNavigationGlassDarkUltraPreview() =>
+    const _DockPreview(dark: true, glass: true);
+
 class _DockPreview extends StatefulWidget {
-  const _DockPreview({this.dark = false});
+  const _DockPreview({
+    this.dark = false,
+    this.glass = false,
+    this.quality = LiquidGlassQuality.ultra,
+  });
 
   final bool dark;
+  final bool glass;
+  final LiquidGlassQuality quality;
 
   @override
   State<_DockPreview> createState() => _DockPreviewState();
@@ -25,49 +57,40 @@ class _DockPreviewState extends State<_DockPreview> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = widget.dark
-        ? OmniThemePalette.dark
-        : OmniThemePalette.light;
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: widget.dark ? Brightness.dark : Brightness.light,
-        colorSchemeSeed: palette.accentPrimary,
-        extensions: [palette],
-      ),
-      home: Scaffold(
-        backgroundColor: palette.pageBackground,
-        body: Stack(
-          children: [
-            Center(child: Text(['首页', 'Agents', '轨迹', '设置'][_selectedIndex])),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: FlClashNavigationDock(
-                selectedIndex: _selectedIndex,
-                onDestinationSelected: (value) =>
-                    setState(() => _selectedIndex = value),
-                destinations: const [
-                  FlClashNavigationDestination(
-                    icon: LucideIcons.house,
-                    label: '首页',
-                  ),
-                  FlClashNavigationDestination(
-                    icon: LucideIcons.bot,
-                    label: 'Agents',
-                  ),
-                  FlClashNavigationDestination(
-                    icon: LucideIcons.route,
-                    label: '轨迹',
-                  ),
-                  FlClashNavigationDestination(
-                    icon: LucideIcons.settings,
-                    label: '设置',
-                  ),
-                ],
-              ),
+    return LiquidGlassPreviewFrame(
+      dark: widget.dark,
+      glass: widget.glass,
+      quality: widget.quality,
+      builder: (context) => Stack(
+        children: [
+          Center(child: Text(['首页', 'Agents', '轨迹', '设置'][_selectedIndex])),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: FlClashNavigationDock(
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: (value) =>
+                  setState(() => _selectedIndex = value),
+              destinations: const [
+                FlClashNavigationDestination(
+                  icon: LucideIcons.house,
+                  label: '首页',
+                ),
+                FlClashNavigationDestination(
+                  icon: LucideIcons.bot,
+                  label: 'Agents',
+                ),
+                FlClashNavigationDestination(
+                  icon: LucideIcons.route,
+                  label: '轨迹',
+                ),
+                FlClashNavigationDestination(
+                  icon: LucideIcons.settings,
+                  label: '设置',
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

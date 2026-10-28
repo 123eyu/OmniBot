@@ -3,8 +3,76 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/widgets/flclash/search_header.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
 
 void main() {
+  for (final quality in LiquidGlassQuality.values) {
+    testWidgets(
+      '$quality search reverses and changes quality without a new input',
+      (tester) async {
+        final open = ValueNotifier(false);
+        final controller = TextEditingController();
+        final focus = FocusNode();
+        addTearDown(open.dispose);
+        addTearDown(controller.dispose);
+        addTearDown(focus.dispose);
+        var menuCount = 0;
+        Widget app({bool enabled = true, LiquidGlassQuality? mode}) => _harness(
+          open,
+          controller,
+          focus,
+          glass: enabled,
+          quality: mode ?? quality,
+          onMenu: () => menuCount++,
+        );
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        final restCaptures = LiquidGlassHost.debugHeldCaptures;
+        expect(restCaptures, 1);
+        await tester.tap(find.byKey(const ValueKey('search')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        final input = tester.element(find.byType(TextField));
+        await tester.enterText(find.byType(TextField), 'Codex');
+        await tester.pumpWidget(
+          app(
+            mode: quality == LiquidGlassQuality.ultra
+                ? LiquidGlassQuality.standard
+                : LiquidGlassQuality.ultra,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.element(find.byType(TextField)), same(input));
+        expect(focus.hasFocus, isTrue);
+        expect(controller.text, 'Codex');
+        open.value = false;
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 70));
+        open.value = true;
+        await tester.pumpAndSettle();
+        expect(tester.element(find.byType(TextField)), same(input));
+        expect(controller.text, 'Codex');
+        await tester.tap(find.byKey(const ValueKey('cancel')));
+        await tester.pumpAndSettle();
+        expect(find.byType(TextField), findsNothing);
+        expect(focus.hasFocus, isFalse);
+        expect(LiquidGlassHost.debugHeldCaptures, restCaptures);
+        await tester.pumpWidget(app(enabled: false));
+        await tester.pumpAndSettle();
+        expect(LiquidGlassHost.debugHeldCaptures, 0);
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        expect(LiquidGlassHost.debugHeldCaptures, restCaptures);
+        expect(menuCount, 0);
+        await tester.tap(find.byKey(const ValueKey('menu')));
+        expect(menuCount, 1);
+        await tester.pumpWidget(const SizedBox.shrink());
+        expect(LiquidGlassHost.debugHeldCaptures, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'app theme keeps input contents centered in the 44 dp search pill',
     (tester) async {
@@ -152,55 +220,65 @@ Widget _harness(
   bool rtl = false,
   bool searchAction = false,
   ThemeData? theme,
+  bool glass = false,
+  LiquidGlassQuality quality = LiquidGlassQuality.ultra,
+  VoidCallback? onMenu,
 }) => MaterialApp(
   theme: theme,
   home: MediaQuery(
     data: MediaQueryData(textScaler: TextScaler.linear(rtl ? 1.5 : 1)),
     child: Directionality(
       textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
-      child: Scaffold(
-        body: Column(
-          children: [
-            ValueListenableBuilder<bool>(
-              valueListenable: open,
-              builder: (_, value, _) => FlClashSearchHeader(
-                title: const Text(
-                  'Agents',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                searching: value,
-                controller: controller,
-                focusNode: focus,
-                onSearch: () => open.value = true,
-                onClose: () {
-                  controller.clear();
-                  focus.unfocus();
-                  open.value = false;
-                },
-                searchButtonKey: const ValueKey('search'),
-                closeButtonKey: const ValueKey('cancel'),
-                fieldKey: const ValueKey('field'),
-                clearButtonKey: const ValueKey('clear'),
-                actions: [
-                  IconButton(
-                    key: const ValueKey('menu'),
-                    onPressed: () {},
-                    icon: const Icon(Icons.more_horiz),
-                  ),
-                ],
-                searchActions: [
-                  if (searchAction)
-                    IconButton(
-                      key: const ValueKey('persistent'),
-                      onPressed: () {},
-                      icon: const Icon(Icons.refresh),
+      child: LiquidGlassScope(
+        enabled: glass,
+        quality: quality,
+        child: LiquidGlassHost(
+          enabled: glass,
+          child: Scaffold(
+            body: Column(
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: open,
+                  builder: (_, value, _) => FlClashSearchHeader(
+                    title: const Text(
+                      'Agents',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                ],
-              ),
+                    searching: value,
+                    controller: controller,
+                    focusNode: focus,
+                    onSearch: () => open.value = true,
+                    onClose: () {
+                      controller.clear();
+                      focus.unfocus();
+                      open.value = false;
+                    },
+                    searchButtonKey: const ValueKey('search'),
+                    closeButtonKey: const ValueKey('cancel'),
+                    fieldKey: const ValueKey('field'),
+                    clearButtonKey: const ValueKey('clear'),
+                    actions: [
+                      IconButton(
+                        key: const ValueKey('menu'),
+                        onPressed: onMenu ?? () {},
+                        icon: const Icon(Icons.more_horiz),
+                      ),
+                    ],
+                    searchActions: [
+                      if (searchAction)
+                        IconButton(
+                          key: const ValueKey('persistent'),
+                          onPressed: () {},
+                          icon: const Icon(Icons.refresh),
+                        ),
+                    ],
+                  ),
+                ),
+                const Expanded(child: SizedBox()),
+              ],
             ),
-            const Expanded(child: SizedBox()),
-          ],
+          ),
         ),
       ),
     ),

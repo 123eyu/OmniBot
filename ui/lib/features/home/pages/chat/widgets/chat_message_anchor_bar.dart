@@ -14,6 +14,7 @@ import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/agent_avatar.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
 import 'package:ui/widgets/glass_popup.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
 
 import '../chat_page_models.dart';
 import '../utils/agent_run_timeline.dart';
@@ -730,10 +731,14 @@ class _ChatMessageAnchorBarState extends State<ChatMessageAnchorBar>
           bottom: widget.bottomInset,
           child: IgnorePointer(
             ignoring: !showButton,
-            child: AnimatedOpacity(
-              opacity: showButton ? 1 : 0,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: showButton ? 1 : 0, end: showButton ? 1 : 0),
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOutCubic,
+              builder: (context, opacity, child) => LiquidGlassFade(
+                opacity: AlwaysStoppedAnimation(opacity),
+                child: child,
+              ),
               child: _buildAnchorButton(),
             ),
           ),
@@ -977,6 +982,17 @@ class _ChatMessageAnchorBarState extends State<ChatMessageAnchorBar>
     required double expansion,
   }) {
     final palette = context.omniPalette;
+    if (LiquidGlassScope.of(context)) {
+      return SizedBox.square(
+        dimension: _kAnchorButtonSize,
+        child: LiquidGlass(
+          style: LiquidGlassStyle.regular(Theme.of(context).colorScheme),
+          clipper: const ShapeBorderClipper(shape: CircleBorder()),
+          pressed: _buttonPressed,
+          child: child,
+        ),
+      );
+    }
     return Container(
       width: _kAnchorButtonSize,
       height: _kAnchorButtonSize,

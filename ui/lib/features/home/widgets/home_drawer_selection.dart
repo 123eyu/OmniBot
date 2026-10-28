@@ -41,14 +41,7 @@ extension _HomeDrawerSelection on HomeDrawerState {
       }
     }
     for (final result in _visibleConversationResults) {
-      if (_isConversationSectionExpanded(
-        _dateConversationSectionKeyForConversation(
-          result.conversation,
-          namespace: _kOmniAiDateSectionNamespace,
-        ),
-      )) {
-        add(result.conversation);
-      }
+      add(result.conversation);
     }
     return rows;
   }

@@ -1,3 +1,6 @@
+import 'package:ui/widgets/glass_popup.dart';
+import 'package:ui/widgets/flclash/popup.dart';
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/authorize/accessibility_permission_prompt.dart';
@@ -21,7 +24,7 @@ class AuthorizeSettingPage extends StatefulWidget {
 }
 
 class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, FlClashPageLoadMixin {
   bool notificationEnabled = true; // 接收消息通知
 
   // 权限状态
@@ -75,9 +78,10 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
   }
 
   Future<void> _loadSettings() async {
+    if (!await waitForPageReady() || !mounted) return;
     try {
       final notification = await CacheUtil.getBool("notification_enabled");
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       setState(() {
         notificationEnabled = notification;
       });
@@ -262,7 +266,15 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
                   ? _tertiaryTextColor
                   : _accentColor,
             ),
-            onTap: () => _openPersonalContext(item.id),
+            onTap: item.id == 'documents'
+                ? null
+                : () => _openPersonalContext(item.id),
+            onMenuTap: item.id == 'documents'
+                ? (anchorContext) => _openPersonalContext(
+                    item.id,
+                    anchorContext: anchorContext,
+                  )
+                : null,
           ),
         _AuthorizeSettingItem(
           icon: LucideIcons.trash2,
@@ -315,9 +327,10 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
   }
 
   Future<void> _refreshPersonalContext() async {
+    if (!await waitForPageReady() || !mounted) return;
     try {
       final capabilities = await PersonalContextService.capabilities();
-      if (mounted) {
+      if (await waitForPageReady() && mounted) {
         setState(() {
           _personalContext = capabilities;
           _personalContextLoaded = true;
@@ -325,7 +338,7 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
         });
       }
     } catch (_) {
-      if (mounted) {
+      if (await waitForPageReady() && mounted) {
         setState(() {
           _personalContextLoaded = true;
           _personalContextFailed = true;
@@ -361,7 +374,10 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
     }
   }
 
-  Future<void> _openPersonalContext(String id) async {
+  Future<void> _openPersonalContext(
+    String id, {
+    BuildContext? anchorContext,
+  }) async {
     if (_personalContextFailed || !_personalContextLoaded) {
       await _refreshPersonalContext();
       return;
@@ -389,40 +405,33 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
       return;
     }
     if (id == 'documents') {
-      final action = await showModalBottomSheet<String>(
+      if (anchorContext == null) return;
+      final anchor = glassPopupAnchorFromContext(anchorContext);
+      if (anchor == null) return;
+      final action = await showOmniMenu<String>(
         context: context,
-        backgroundColor: context.omniPalette.surfacePrimary,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (sheetContext) => SafeArea(
-          child: Padding(
-            padding: OmniMenuStyle.panelPadding,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                OmniMenuItem(
-                  label: _localeText(zh: '选择文件', en: 'Select files'),
-                  onTap: () => Navigator.pop(sheetContext, 'files'),
-                ),
-                OmniMenuItem(
-                  label: _localeText(zh: '选择文件夹', en: 'Select a folder'),
-                  onTap: () => Navigator.pop(sheetContext, 'directory'),
-                ),
-                OmniMenuItem(
-                  child: Text(
-                    _localeText(
-                      zh: '取消已选文件与文件夹的授权',
-                      en: 'Remove selected file and folder access',
-                    ),
-                  ),
-                  onTap: () => Navigator.pop(sheetContext, 'revoke'),
-                ),
-              ],
+        sourceContext: anchorContext,
+        anchor: anchor,
+        width: 300,
+        items: [
+          OmniPopupMenuItem(
+            value: 'files',
+            child: Text(_localeText(zh: '选择文件', en: 'Select files')),
+          ),
+          OmniPopupMenuItem(
+            value: 'directory',
+            child: Text(_localeText(zh: '选择文件夹', en: 'Select a folder')),
+          ),
+          OmniPopupMenuItem(
+            value: 'revoke',
+            child: Text(
+              _localeText(
+                zh: '取消已选文件与文件夹的授权',
+                en: 'Remove selected file and folder access',
+              ),
             ),
           ),
-        ),
+        ],
       );
       if (action == null || !mounted) return;
       if (action == 'revoke') {
@@ -441,7 +450,9 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
   }
 
   Future<void> _checkPermissions() async {
+    if (!await waitForPageReady() || !mounted) return;
     await _refreshPersonalContext();
+    if (!await waitForPageReady() || !mounted) return;
     try {
       final backgroundRunning = await isBackgroundRunAllowed();
       final accessibilityReady =
@@ -459,7 +470,7 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
       final publicStoragePermission = await isPublicStorageAccessGranted();
       final shizukuStatus = await getShizukuStatus();
 
-      if (mounted) {
+      if (await waitForPageReady() && mounted) {
         setState(() {
           _backgroundRunning = backgroundRunning;
           _accessibilityReady = accessibilityReady;
@@ -600,14 +611,29 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
       translateTitle: false,
       children: [
         for (final item in section.items)
-          OmniSettingsTile(
-            icon: item.icon,
-            title: item.title,
-            subtitle: item.subtitle,
-            trailing: item.trailing,
-            onTap: item.onTap,
-            translateText: false,
-          ),
+          if (item.onMenuTap != null)
+            FlClashPopupSource(
+              glass: false,
+              color: Colors.transparent,
+              shape: const RoundedRectangleBorder(),
+              builder: (anchorContext) => OmniSettingsTile(
+                icon: item.icon,
+                title: item.title,
+                subtitle: item.subtitle,
+                trailing: item.trailing,
+                onTap: () => item.onMenuTap!(anchorContext),
+                translateText: false,
+              ),
+            )
+          else
+            OmniSettingsTile(
+              icon: item.icon,
+              title: item.title,
+              subtitle: item.subtitle,
+              trailing: item.trailing,
+              onTap: item.onTap,
+              translateText: false,
+            ),
       ],
     );
   }
@@ -659,6 +685,7 @@ class _AuthorizeSettingItem {
   final String? subtitle;
   final Widget? trailing;
   final VoidCallback? onTap;
+  final ValueChanged<BuildContext>? onMenuTap;
 
   const _AuthorizeSettingItem({
     required this.icon,
@@ -666,5 +693,6 @@ class _AuthorizeSettingItem {
     this.subtitle,
     this.trailing,
     this.onTap,
+    this.onMenuTap,
   });
 }

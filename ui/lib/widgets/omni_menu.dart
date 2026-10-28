@@ -3,6 +3,7 @@ import 'dart:ui' show SemanticsRole;
 import 'package:flutter/material.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/glass_popup.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
 
 /// Opens a button's menu on the shared anchored popup surface.
 ///
@@ -11,6 +12,7 @@ import 'package:ui/widgets/glass_popup.dart';
 /// settings and custom entries can retain their own scrolling content.
 Future<T?> showOmniMenu<T>({
   required BuildContext context,
+  BuildContext? sourceContext,
   required Rect anchor,
   required List<PopupMenuEntry<T>> items,
   double width = 260,
@@ -21,6 +23,7 @@ Future<T?> showOmniMenu<T>({
   final focusMenu = requestFocus ?? Navigator.of(context).widget.requestFocus;
   return showGlassPopup<T>(
     context: context,
+    sourceContext: sourceContext,
     anchor: anchor,
     preferBelow: preferBelow,
     requestFocus: requestFocus,
@@ -234,7 +237,8 @@ class _OmniPopupMenuItemState<T>
   }
 }
 
-/// Opaque popup surface. Its owner still controls positioning and animation.
+/// Popup content respects an ancestor glass surface to avoid a second capture.
+/// Its owner still controls positioning and animation.
 class OmniMenuSurface extends StatelessWidget {
   const OmniMenuSurface({
     super.key,
@@ -249,25 +253,38 @@ class OmniMenuSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      decoration: BoxDecoration(
-        color: context.omniPalette.surfacePrimary,
-        borderRadius: OmniMenuStyle.panelRadius,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(
-              alpha: context.isDarkTheme ? 0.20 : 0.06,
-            ),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: OmniMenuStyle.panelRadius,
-        child: Padding(padding: padding, child: child),
-      ),
+    final inheritedSurface = LiquidGlassSurfaceScope.of(context);
+    final glass = LiquidGlassScope.of(context);
+    Widget content = ClipRRect(
+      borderRadius: OmniMenuStyle.panelRadius,
+      child: Padding(padding: padding, child: child),
     );
+    if (!inheritedSurface) {
+      final shadows = [
+        BoxShadow(
+          color: Colors.black.withValues(
+            alpha: context.isDarkTheme ? 0.20 : 0.06,
+          ),
+          blurRadius: 18,
+          offset: const Offset(0, 6),
+        ),
+      ];
+      content = glass
+          ? LiquidGlass(
+              style: LiquidGlassStyle.menu(Theme.of(context).colorScheme),
+              borderRadius: OmniMenuStyle.panelRadius,
+              shadows: shadows,
+              child: content,
+            )
+          : DecoratedBox(
+              decoration: BoxDecoration(
+                color: context.omniPalette.surfacePrimary,
+                borderRadius: OmniMenuStyle.panelRadius,
+                boxShadow: shadows,
+              ),
+              child: content,
+            );
+    }
+    return SizedBox(width: width, child: content);
   }
 }

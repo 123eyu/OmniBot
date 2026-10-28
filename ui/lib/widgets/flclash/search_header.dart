@@ -18,6 +18,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/flclash/popup.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
 
 part 'search_surface.dart';
 
@@ -241,30 +243,29 @@ class _FlClashSearchHeaderState extends State<FlClashSearchHeader>
             ),
     );
     final group = grouped
-        ? _ElasticPress(
-            child: DecoratedBox(
-              decoration: ShapeDecoration(
-                color: context.omniPalette.surfacePrimary,
-                shape: _fullShape,
-              ),
-              child: _SearchButtonTheme(
-                grouped: true,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _SearchLead(
-                      key: _searchLeadKey,
-                      motion: _motion,
-                      child: SizedBox.square(
-                        dimension: _buttonSize,
-                        child: search,
+        ? FlClashPopupSource(
+            shape: _fullShape,
+            builder: (_) => _ElasticPress(
+              child: _ToolbarGroupSurface(
+                child: _SearchButtonTheme(
+                  grouped: true,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _SearchLead(
+                        key: _searchLeadKey,
+                        motion: _motion,
+                        child: SizedBox.square(
+                          dimension: _buttonSize,
+                          child: search,
+                        ),
                       ),
-                    ),
-                    SizedBox.square(
-                      dimension: _buttonSize,
-                      child: widget.actions.first,
-                    ),
-                  ],
+                      SizedBox.square(
+                        dimension: _buttonSize,
+                        child: widget.actions.first,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -404,6 +405,55 @@ class _FlClashSearchHeaderState extends State<FlClashSearchHeader>
   }
 }
 
+/// A wide toolbar control sharing the search/action group's solid surface and
+/// elastic press. Its child supplies the label; the complete capsule is one
+/// interaction target and can be captured by [FlClashPopupBox].
+class FlClashToolbarCapsule extends StatelessWidget {
+  const FlClashToolbarCapsule({
+    super.key,
+    required this.child,
+    required this.onPressed,
+    this.tooltip,
+  });
+
+  final Widget child;
+  final VoidCallback? onPressed;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = _ElasticPress(
+      child: TextButton(
+        onPressed: onPressed,
+        style:
+            (LiquidGlassScope.of(context)
+                    ? LiquidGlass.buttonStyle(
+                        (_) => LiquidGlassStyle.regular(
+                          Theme.of(context).colorScheme,
+                        ),
+                      )
+                    : const ButtonStyle())
+                .merge(
+                  TextButton.styleFrom(
+                    backgroundColor: context.omniPalette.surfacePrimary,
+                    foregroundColor: context.omniPalette.textPrimary,
+                    minimumSize: const Size(_buttonSize, _buttonSize),
+                    maximumSize: const Size(double.infinity, _buttonSize),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: _fullShape,
+                    visualDensity: VisualDensity.standard,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    splashFactory: NoSplash.splashFactory,
+                    overlayColor: Colors.transparent,
+                  ),
+                ),
+        child: child,
+      ),
+    );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
+  }
+}
+
 class _SearchButtonTheme extends StatelessWidget {
   const _SearchButtonTheme({this.grouped = false, required this.child});
   final bool grouped;
@@ -413,27 +463,80 @@ class _SearchButtonTheme extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
     final goo = !grouped && _GooSurface.of(context);
+    final glass = !grouped && !goo && LiquidGlassScope.of(context);
     final fill = grouped || goo ? Colors.transparent : palette.surfacePrimary;
     return IconButtonTheme(
       data: IconButtonThemeData(
-        style: (goo ? _GooSurface.buttonStyle : const ButtonStyle()).merge(
-          IconButton.styleFrom(
-            backgroundColor: fill,
-            foregroundColor: palette.textPrimary,
-            disabledForegroundColor: palette.textPrimary.withValues(alpha: .38),
-            fixedSize: const Size.square(_buttonSize),
-            minimumSize: const Size.square(_buttonSize),
-            padding: EdgeInsets.zero,
-            iconSize: _iconSize,
-            shape: _fullShape,
-            visualDensity: VisualDensity.standard,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            splashFactory: NoSplash.splashFactory,
-            overlayColor: Colors.transparent,
-          ),
-        ),
+        style:
+            (goo
+                    ? _GooSurface.buttonStyle
+                    : glass
+                    ? LiquidGlass.buttonStyle(
+                        (_) => LiquidGlassStyle.regular(
+                          Theme.of(context).colorScheme,
+                        ),
+                      )
+                    : const ButtonStyle())
+                .merge(
+                  IconButton.styleFrom(
+                    backgroundColor: fill,
+                    foregroundColor: palette.textPrimary,
+                    disabledForegroundColor: palette.textPrimary.withValues(
+                      alpha: .38,
+                    ),
+                    fixedSize: const Size.square(_buttonSize),
+                    minimumSize: const Size.square(_buttonSize),
+                    padding: EdgeInsets.zero,
+                    iconSize: _iconSize,
+                    shape: _fullShape,
+                    visualDensity: VisualDensity.standard,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    splashFactory: NoSplash.splashFactory,
+                    overlayColor: Colors.transparent,
+                  ),
+                ),
       ),
       child: child,
+    );
+  }
+}
+
+/// The two toolbar segments share one glass pane, including press lighting.
+class _ToolbarGroupSurface extends StatefulWidget {
+  const _ToolbarGroupSurface({required this.child});
+  final Widget child;
+
+  @override
+  State<_ToolbarGroupSurface> createState() => _ToolbarGroupSurfaceState();
+}
+
+class _ToolbarGroupSurfaceState extends State<_ToolbarGroupSurface> {
+  int? _pointer;
+
+  void _end(PointerEvent event) {
+    if (event.pointer == _pointer) setState(() => _pointer = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!LiquidGlassScope.of(context)) {
+      return DecoratedBox(
+        decoration: ShapeDecoration(
+          color: context.omniPalette.surfacePrimary,
+          shape: _fullShape,
+        ),
+        child: widget.child,
+      );
+    }
+    return Listener(
+      onPointerDown: (event) => setState(() => _pointer = event.pointer),
+      onPointerUp: _end,
+      onPointerCancel: _end,
+      child: LiquidGlass(
+        style: LiquidGlassStyle.regular(Theme.of(context).colorScheme),
+        pressed: _pointer != null,
+        child: widget.child,
+      ),
     );
   }
 }
@@ -1136,7 +1239,7 @@ class _UnderBarSearch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
+    return LiquidGlassFade(
       opacity: opacity,
       child: ExcludeFocus(
         excluding: searching,
@@ -1355,7 +1458,7 @@ class _BarSearch extends StatelessWidget {
                   );
                 },
               );
-              return FadeTransition(
+              return LiquidGlassFade(
                 opacity: opacity,
                 child: _GooSurface(
                   color: color,

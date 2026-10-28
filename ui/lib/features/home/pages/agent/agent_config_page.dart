@@ -4,6 +4,8 @@ import 'package:ui/core/router/go_router_manager.dart';
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:ui/widgets/glass_popup.dart';
+import 'package:ui/widgets/flclash/popup.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/services/agent_runtime_service.dart';
@@ -33,6 +35,7 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
   late final TextEditingController _commandController;
   late final TextEditingController _argumentsController;
   late final TextEditingController _environmentController;
+  final _sharedModelContentKey = GlobalKey();
 
   AcpAgentProfile? _agent;
   String _kind = '';
@@ -202,27 +205,32 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
     }
   }
 
-  Future<void> _selectSharedModel() async {
+  Future<void> _selectSharedModel(BuildContext anchorContext) async {
     if (_sharedModelSaving || _sharedModelLoading) return;
-    final selection = await showModalBottomSheet<ConversationModelSelection>(
+    final anchor = glassPopupAnchorFromContext(anchorContext);
+    if (anchor == null) return;
+    final selection = await showGlassPopup<ConversationModelSelection>(
       context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
-        child: ConversationModelSelectorContent(
-          width: MediaQuery.sizeOf(sheetContext).width,
-          maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.7,
-          loadLiveProviders: true,
-          currentSelection: _sharedModelBinding == null
-              ? null
-              : ConversationModelSelection(
-                  providerProfileId: _sharedModelBinding!.providerProfileId,
-                  modelId: _sharedModelBinding!.modelId,
-                ),
-          onSelect: (value) => Navigator.of(sheetContext).pop(value),
+      sourceContext: anchorContext,
+      anchor: anchor,
+      child: Builder(
+        builder: (popupContext) => LayoutBuilder(
+          builder: (context, constraints) => ConversationModelSelectorContent(
+            width: 320,
+            maxHeight: constraints.maxHeight.clamp(220.0, 460.0),
+            loadLiveProviders: true,
+            currentSelection: _sharedModelBinding == null
+                ? null
+                : ConversationModelSelection(
+                    providerProfileId: _sharedModelBinding!.providerProfileId,
+                    modelId: _sharedModelBinding!.modelId,
+                  ),
+            onSelect: (value) => Navigator.of(popupContext).pop(value),
+          ),
         ),
       ),
     );
-    if (selection == null) return;
+    if (!mounted || selection == null) return;
     await _saveSharedModel(
       _SharedModelSelection(
         providerProfileId: selection.providerProfileId,
@@ -814,35 +822,52 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
     final label = binding == null
         ? _text('请选择 Provider / 模型', 'Select Provider / model')
         : '${profile?.name ?? binding.providerProfileId} / ${binding.modelId}';
-    return InkWell(
-      key: const Key('agent-shared-provider-model-selector'),
-      onTap: _sharedModelSaving || _sharedModelLoading
-          ? null
-          : _selectSharedModel,
-      borderRadius: BorderRadius.circular(10),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: _text(
-            '统一 Agent Provider / 模型',
-            'Shared Agent Provider / model',
+    final decoration = InputDecoration(
+      labelText: _text(
+        '统一 Agent Provider / 模型',
+        'Shared Agent Provider / model',
+      ),
+      suffixIcon: _sharedModelSaving
+          ? const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          : const Icon(LucideIcons.chevronDown),
+    ).applyDefaults(Theme.of(context).inputDecorationTheme);
+    return FlClashPopupSource(
+      glass: false,
+      color: decoration.filled == true
+          ? decoration.fillColor ?? Colors.transparent
+          : Colors.transparent,
+      shape: decoration.enabledBorder ?? decoration.border ?? InputBorder.none,
+      captureRect: (context) => glassPopupInputContainerRect(
+        context,
+        _sharedModelContentKey.currentContext,
+      ),
+      captureOverflow: (context) => glassPopupInputLabelRects(
+        context,
+        _sharedModelContentKey.currentContext,
+      ),
+      builder: (anchorContext) => InkWell(
+        key: const Key('agent-shared-provider-model-selector'),
+        onTap: _sharedModelSaving || _sharedModelLoading
+            ? null
+            : () => _selectSharedModel(anchorContext),
+        borderRadius: BorderRadius.circular(10),
+        child: InputDecorator(
+          decoration: decoration,
+          child: Text(
+            _sharedModelLoading
+                ? _text('正在加载 Provider…', 'Loading Providers…')
+                : label,
+            key: _sharedModelContentKey,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          suffixIcon: _sharedModelSaving
-              ? const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : const Icon(LucideIcons.chevronDown),
-        ),
-        child: Text(
-          _sharedModelLoading
-              ? _text('正在加载 Provider…', 'Loading Providers…')
-              : label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
         ),
       ),
     );

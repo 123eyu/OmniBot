@@ -16,6 +16,7 @@ import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_c
 import 'package:ui/features/home/widgets/conversation_context_menu.dart';
 import 'package:ui/features/home/widgets/conversation_slidable.dart';
 import 'package:ui/features/home/widgets/home_drawer_search_field.dart';
+import 'package:ui/features/home/widgets/home_conversation_tile_content.dart';
 import 'package:ui/features/home/widgets/home_search_header.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
@@ -41,8 +42,10 @@ import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
 import 'package:ui/widgets/app_update_dialog.dart';
 import 'package:ui/widgets/flclash/popup.dart';
+import 'package:ui/widgets/flclash/search_header.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/omni_menu.dart';
+import 'package:ui/widgets/omni_glass_floating_action_button.dart';
 import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:ui/widgets/settings_ui.dart';
 
@@ -197,6 +200,8 @@ class HomeDrawerState extends ConsumerState<HomeDrawer>
   bool _isSearching = false;
   bool _homeSearchVisible = false;
   final _homeMenuRevision = ValueNotifier<int>(0);
+  List<OmniPluginActionItem> _homeMenuWebQuickActions = const [];
+  int _webQuickActionsRequest = 0;
   _HomeConversationFilter _homeFilter = _HomeConversationFilter.xiaowan;
   AcpAgentCatalog? _homeAgentCatalog;
   bool _homeRouteWasCurrent = false;
@@ -391,42 +396,62 @@ class HomeDrawerState extends ConsumerState<HomeDrawer>
   Future<void> _loadWebQuickActions() =>
       runPageLoad(#homePluginActions, _readWebQuickActions, revalidate: true);
 
-  Future<void> _readWebQuickActions() async {
+  Future<List<OmniPluginActionItem>> _queryWebQuickActions() async {
+    final actions = await OmniPluginService.listActions();
+    return actions
+        .where(
+          (action) =>
+              action.supportsPlacement('home_drawer_quick_launch') &&
+              (action.presentation['agentId']?.toString().trim().isNotEmpty ??
+                  false),
+        )
+        .toList(growable: false)
+      ..sort((left, right) {
+        final order = left.quickLaunchOrder.compareTo(right.quickLaunchOrder);
+        return order != 0
+            ? order
+            : left.displayName.compareTo(right.displayName);
+      });
+  }
+
+  /// The open popup owns this snapshot. Its parent route is intentionally not
+  /// current while the menu is visible, so only the parent's cache publication
+  /// waits for that route to settle; the menu's registry read cannot use it.
+  Future<void> _refreshHomeMenuWebQuickActions() async {
+    _homeMenuWebQuickActions = _webQuickActions;
+    final request = ++_webQuickActionsRequest;
+    List<OmniPluginActionItem> actions;
     try {
-      final actions = await OmniPluginService.listActions();
-      if (!await waitForPageReady() || !pageLoadIsCurrent(#homePluginActions)) {
+      actions = await _queryWebQuickActions();
+    } catch (error) {
+      debugPrint('[HomeDrawer] failed to load menu Web quick actions: $error');
+      actions = const [];
+    }
+    if (!mounted || request != _webQuickActionsRequest) return;
+    _homeMenuWebQuickActions = actions;
+    _homeMenuRevision.value++;
+    if (!await waitForPageReady() || request != _webQuickActionsRequest) return;
+    setState(() => _webQuickActions = actions);
+  }
+
+  Future<void> _readWebQuickActions() async {
+    final request = ++_webQuickActionsRequest;
+    try {
+      final quickActions = await _queryWebQuickActions();
+      if (!await waitForPageReady() ||
+          request != _webQuickActionsRequest ||
+          !pageLoadIsCurrent(#homePluginActions)) {
         return;
       }
-      final quickActions =
-          actions
-              .where(
-                (action) =>
-                    action.supportsPlacement('home_drawer_quick_launch') &&
-                    (action.presentation['agentId']
-                            ?.toString()
-                            .trim()
-                            .isNotEmpty ??
-                        false),
-              )
-              .toList(growable: false)
-            ..sort((left, right) {
-              final order = left.quickLaunchOrder.compareTo(
-                right.quickLaunchOrder,
-              );
-              return order != 0
-                  ? order
-                  : left.displayName.compareTo(right.displayName);
-            });
       setState(() => _webQuickActions = quickActions);
-      _homeMenuRevision.value++;
       unawaited(_refreshWebQuickActionStatuses());
     } catch (error) {
       debugPrint('[HomeDrawer] failed to load Web quick actions: $error');
       if (await waitForPageReady() &&
+          request == _webQuickActionsRequest &&
           pageLoadIsCurrent(#homePluginActions) &&
           _webQuickActions.isNotEmpty) {
         setState(() => _webQuickActions = const <OmniPluginActionItem>[]);
-        _homeMenuRevision.value++;
       }
     }
   }

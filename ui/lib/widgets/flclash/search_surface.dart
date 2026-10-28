@@ -1,5 +1,5 @@
 // Adapted from FlClash ui/navigation_dock.dart and ui/goo.dart at
-// 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7. Default solid-surface path.
+// 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7. Shared solid and liquid-glass surface paths.
 // SPDX-License-Identifier: GPL-3.0-only
 // Preserve upstream render-object constructor layout.
 // ignore_for_file: prefer_initializing_formals
@@ -442,7 +442,6 @@ class _GooSurface extends StatelessWidget {
   const _GooSurface({required this.color, required this.child});
 
   final Color color;
-
   final Widget child;
 
   static bool of(BuildContext context) =>
@@ -462,7 +461,14 @@ class _GooSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _GooScope(
-      child: _GooSurfaceBox(color: color, child: child),
+      child: _GooSurfaceBox(
+        glass: LiquidGlassScope.of(context)
+            ? LiquidGlassStyle.regular(Theme.of(context).colorScheme)
+            : null,
+        color: color,
+        shadows: const [],
+        child: child,
+      ),
     );
   }
 }
@@ -518,30 +524,60 @@ class _RenderGooPane extends RenderProxyBox {
 }
 
 class _GooSurfaceBox extends SingleChildRenderObjectWidget {
-  const _GooSurfaceBox({required this.color, super.child});
+  const _GooSurfaceBox({
+    required this.glass,
+    required this.color,
+    required this.shadows,
+    super.child,
+  });
 
+  final LiquidGlassStyle? glass;
   final Color color;
+  final List<BoxShadow> shadows;
 
   @override
   _RenderGooSurface createRenderObject(BuildContext context) =>
-      _RenderGooSurface(color: color);
+      _RenderGooSurface(glass: glass, color: color, shadows: shadows);
 
   @override
   void updateRenderObject(
     BuildContext context,
     _RenderGooSurface renderObject,
   ) {
-    renderObject.color = color;
+    renderObject
+      ..glass = glass
+      ..color = color
+      ..shadows = shadows;
   }
 }
 
 typedef _Placed = ({Rect rect, double lift});
 
 class _RenderGooSurface extends RenderProxyBox {
-  _RenderGooSurface({required Color color}) : _color = color;
+  _RenderGooSurface({
+    required LiquidGlassStyle? glass,
+    required Color color,
+    required List<BoxShadow> shadows,
+  }) : _glass = glass,
+       _color = color,
+       _shadows = shadows;
 
   final _panes = <_RenderGooPane>{};
+  late final _pane = LiquidGlassPane(markNeedsPaint);
+  Offset? _touch;
   ({List<Rect> pills, List<double> blends, Path path})? _outline;
+
+  LiquidGlassStyle? _glass;
+  set glass(LiquidGlassStyle? value) {
+    if (value == _glass) {
+      return;
+    }
+    if ((value == null) != (_glass == null)) {
+      markNeedsCompositingBitsUpdate();
+    }
+    _glass = value;
+    markNeedsPaint();
+  }
 
   Color _color;
   set color(Color value) {
@@ -550,6 +586,31 @@ class _RenderGooSurface extends RenderProxyBox {
     }
     _color = value;
     markNeedsPaint();
+  }
+
+  List<BoxShadow> _shadows;
+  set shadows(List<BoxShadow> value) {
+    if (listEquals(value, _shadows)) {
+      return;
+    }
+    _shadows = value;
+    markNeedsPaint();
+  }
+
+  @override
+  bool get alwaysNeedsCompositing => _glass != null;
+
+  @override
+  void handleEvent(PointerEvent event, BoxHitTestEntry entry) {
+    if (event is PointerDownEvent || event is PointerMoveEvent) {
+      _touch = event.localPosition;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pane.dispose();
+    super.dispose();
   }
 
   @override
@@ -567,6 +628,7 @@ class _RenderGooSurface extends RenderProxyBox {
     ]);
     final pills = [for (final pane in panes) pane.rect];
     if (pills.isEmpty) {
+      _pane.clear();
       super.paint(context, offset);
       return;
     }
@@ -578,9 +640,35 @@ class _RenderGooSurface extends RenderProxyBox {
                       math.max(panes[index - 1].lift, panes[index].lift)
             : 0.0,
     ];
+    final bounds = pills.reduce((a, b) => a.expandToInclude(b));
     final path = _outlineOf(pills, blends);
     final canvas = context.canvas;
-    canvas.drawPath(path.shift(offset), Paint()..color = _color);
+    _paintShadows(canvas, path.shift(offset), bounds.shift(offset));
+    final glass = _glass;
+    if (glass == null) {
+      _pane.clear();
+      canvas.drawPath(path.shift(offset), Paint()..color = _color);
+    } else {
+      final pressed = panes.reduce((a, b) => b.lift > a.lift ? b : a);
+      final touch = _touch;
+      _pane.paint(
+        context,
+        bounds.shift(offset),
+        shape: LiquidGlassGoo(path.shift(-bounds.topLeft), [
+          for (final pill in pills) pill.shift(-bounds.topLeft),
+        ], blends),
+        style: glass,
+        glow: LiquidGlassGlow(
+          center:
+              (touch != null && pressed.rect.contains(touch)
+                  ? touch
+                  : pressed.rect.center) -
+              bounds.topLeft,
+          reach: pressed.rect.height / math.sqrt2,
+          strength: pressed.lift * 0.16,
+        ),
+      );
+    }
     super.paint(context, offset);
   }
 
@@ -616,6 +704,29 @@ class _RenderGooSurface extends RenderProxyBox {
     final path = gooOutline(pills, blends);
     _outline = (pills: pills, blends: blends, path: path);
     return path;
+  }
+
+  void _paintShadows(Canvas canvas, Path path, Rect bounds) {
+    if (_shadows.isEmpty) {
+      return;
+    }
+    final reach = _shadows.fold(
+      0.0,
+      (reach, shadow) =>
+          math.max(reach, shadow.offset.distance + shadow.blurRadius * 2),
+    );
+    canvas
+      ..save()
+      ..clipPath(
+        Path()
+          ..fillType = PathFillType.evenOdd
+          ..addRect(bounds.inflate(reach))
+          ..addPath(path, Offset.zero),
+      );
+    for (final shadow in _shadows) {
+      canvas.drawPath(path.shift(shadow.offset), shadow.toPaint());
+    }
+    canvas.restore();
   }
 }
 

@@ -1,3 +1,4 @@
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:ui/l10n/l10n.dart';
@@ -30,7 +31,8 @@ class SkillStorePage extends StatefulWidget {
   State<SkillStorePage> createState() => _SkillStorePageState();
 }
 
-class _SkillStorePageState extends State<SkillStorePage> {
+class _SkillStorePageState extends State<SkillStorePage>
+    with FlClashPageLoadMixin {
   static const double _kSkillTileTrailingWidth = 64;
   static const double _kSkillTileTrailingHeight = 28;
 
@@ -87,16 +89,17 @@ class _SkillStorePageState extends State<SkillStorePage> {
   }
 
   Future<void> _loadSkills() async {
+    if (!await waitForPageReady() || !mounted) return;
     setState(() => _loading = true);
     try {
       final skills = await AgentSkillStoreService.listSkills();
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       setState(() {
         _skills = skills;
         _loading = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       setState(() => _loading = false);
       showToast(context.l10n.skillLoadFailed, type: ToastType.error);
     }

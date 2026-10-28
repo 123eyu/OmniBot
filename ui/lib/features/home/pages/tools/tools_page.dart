@@ -1,3 +1,4 @@
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -15,7 +16,8 @@ class ToolsPage extends StatefulWidget {
   State<ToolsPage> createState() => _ToolsPageState();
 }
 
-class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
+class _ToolsPageState extends State<ToolsPage>
+    with WidgetsBindingObserver, FlClashPageLoadMixin {
   final _search = TextEditingController();
   final _focus = FocusNode();
   List<CatalogTool> _local = [];
@@ -54,6 +56,7 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
   void _searchChanged() => setState(() {});
 
   Future<void> _load() async {
+    if (!await waitForPageReady() || !mounted) return;
     setState(() {
       _localLoading = _remoteLoading = true;
       _localFailed = _remoteFailed = false;
@@ -62,34 +65,44 @@ class _ToolsPageState extends State<ToolsPage> with WidgetsBindingObserver {
   }
 
   Future<void> _loadLocal() async {
+    if (!await waitForPageReady() || !mounted) return;
     try {
       final tools = await ToolCatalogService.localTools();
-      if (mounted) setState(() => _local = tools);
+      if (await waitForPageReady() && mounted) {
+        setState(() => _local = tools);
+      }
     } catch (_) {
-      if (mounted) {
+      if (await waitForPageReady() && mounted) {
         setState(() {
           _local = [];
           _localFailed = true;
         });
       }
     } finally {
-      if (mounted) setState(() => _localLoading = false);
+      if (await waitForPageReady() && mounted) {
+        setState(() => _localLoading = false);
+      }
     }
   }
 
   Future<void> _loadRemote() async {
+    if (!await waitForPageReady() || !mounted) return;
     try {
       final servers = await ToolCatalogService.remoteTools();
-      if (mounted) setState(() => _servers = servers);
+      if (await waitForPageReady() && mounted) {
+        setState(() => _servers = servers);
+      }
     } catch (_) {
-      if (mounted) {
+      if (await waitForPageReady() && mounted) {
         setState(() {
           _servers = [];
           _remoteFailed = true;
         });
       }
     } finally {
-      if (mounted) setState(() => _remoteLoading = false);
+      if (await waitForPageReady() && mounted) {
+        setState(() => _remoteLoading = false);
+      }
     }
   }
 

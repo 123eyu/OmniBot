@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/l10n/l10n.dart';
@@ -18,7 +19,8 @@ class StorageUsagePage extends StatefulWidget {
   State<StorageUsagePage> createState() => _StorageUsagePageState();
 }
 
-class _StorageUsagePageState extends State<StorageUsagePage> {
+class _StorageUsagePageState extends State<StorageUsagePage>
+    with FlClashPageLoadMixin {
   bool _loading = true;
   String? _error;
   String? _clearingCategoryId;
@@ -65,6 +67,7 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
   }
 
   Future<void> _loadSummary({bool silent = false}) async {
+    if (!await waitForPageReady() || !mounted) return;
     if (!silent) {
       setState(() {
         _loading = true;
@@ -73,14 +76,14 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
     }
     try {
       final summary = await StorageUsageService.getStorageUsageSummary();
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       setState(() {
         _summary = summary;
         _loading = false;
         _error = null;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       setState(() {
         _loading = false;
         _error = _t(

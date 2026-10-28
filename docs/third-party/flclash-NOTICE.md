@@ -18,13 +18,16 @@ OmnibotApp's separate commercial license.
 | `ui/lib/widgets/flclash/deferred_push.dart` | `lib/ui/deferred_push.dart` |
 | `ui/lib/widgets/flclash/keyboard_inset_hold.dart` | `lib/ui/keyboard_inset_hold.dart` |
 | Settings row transition decoration in `ui/lib/features/home/pages/settings/settings_page.dart` | `lib/ui/list.dart` (`ListItem.open`) and `lib/ui/list_selected.dart` (`DecorationListItem`); group corners and surface adapted to the existing OmniSettingsGroup |
-| `ui/lib/widgets/flclash/search_header.dart` and `search_surface.dart` | Proxy page `lib/ui/scaffold.dart`, `lib/ui/search_field.dart`, `lib/ui/button.dart`, `lib/ui/motion.dart`, and the solid surface/press portions of `lib/ui/goo.dart` and `lib/ui/navigation_dock.dart` |
-| `ui/lib/widgets/flclash/popup.dart` and `popup_geometry.dart` | `lib/ui/popup.dart` (solid flat popup and source-control morph), `lib/ui/goo.dart`, `lib/ui/motion.dart`, and the solid `menuShadows` constants from `lib/ui/liquid_glass.dart` |
+| `ui/lib/widgets/flclash/search_header.dart` and `search_surface.dart` | Proxy page `lib/ui/scaffold.dart`, `lib/ui/search_field.dart`, `lib/ui/button.dart`, `lib/ui/motion.dart`, and the solid/liquid-glass surface and press portions of `lib/ui/goo.dart` and `lib/ui/navigation_dock.dart` |
+| `ui/lib/widgets/flclash/liquid_glass.dart`, `liquid_glass_capture.dart`, and `ui/shaders/liquid_glass.frag` | `lib/ui/liquid_glass.dart`, `lib/ui/liquid_glass_capture.dart`, and `shaders/liquid_glass.frag`; Flutter Material/HCT/reduced-motion adapters replace the upstream app helpers |
+| `ui/lib/widgets/flclash/popup.dart` and `popup_geometry.dart`, shared by `glass_popup.dart` and `omni_menu.dart` | `lib/ui/popup.dart` (flat popup, source-control morph and liquid-glass platter), `lib/ui/goo.dart`, `lib/ui/motion.dart`, and the solid `menuShadows` constants from `lib/ui/liquid_glass.dart` |
 
-The navigation dock ports the upstream defaults: floating navigation enabled,
-liquid glass disabled. Its layout, spring simulations, drag selection, lens
-deformation and per-icon selection effects are retained. The optional glass
-shader path and desktop-only integration are not included. Application-specific
+The navigation dock retains the upstream floating-navigation layout, spring
+simulations, drag selection, lens deformation and per-icon selection effects.
+OmnibotApp enables the optional glass path at ultra quality by default; the
+appearance preference can disable it. The optional glass
+shader path now uses the shared upstream capture host described below.
+Desktop-only integration is not included. Application-specific
 icons, labels, colors, providers and destinations are supplied by OmnibotApp.
 
 Tab motion uses FlClash's optional slide branch: the PageView moves horizontally
@@ -63,19 +66,77 @@ container routes do not participate in `secondaryAnimation`, so an uncovered
 page cannot start dragging beneath an overlay that is still exiting.
 Deferred push retains the upstream one-frame preparation before opening.
 Keyboard inset holding uses the application's `TickerMode` instead of the
-upstream `PageActivityScope`.
+upstream `PageActivityScope`. Settings-page UI loading also waits for its actual
+route transition to settle through a shared route gate; ACP work and business
+lifecycle ownership remain unchanged.
 
 Home conversation search and the Agents contacts list share the upstream proxy
 toolbar's grouped search button, spring-driven expansion/return, button-slot
-collapse, field/cancel separation, and solid joining-surface geometry. They keep
+collapse, field/cancel separation, and joining-surface geometry in both solid
+and liquid-glass modes. They keep
 their existing query/filter owners and add reduced-motion and inactive-tab focus
 handling. Search uses the upstream 44 dp buttons, 72 dp toolbar and 16 dp edge
 insets; it intentionally replaces the previous home-specific search animation.
-The home search and menu share one 88 by 44 dp capsule. The menu retains the
-upstream 44 dp source-control anchor, pointer-down admission, source snapshot,
-450 ms opening spring and 500 ms return morph. Popup geometry, blur and corner
-interpolation use the upstream solid path; application menu actions remain
-owned by HomeDrawer. Plugin refresh updates the visible menu without delaying
-its opening. The flat menu also retains the opening press across rows, including
-pressed-row feedback, slide-to-select, release and cancel. Submenus and optional
-liquid-glass rendering are not included.
+The home search and menu share one 88 by 44 dp capsule, which is captured and
+restored as a complete source even though only the 44 dp menu segment opens it.
+The Agent switcher uses the same toolbar capsule and optional glass material. The menu retains
+upstream pointer-down admission, source snapshots, the 450 ms opening spring
+and 500 ms return morph. Popup geometry, blur and corner interpolation use the
+upstream solid or liquid-glass path; application menu actions remain owned by
+HomeDrawer. Plugin refresh updates the visible menu without delaying its opening. The flat menu also retains the opening press across rows, including
+pressed-row feedback, slide-to-select, release and cancel. Submenus remain
+application-owned. The same opening and return renderer also
+retains the upstream liquid-glass branch when the shared scope enables it.
+
+The same FlClash popup renderer now presents button-opened lists through
+`showOmniMenu`, `showGlassPopup` and `showOverlayGlassPopup`. A shared source
+wrapper owns the snapshot, temporary hiding and restoration of each complete
+control. Route and OverlayEntry ownership remain distinct: input menus preserve
+the existing editor focus, keyboard, cancellation and Android back registration.
+Each owner retains its safe-area/keyboard-aware placement; long-press menus,
+information cards and editors without a source use the upstream no-source
+return path. Interrupted closes retain the full return clock, and reduced
+motion skips transforms. There is one Flutter spring/geometry renderer rather
+than a second approximation for the overlay path.
+
+The native HTML preview's more menu uses
+`app/src/main/java/cn/com/omnimind/bot/ui/components/FlClashPopupMenu.kt`, adapted
+from the same upstream popup, motion and goo geometry. It retains the 450/500 ms
+clocks, springs, source snapshot, platter/droplet geometry and smooth-min outline.
+Android PopupWindow and Canvas own its presentation lifecycle; no Flutter engine
+is created. The native outline uses rounded rectangles. Android 12 (API 31) and
+later use RenderEffect for content blur; Android 10/11 (API 29/30) retain geometry
+and opacity without that platform effect. This is a native motion adaptation,
+not a claim of pixel-identical Flutter rendering.
+
+The liquid-glass engine retains the upstream refraction/dispersion fragment
+shader, regular/menu/pill/lens optical styles, glow/rim/goo uniforms, standard
+and ultra quality modes, one-host capture atlas, frost-dependent downsampling,
+32-pixel atlas bands, retained captures, and explicit image/shader disposal.
+`LiquidGlass.warmUp()` primes the same cached program used by painting; a failed
+load is cached and does not block the first screen or retry every frame. The
+unsupported-engine fallback is upstream's captured frost/tint path, not a
+replacement BackdropFilter implementation. Reduced motion settles press glow
+immediately while preserving the static glass material.
+
+The shared popup renderer now restores the upstream glass platter and droplet
+branches, including held capture bounds and the return-to-source optical blend.
+OmnibotApp keeps the same pane through the stable menu state and marks child
+surfaces with `LiquidGlassSurfaceScope`, so generic Route and Overlay menus do
+not cover the glass with an opaque card or create a second capture. Source
+snapshots use `LiquidGlass.withoutPanes`, as upstream, to capture glyphs without
+baking a backdrop into the returning control.
+Each source supplies its visible shape, material and capture bounds. Circular
+buttons capture their painted surface independently of the larger touch target;
+input fields include floating labels without moving their supporting text.
+Returning snapshots and restored sources hand off in the same frame, with
+source alpha compensation to avoid doubled fills during the final blend.
+
+The home new-conversation, remote MCP add and run-log action controls retain their original
+FloatingActionButton, Hero, tooltip, dimensions and action owners. A shared
+presentation wrapper supplies the upstream regular glass style in their original
+shape with theme-aware foregrounds, observing the existing pointer sequence for
+press glow. Glass mode removes the FAB's separate material shadow; disabling
+glass restores the original solid appearance and elevation.
+The chat message-anchor button uses the same regular glass surface and
+glass-aware fade while retaining its tap, long-press and fan interaction.

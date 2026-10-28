@@ -680,7 +680,7 @@ class _AppDialogWidgetState extends State<_AppDialogWidget> {
         _buildTitle(),
         if (widget.content != null) ...[
           const SizedBox(height: 8),
-          _buildContent(),
+          Flexible(child: SingleChildScrollView(child: _buildContent())),
         ],
         if (widget.type == DialogType.input ||
             widget.type == DialogType.select ||

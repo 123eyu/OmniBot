@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ui/widgets/flclash/navigation_dock.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
 
 const _destinations = [
   FlClashNavigationDestination(icon: Icons.home, label: '首页'),
@@ -15,6 +16,8 @@ Widget _testApp({
   Brightness brightness = Brightness.light,
   TextDirection direction = TextDirection.ltr,
   double bottomPadding = 0,
+  bool glass = false,
+  LiquidGlassQuality quality = LiquidGlassQuality.ultra,
 }) => MaterialApp(
   theme: ThemeData(brightness: brightness),
   home: MediaQuery(
@@ -24,8 +27,13 @@ Widget _testApp({
     ),
     child: Directionality(
       textDirection: direction,
-      child: Scaffold(
-        body: _DockHarness(onSelected: onSelected),
+      child: LiquidGlassScope(
+        enabled: glass,
+        quality: quality,
+        child: LiquidGlassHost(
+          enabled: glass,
+          child: Scaffold(body: _DockHarness(onSelected: onSelected)),
+        ),
       ),
     ),
   ),
@@ -57,6 +65,62 @@ class _DockHarnessState extends State<_DockHarness> {
 }
 
 void main() {
+  for (final quality in LiquidGlassQuality.values) {
+    testWidgets(
+      '$quality drag survives quality changes and releases captures',
+      (tester) async {
+        final selected = <int>[];
+        await tester.pumpWidget(
+          _testApp(onSelected: selected.add, glass: true, quality: quality),
+        );
+        await tester.pumpAndSettle();
+        final dock = tester.element(find.byType(FlClashNavigationDock));
+        expect(LiquidGlassHost.debugHeldCaptures, 1);
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.text('首页').first),
+        );
+        await tester.pump(const Duration(milliseconds: 80));
+        await gesture.moveTo(tester.getCenter(find.text('设置').first));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(selected, isEmpty);
+        expect(LiquidGlassHost.debugHeldCaptures, greaterThan(1));
+        final switched = quality == LiquidGlassQuality.ultra
+            ? LiquidGlassQuality.standard
+            : LiquidGlassQuality.ultra;
+        await tester.pumpWidget(
+          _testApp(onSelected: selected.add, glass: true, quality: switched),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(selected, isEmpty);
+        expect(tester.element(find.byType(FlClashNavigationDock)), same(dock));
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(selected, [3]);
+        expect(LiquidGlassHost.debugHeldCaptures, 1);
+        final cancel = await tester.startGesture(
+          tester.getCenter(find.text('设置').first),
+        );
+        await cancel.moveTo(tester.getCenter(find.text('Agents').first));
+        await tester.pump(const Duration(milliseconds: 120));
+        await tester.pumpWidget(_testApp(onSelected: selected.add));
+        await tester.pumpAndSettle();
+        expect(LiquidGlassHost.debugHeldCaptures, 0);
+        await cancel.cancel();
+        await tester.pumpAndSettle();
+        expect(selected, [3]);
+        await tester.pumpWidget(
+          _testApp(onSelected: selected.add, glass: true, quality: quality),
+        );
+        await tester.pumpAndSettle();
+        expect(selected, [3]);
+        expect(LiquidGlassHost.debugHeldCaptures, 1);
+        await tester.pumpWidget(const SizedBox.shrink());
+        expect(LiquidGlassHost.debugHeldCaptures, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets('tap selects once and lens settles without replacing the dock', (
     tester,
   ) async {

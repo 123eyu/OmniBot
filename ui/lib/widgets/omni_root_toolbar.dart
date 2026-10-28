@@ -33,27 +33,33 @@ class OmniRootToolbar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) => FlClashSearchHeader(
     primary: primary,
-    title: Row(
-      children: [
-        Expanded(
-          child: Semantics(
-            header: true,
-            child: Text(
-              title,
-              key: titleKey,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                height: 1.3,
-                color: context.omniPalette.textPrimary,
+    // Align titles with the pages' 22 dp content gutter while the toolbar
+    // controls keep FlClash's 16 dp edge inset.
+    title: Padding(
+      padding: const EdgeInsetsDirectional.only(start: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Semantics(
+              header: true,
+              child: Text(
+                title,
+                key: titleKey,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                  color: context.omniPalette.textPrimary,
+                ),
               ),
             ),
           ),
-        ),
-        if (titleTrailing != null && search?.searching != true) titleTrailing!,
-      ],
+          if (titleTrailing != null && search?.searching != true)
+            titleTrailing!,
+        ],
+      ),
     ),
     leading: showBackButton
         ? IconButton(

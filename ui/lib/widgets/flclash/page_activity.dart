@@ -9,6 +9,8 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 
+import 'route_activation.dart';
+
 /// The tab animation is the single owner of this UI scheduling boundary.
 /// No timer estimates its duration, and unrequested tabs are never warmed.
 class FlClashPageActivityController extends ChangeNotifier {
@@ -117,16 +119,36 @@ class _PageLoad {
 mixin FlClashPageLoadMixin<T extends StatefulWidget> on State<T> {
   final _pageLoads = <Object, _PageLoad>{};
   final _pageDisposed = Completer<void>();
+  final _routeActivation = FlClashRouteActivation();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _routeActivation.bind(ModalRoute.of(context));
+  }
 
   Future<bool> waitForPageReady() async {
-    if (!mounted || _pageDisposed.isCompleted) return false;
-    final scope = FlClashPageActivityScope.read(context);
-    if (scope == null) return true;
-    final ready = await scope.controller.waitUntilReady(
-      scope.index,
-      _pageDisposed.future,
-    );
-    return ready && mounted && !_pageDisposed.isCompleted;
+    while (mounted && !_pageDisposed.isCompleted) {
+      final scope = FlClashPageActivityScope.read(context);
+      if (scope != null &&
+          !await scope.controller.waitUntilReady(
+            scope.index,
+            _pageDisposed.future,
+          )) {
+        return false;
+      }
+      if (!await _routeActivation.waitUntilReady(_pageDisposed.future)) {
+        return false;
+      }
+      if (!mounted || _pageDisposed.isCompleted) return false;
+      // Tab selection may have changed while a route/popup was covering it.
+      final currentScope = FlClashPageActivityScope.read(context);
+      if (currentScope == null ||
+          currentScope.controller.readyFor(currentScope.index)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   bool pageLoadIsCurrent(Object key) => _pageLoads[key]?.dirty != true;
@@ -174,6 +196,7 @@ mixin FlClashPageLoadMixin<T extends StatefulWidget> on State<T> {
   @override
   void dispose() {
     _pageDisposed.complete();
+    _routeActivation.dispose();
     super.dispose();
   }
 }

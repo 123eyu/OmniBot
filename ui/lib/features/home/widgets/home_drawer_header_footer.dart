@@ -88,6 +88,7 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
 
     await showGlassPopup<void>(
       context: anchorContext,
+      sourceContext: anchorContext,
       anchor: anchor,
       preferBelow: false,
       child: Builder(
@@ -142,13 +143,17 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
     OmniPluginActionItem action, {
     required Color surface,
     required bool english,
+    AgentWebStatus? statusOverride,
   }) {
     final palette = dialogContext.omniPalette;
     final key = '${action.pluginId}/${action.id}';
     final busy = _busyWebQuickActionKey == key;
     final disabled = _busyWebQuickActionKey != null;
     final agentId = action.presentation['agentId']?.toString().trim() ?? '';
-    final status = _webQuickActionStatuses[key] ?? AgentWebStatus.unknown;
+    final status =
+        statusOverride ??
+        _webQuickActionStatuses[key] ??
+        AgentWebStatus.unknown;
     final stoppable =
         status.active && AgentWebStatusService.supportsLifecycle(action);
     final shortLabel = action.localizedPresentationValue(
@@ -355,7 +360,10 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
       AgentWebStatus.starting => const Color(0xFFE3A52B),
       _ => null,
     };
-    return Builder(
+    return FlClashPopupSource(
+      glass: false,
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       builder: (buttonContext) => Tooltip(
         message: 'Agent WebUI',
         child: InkWell(

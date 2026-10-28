@@ -1,7 +1,7 @@
 // Adapted from FlClash (GPL-3.0), lib/ui/navigation_dock.dart.
 // Source: https://github.com/chen08209/FlClash/tree/7fd417fb9a9a277c6a9339a8ac87f907df7c25f7
 // OmnibotApp modifications: Flutter Material imports, IconData destinations,
-// and the upstream default solid surface (optional glass shader paths omitted).
+// and the upstream solid/glass surfaces, quality modes and lifted selection lens.
 // Geometry, spring simulations, lens tinting and pointer handling are retained.
 
 // Keep upstream render-object constructors recognizable when comparing ports.
@@ -16,6 +16,9 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:material_color_utilities/hct/hct.dart';
+
+import 'liquid_glass.dart';
 
 // FlClash AppShape.full / SurfaceLevel.floatingOf, without the application-wide
 // shape and surface theme helpers.
@@ -64,6 +67,10 @@ const double _jellySquash = 0.15;
 const double _jellyAspect = 1.4;
 // A fifth of a dp at each edge of the widest mobile lens, 134 dp lifted.
 const double _jellyRest = 3e-3;
+const double _glowReach = 28;
+const double _glowGrowth = 3;
+const double _glowPeak = 0.06;
+const double _glowWash = 0.7;
 const double _overdrag = 0.35;
 const double _pullLimit = 7 / 32;
 const double _pullStretch = 0.5;
@@ -104,6 +111,13 @@ final _hoverSpring = SpringDescription.withDurationAndBounce(
 final _fadeSpring = SpringDescription.withDurationAndBounce(
   duration: const Duration(milliseconds: 200),
 );
+final _glowInSpring = SpringDescription.withDurationAndBounce(
+  duration: const Duration(milliseconds: 100),
+);
+final _glowOutSpring = SpringDescription.withDurationAndBounce(
+  duration: const Duration(milliseconds: 500),
+);
+
 double _rubberBand(double overshoot, double limit) {
   final pull = 1 - 1 / (overshoot.abs() * 0.55 / limit + 1);
   return limit * pull * overshoot.sign;
@@ -249,6 +263,41 @@ List<BoxShadow> dockShadows(ColorScheme colorScheme) {
       offset: const Offset(0, 1),
     ),
   ];
+}
+
+/// What the dock's parts stand on: a floating surface, or glass.
+class _DockSurface extends StatelessWidget {
+  const _DockSurface({
+    required this.glass,
+    required this.style,
+    required this.glow,
+    required this.child,
+  });
+
+  final bool glass;
+  final LiquidGlassStyle style;
+  final ValueListenable<LiquidGlassGlow> glow;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (glass) {
+      return ValueListenableBuilder(
+        valueListenable: glow,
+        builder: (_, glow, child) =>
+            LiquidGlass(style: style, glow: glow, child: child),
+        child: child,
+      );
+    }
+    return DecoratedBox(
+      decoration: ShapeDecoration(
+        shape: _dockShape,
+        shadows: dockShadows(colorScheme),
+      ),
+      child: child,
+    );
+  }
 }
 
 ({double width, double height}) _measureLabel(
@@ -519,10 +568,17 @@ class __FloatingNavigationBarState extends State<_FloatingNavigationBar>
   late final _Spring _swell = _Spring(this, 0);
   late final _Spring _stretch = _Spring(this, 0);
   late final _Spring _jelly = _Spring(this, 0, rest: _jellyRest);
+  late final _Spring _glow = _Spring(this, 0);
+  late final _Spring _glowSpread = _Spring(this, 0);
+  final ValueNotifier<LiquidGlassGlow> _touchGlow = ValueNotifier(
+    LiquidGlassGlow.none,
+  );
+  Offset _glowAt = Offset.zero;
   late final Listenable _barMotion = Listenable.merge([_swell, _stretch]);
   late final Listenable _motion = Listenable.merge([_lens, _lift, _jelly]);
   late final Listenable _hoverMotion = Listenable.merge([_hover, _hoverShow]);
   final List<_Spring> _parallax = [];
+  bool _lifted = false;
   int? _pointer;
   int? _pressedIndex;
   double _pressX = 0;
@@ -547,7 +603,11 @@ class __FloatingNavigationBarState extends State<_FloatingNavigationBar>
     _lens
       ..addListener(_wobble)
       ..addListener(_dropLift);
-    _lift.addListener(_dropLift);
+    _lift
+      ..addListener(_dropLift)
+      ..addListener(_noteLift);
+    _glow.addListener(_shine);
+    _glowSpread.addListener(_shine);
     _hoverAt.addListener(_leanContent);
     _syncParallax();
   }
@@ -575,6 +635,9 @@ class __FloatingNavigationBarState extends State<_FloatingNavigationBar>
     _swell.dispose();
     _stretch.dispose();
     _jelly.dispose();
+    _glow.dispose();
+    _glowSpread.dispose();
+    _touchGlow.dispose();
     _hoverAt.dispose();
     super.dispose();
   }
@@ -588,6 +651,18 @@ class __FloatingNavigationBarState extends State<_FloatingNavigationBar>
     if (target != _jelly.target) {
       _jelly.springTo(target, _jellySpring);
     }
+  }
+
+  // UIKit lights the bar from the finger, washing over the rest of it, and
+  // spreads the light out as it fades on release.
+  void _shine() {
+    final glow = _glow.value;
+    _touchGlow.value = LiquidGlassGlow(
+      center: _glowAt,
+      reach: _glowReach * (1 + _glowGrowth * _glowSpread.value),
+      strength: _glowPeak * glow * glow,
+      wash: _glowWash,
+    );
   }
 
   void _syncParallax() {
@@ -610,6 +685,13 @@ class __FloatingNavigationBarState extends State<_FloatingNavigationBar>
       if (target != parallax.target) {
         parallax.springTo(target, _hoverSpring);
       }
+    }
+  }
+
+  void _noteLift() {
+    final lifted = _lift.value > 0;
+    if (lifted != _lifted) {
+      setState(() => _lifted = lifted);
     }
   }
 
@@ -720,12 +802,17 @@ class __FloatingNavigationBarState extends State<_FloatingNavigationBar>
     _hoverShow.springTo(0, _fadeSpring);
     _hoverAt.value = null;
     _swell.springTo(1, _pressSpring);
+    _glowAt = event.localPosition;
+    _glowSpread.jumpTo(0);
+    _glow.springTo(1, _glowInSpring);
     _press(event.localPosition);
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
     if (event.pointer == _pointer) {
       _tracker?.addPosition(event.timeStamp, event.localPosition);
+      _glowAt = event.localPosition;
+      _shine();
       _slide(event.localPosition);
     }
   }
@@ -741,6 +828,8 @@ class __FloatingNavigationBarState extends State<_FloatingNavigationBar>
       _fling(tracker.getVelocity().pixelsPerSecond.dx);
     }
     _release(commit: event is PointerUpEvent);
+    _glow.springTo(0, _glowOutSpring);
+    _glowSpread.springTo(1, _glowOutSpring);
     _stretch.springTo(0, _pressSpring);
     if (_cursor != null) {
       _cursor = event.localPosition;
@@ -849,13 +938,15 @@ class __FloatingNavigationBarState extends State<_FloatingNavigationBar>
       0.0,
       (height, label) => math.max(height, label.height),
     );
-    final bar = DecoratedBox(
-      decoration: ShapeDecoration(
-        shape: _dockShape,
-        shadows: dockShadows(colorScheme),
-      ),
+    final glass = LiquidGlassScope.of(context);
+    final ultra =
+        LiquidGlassScope.qualityOf(context) == LiquidGlassQuality.ultra;
+    final bar = _DockSurface(
+      glass: glass,
+      style: LiquidGlassStyle.pill(colorScheme),
+      glow: _touchGlow,
       child: Material(
-        color: _floatingSurface(colorScheme),
+        color: glass ? Colors.transparent : _floatingSurface(colorScheme),
         shape: _dockShape,
         // Raw pointers rather than recognizers: a drag has nothing to win the
         // arena from, and a tap waiting on one lifts the lens late.
@@ -921,14 +1012,19 @@ class __FloatingNavigationBarState extends State<_FloatingNavigationBar>
                         ],
                       ),
                     );
+                    final lensed =
+                        glass && _lifted && widget.destinations.isNotEmpty;
                     return Stack(
                       clipBehavior: Clip.none,
                       children: [
                         if (widget.destinations.isNotEmpty)
                           AnimatedBuilder(
                             animation: _motion,
-                            builder: (_, _) =>
-                                _Lens(rect: lensRect(), lift: _lift.value),
+                            builder: (_, _) => _Lens(
+                              rect: lensRect(),
+                              lift: _lift.value,
+                              glass: glass,
+                            ),
                           ),
                         if (widget.destinations.isNotEmpty)
                           AnimatedBuilder(
@@ -942,7 +1038,24 @@ class __FloatingNavigationBarState extends State<_FloatingNavigationBar>
                               opacity: _hoverShow.value,
                             ),
                           ),
-                        items(_LensPart.both),
+                        if (glass && widget.destinations.isNotEmpty)
+                          AnimatedBuilder(
+                            animation: _motion,
+                            builder: (_, _) =>
+                                _GlassLens(rect: lensRect(), lift: _lift.value),
+                          ),
+                        items(lensed ? _LensPart.outside : _LensPart.both),
+                        if (lensed)
+                          AnimatedBuilder(
+                            animation: _motion,
+                            builder: (_, child) => _LensContent(
+                              rect: lensRect(),
+                              lift: _lift.value,
+                              warp: ultra,
+                              child: child!,
+                            ),
+                            child: items(_LensPart.inside),
+                          ),
                       ],
                     );
                   },
@@ -1003,15 +1116,23 @@ class _HoverHighlight extends StatelessWidget {
 }
 
 class _Lens extends StatelessWidget {
-  const _Lens({required this.rect, required this.lift});
+  const _Lens({required this.rect, required this.lift, required this.glass});
 
   final Rect rect;
   final double lift;
+
+  /// On glass the lens rests as a platter in the secondary hue, sunk in dark
+  /// mode as iOS's tab bar marks its selection, and clears as it lifts into
+  /// the [_GlassLens].
+  final bool glass;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final lifted = lift.clamp(0.0, 1.0);
+    final tone = colorScheme.brightness == Brightness.dark ? 4.0 : 90.0;
+    final hct = Hct.fromInt(colorScheme.secondary.toARGB32())..tone = tone;
+    final platter = Color(hct.toInt()).withValues(alpha: 0.85);
     return PositionedDirectional(
       start: rect.left,
       top: rect.top,
@@ -1019,15 +1140,143 @@ class _Lens extends StatelessWidget {
       height: rect.height,
       child: DecoratedBox(
         decoration: ShapeDecoration(
-          color: Color.alphaBlend(
-            colorScheme.onSurface.withValues(alpha: 0.08 * lifted),
-            _selectedSurface(colorScheme),
-          ),
+          color: glass
+              ? platter.withValues(alpha: platter.a * (1 - lifted))
+              : Color.alphaBlend(
+                  colorScheme.onSurface.withValues(alpha: 0.08 * lifted),
+                  _selectedSurface(colorScheme),
+                ),
           shape: _dockShape,
         ),
       ),
     );
   }
+}
+
+/// The clear lens a lifted selection becomes on glass. The destinations stand
+/// on it, as iOS draws them over its lens, so it bends only the bar.
+class _GlassLens extends StatelessWidget {
+  const _GlassLens({required this.rect, required this.lift});
+
+  final Rect rect;
+  final double lift;
+
+  @override
+  Widget build(BuildContext context) {
+    if (lift <= 0) {
+      return const SizedBox.shrink();
+    }
+    final colorScheme = Theme.of(context).colorScheme;
+    return Positioned.directional(
+      textDirection: Directionality.of(context),
+      start: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      child: IgnorePointer(
+        child: LiquidGlass(
+          style: LiquidGlassStyle.lens(colorScheme).scale(lift),
+          shadows: _lensShadows(colorScheme, lift),
+        ),
+      ),
+    );
+  }
+}
+
+List<BoxShadow> _lensShadows(ColorScheme colorScheme, double lift) {
+  final strength = colorScheme.brightness == Brightness.dark ? 3.0 : 1.0;
+  return [
+    BoxShadow(
+      color: colorScheme.shadow.withValues(
+        alpha: 0.055 * strength * lift.clamp(0.0, 1.0),
+      ),
+      blurRadius: 5,
+      offset: const Offset(0, 8),
+    ),
+  ];
+}
+
+/// What a lifted lens on glass shows of the destinations under it, over the
+/// [_GlassLens], with a pane of its own that warps only them: they are drawn
+/// offscreen, so that pane reads them and not the bar.
+class _LensContent extends StatelessWidget {
+  const _LensContent({
+    required this.rect,
+    required this.lift,
+    required this.warp,
+    required this.child,
+  });
+
+  final Rect rect;
+  final double lift;
+  final bool warp;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final textDirection = Directionality.of(context);
+    final clipper = _LensClip(rect, textDirection);
+    if (!warp) {
+      return Positioned.fill(
+        child: IgnorePointer(
+          child: ExcludeSemantics(
+            child: ClipPath(clipper: clipper, child: child),
+          ),
+        ),
+      );
+    }
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: ExcludeSemantics(
+          child: ClipPath(
+            clipper: clipper,
+            clipBehavior: Clip.antiAliasWithSaveLayer,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(child: child),
+                Positioned.directional(
+                  textDirection: textDirection,
+                  start: rect.left,
+                  top: rect.top,
+                  width: rect.width,
+                  height: rect.height,
+                  child: LiquidGlass(
+                    style: LiquidGlassStyle.lensContent(
+                      Theme.of(context).colorScheme,
+                    ).scale(lift),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LensClip extends CustomClipper<Path> {
+  const _LensClip(this.rect, this.textDirection);
+
+  final Rect rect;
+  final TextDirection textDirection;
+
+  @override
+  Path getClip(Size size) => _dockShape.getOuterPath(
+    textDirection == TextDirection.ltr
+        ? rect
+        : Rect.fromLTRB(
+            size.width - rect.right,
+            rect.top,
+            size.width - rect.left,
+            rect.bottom,
+          ),
+  );
+
+  @override
+  bool shouldReclip(_LensClip oldClipper) =>
+      rect != oldClipper.rect || textDirection != oldClipper.textDirection;
 }
 
 enum _LensPart { both, outside, inside }
@@ -1085,7 +1334,19 @@ class _FloatingBarItemState extends State<_FloatingBarItem> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final color = colorScheme.onSurfaceVariant;
-    final tint = colorScheme.primary;
+    var tint = colorScheme.primary;
+    if (widget.part == _LensPart.inside &&
+        LiquidGlassScope.qualityOf(context) == LiquidGlassQuality.standard) {
+      // Without a pane of its own the copy takes the light that one adds.
+      final brightness = LiquidGlassStyle.lensContent(colorScheme).brightness;
+      tint = Color.from(
+        alpha: tint.a,
+        red: math.min(tint.r * brightness, 1),
+        green: math.min(tint.g * brightness, 1),
+        blue: math.min(tint.b * brightness, 1),
+      );
+    }
+
     final content = _LensTint(
       part: widget.part,
       lens: widget.lens,

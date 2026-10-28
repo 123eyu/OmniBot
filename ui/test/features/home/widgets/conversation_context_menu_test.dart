@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ui/features/home/widgets/conversation_context_menu.dart';
 import 'package:ui/theme/app_theme.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
 
 void main() {
   for (final closeWithAction in [false, true]) {
@@ -130,20 +131,22 @@ void main() {
         const ValueKey('conversation-context-preview'),
       );
       double opacity() => tester
-          .widget<Opacity>(
+          .widget<LiquidGlassFade>(
             find.byKey(const ValueKey('conversation-context-actions-opacity')),
           )
-          .opacity;
+          .opacity
+          .value;
       await tester.tap(find.text('Open'));
       await tester.pump();
       final initial = tester.getRect(preview);
       expect(initial.top, 700);
       expect(opacity(), 0);
       double previewOpacity() => tester
-          .widget<Opacity>(
+          .widget<LiquidGlassFade>(
             find.byKey(const ValueKey('conversation-context-preview-opacity')),
           )
-          .opacity;
+          .opacity
+          .value;
       expect(previewOpacity(), 0);
       await tester.pump(const Duration(milliseconds: 60));
       final early = tester.getRect(preview);
@@ -182,10 +185,11 @@ void main() {
     await tester.pump();
     expect(
       tester
-          .widget<Opacity>(
+          .widget<LiquidGlassFade>(
             find.byKey(const ValueKey('conversation-context-actions-opacity')),
           )
-          .opacity,
+          .opacity
+          .value,
       1,
     );
     final preview = find.byKey(const ValueKey('conversation-context-preview'));

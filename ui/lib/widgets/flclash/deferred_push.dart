@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 /// first build does not swallow the start of the transition.
 mixin DeferredPushRouteMixin<T> on TransitionRoute<T> {
   _TickerCapture? _vsync;
+  bool _pushDisposed = false;
 
   @override
   AnimationController createAnimationController() {
@@ -31,9 +32,16 @@ mixin DeferredPushRouteMixin<T> on TransitionRoute<T> {
     final pushed = super.didPush();
     final context = navigator!.context;
     SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (_pushDisposed || !context.mounted) return;
       ticker.muted = !TickerMode.getValuesNotifier(context).value.enabled;
     });
     return pushed;
+  }
+
+  @override
+  void dispose() {
+    _pushDisposed = true;
+    super.dispose();
   }
 }
 

@@ -1,3 +1,4 @@
+import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -16,7 +17,8 @@ class PluginMarketPage extends StatefulWidget {
   State<PluginMarketPage> createState() => _PluginMarketPageState();
 }
 
-class _PluginMarketPageState extends State<PluginMarketPage> {
+class _PluginMarketPageState extends State<PluginMarketPage>
+    with FlClashPageLoadMixin {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   List<OmniPluginItem> _plugins = const <OmniPluginItem>[];
@@ -58,10 +60,11 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
   }
 
   Future<void> _loadPlugins() async {
-    if (mounted) setState(() => _loading = true);
+    if (!await waitForPageReady() || !mounted) return;
+    if (await waitForPageReady() && mounted) setState(() => _loading = true);
     try {
       final plugins = await OmniPluginService.listPlugins();
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       setState(() {
         _plugins = plugins
             .where((plugin) => !plugin.hidden)
@@ -69,7 +72,7 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
         _loading = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!await waitForPageReady() || !mounted) return;
       setState(() => _loading = false);
       showToast(context.l10n.pluginLoadFailed, type: ToastType.error);
     }

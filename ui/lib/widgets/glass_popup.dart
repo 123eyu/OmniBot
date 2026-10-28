@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/flclash/popup.dart';
 
 /// 横向定位策略。
 enum GlassPopupHorizontalPlacement {
@@ -23,7 +24,7 @@ enum GlassPopupHorizontalPlacement {
 }
 
 /// 给 OverlayEntry 场景用的 popup 包装：复用 [GlassPopupRoute] 的定位
-/// 算法和 unfold 动画，但不走 [Navigator]。
+/// 算法和 FlClash 源控件变形动画，但不走 [Navigator]。
 ///
 /// 为什么不走 Navigator：在输入框聚焦+软键盘弹起时打开菜单，[Navigator.push] →
 /// [ModalRoute.didPush] 会调 `setFirstFocus` 把焦点从 TextField 抢到 popup 的
@@ -42,20 +43,27 @@ class GlassPopupOverlayContent extends StatefulWidget {
     super.key,
     required this.anchor,
     required this.child,
+    this.source,
+    this.placementAnchor,
     this.preferBelow = true,
     this.verticalGap = 6,
     this.overlapAnchor = true,
     this.screenPadding = const EdgeInsets.all(8),
     this.unfoldAlignment,
     this.horizontalPlacement = GlassPopupHorizontalPlacement.edgeAlign,
-    this.duration = const Duration(milliseconds: 240),
-    this.reverseDuration = const Duration(milliseconds: 160),
+    this.duration = FlClashPopupMotion.openingDuration,
+    this.reverseDuration = FlClashPopupMotion.closingDuration,
     this.curve = Curves.easeOutCubic,
     this.reverseCurve = Curves.easeInCubic,
   });
 
   final Rect anchor;
   final Widget child;
+  final FlClashPopupSourceLease? source;
+
+  /// Optional panel alignment, independent of the real source used by the morph.
+  /// Composer menus can align to the editor edge while returning to their button.
+  final Rect? placementAnchor;
   final bool preferBelow;
   final double verticalGap;
 
@@ -79,8 +87,7 @@ class GlassPopupOverlayContentState extends State<GlassPopupOverlayContent>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   bool _reduceMotion = false;
-  final ValueNotifier<_GlassPopupOrigin> _originNotifier =
-      ValueNotifier<_GlassPopupOrigin>(_GlassPopupOrigin.initial);
+  bool _closing = false;
 
   @override
   void initState() {
@@ -90,7 +97,16 @@ class GlassPopupOverlayContentState extends State<GlassPopupOverlayContent>
       duration: widget.duration,
       reverseDuration: widget.reverseDuration,
     );
+    _controller.addStatusListener(_handleStatus);
     _controller.forward();
+  }
+
+  void _handleStatus(AnimationStatus status) {
+    if (_closing && status == AnimationStatus.dismissed) {
+      // The renderer retires its return surface at dismissed. Reveal the live
+      // control in that same frame; lease disposal still belongs to the owner.
+      widget.source?.reveal();
+    }
   }
 
   @override
@@ -103,7 +119,6 @@ class GlassPopupOverlayContentState extends State<GlassPopupOverlayContent>
   @override
   void dispose() {
     _controller.dispose();
-    _originNotifier.dispose();
     super.dispose();
   }
 
@@ -111,12 +126,16 @@ class GlassPopupOverlayContentState extends State<GlassPopupOverlayContent>
   /// [OverlayEntry] 从 [Overlay] 中 `remove()`。
   Future<void> playReverse() async {
     if (!mounted) return;
+    _closing = true;
     try {
       if (_reduceMotion) {
         _controller.value = 0;
         return;
       }
-      await _controller.reverse().orCancel;
+      await FlClashPopupMotion.close(
+        _controller,
+        duration: widget.reverseDuration,
+      );
     } on TickerCanceled {
       // 收起途中被 dispose,正常退出。
     }
@@ -125,9 +144,13 @@ class GlassPopupOverlayContentState extends State<GlassPopupOverlayContent>
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
+    final overlay = Overlay.maybeOf(context)?.context.findRenderObject();
+    final anchor =
+        widget.source?.rectIn(overlay is RenderBox ? overlay : null) ??
+        widget.anchor;
     return CustomSingleChildLayout(
       delegate: _GlassPopupLayoutDelegate(
-        anchor: widget.anchor,
+        anchor: widget.placementAnchor ?? anchor,
         preferBelow: widget.preferBelow,
         verticalGap: widget.verticalGap,
         overlapAnchor: widget.overlapAnchor,
@@ -137,19 +160,11 @@ class GlassPopupOverlayContentState extends State<GlassPopupOverlayContent>
         textDirection: Directionality.of(context),
         explicitUnfoldAlignment: widget.unfoldAlignment,
         horizontalPlacement: widget.horizontalPlacement,
-        onOriginResolved: (origin) {
-          if (_originNotifier.value != origin) {
-            scheduleMicrotask(() {
-              if (mounted) _originNotifier.value = origin;
-            });
-          }
-        },
       ),
-      child: _GlassPopupAnimatedFrame(
+      child: FlClashPopupTransition(
+        anchor: anchor,
         animation: _controller.view,
-        originNotifier: _originNotifier,
-        curve: widget.curve,
-        reverseCurve: widget.reverseCurve,
+        source: widget.source,
         child: widget.child,
       ),
     );
@@ -158,19 +173,22 @@ class GlassPopupOverlayContentState extends State<GlassPopupOverlayContent>
 
 /// 锚点弹层的统一入口；保留旧 API 名称，面板外观由调用方提供。
 ///
-/// List menus cover their trigger and reveal outward from its bounds. Adjacent
-/// popups remain available through overlapAnchor=false for tooltips and editors.
-/// The clip stays local to the panel so its text never changes scale.
+/// List menus use the same paint-only spring, blur and return-to-source renderer
+/// as FlClashPopupBox. Adjacent tooltips and editor cards remain available through
+/// overlapAnchor=false. Pass a context inside FlClashPopupSource for a snapshot
+/// of the complete trigger and wait for its return before the selection resolves.
 Future<T?> showGlassPopup<T>({
   required BuildContext context,
+  BuildContext? sourceContext,
+  Rect? placementAnchor,
   required Rect anchor,
   required Widget child,
   bool preferBelow = true,
   double verticalGap = 6,
   bool overlapAnchor = true,
   EdgeInsets screenPadding = const EdgeInsets.all(8),
-  Duration transitionDuration = const Duration(milliseconds: 240),
-  Duration reverseTransitionDuration = const Duration(milliseconds: 160),
+  Duration transitionDuration = FlClashPopupMotion.openingDuration,
+  Duration reverseTransitionDuration = FlClashPopupMotion.closingDuration,
   Curve curve = Curves.easeOutCubic,
   Curve reverseCurve = Curves.easeInCubic,
   Alignment? unfoldAlignment,
@@ -191,33 +209,37 @@ Future<T?> showGlassPopup<T>({
     from: context,
     to: navigator.context,
   );
-  return navigator.push<T>(
-    GlassPopupRoute<T>(
-      anchor: anchor,
-      child: capturedThemes.wrap(child),
-      preferBelow: preferBelow,
-      verticalGap: verticalGap,
-      overlapAnchor: overlapAnchor,
-      screenPadding: screenPadding,
-      animationDuration: MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : transitionDuration,
-      reverseAnimationDuration: MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : reverseTransitionDuration,
-      curve: curve,
-      reverseCurve: reverseCurve,
-      explicitUnfoldAlignment: unfoldAlignment,
-      horizontalPlacement: horizontalPlacement,
-      instant: instant,
-      requestFocus: requestFocus,
-      barrierColor: barrierColor,
-      barrierLabel:
-          barrierLabel ??
-          MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      settings: routeSettings,
-    ),
+  final source = FlClashPopupSource.captureOf(sourceContext);
+  final route = GlassPopupRoute<T>(
+    anchor: anchor,
+    source: source,
+    placementAnchor: placementAnchor,
+    child: capturedThemes.wrap(child),
+    preferBelow: preferBelow,
+    verticalGap: verticalGap,
+    overlapAnchor: overlapAnchor,
+    screenPadding: screenPadding,
+    animationDuration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : transitionDuration,
+    reverseAnimationDuration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : reverseTransitionDuration,
+    curve: curve,
+    reverseCurve: reverseCurve,
+    explicitUnfoldAlignment: unfoldAlignment,
+    horizontalPlacement: horizontalPlacement,
+    instant: instant,
+    requestFocus: requestFocus,
+    barrierColor: barrierColor,
+    barrierLabel:
+        barrierLabel ??
+        MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    settings: routeSettings,
   );
+  final result = navigator.push<T>(route);
+  unawaited(route.completed.whenComplete(() => source?.release()));
+  return source == null ? result : route.completed.then((_) => result);
 }
 
 /// `showGlassPopup` 内部使用的自定义 [PopupRoute]。
@@ -225,6 +247,8 @@ class GlassPopupRoute<T> extends PopupRoute<T> {
   GlassPopupRoute({
     required this.anchor,
     required this.child,
+    this.source,
+    this.placementAnchor,
     required this.preferBelow,
     required this.verticalGap,
     required this.overlapAnchor,
@@ -237,13 +261,15 @@ class GlassPopupRoute<T> extends PopupRoute<T> {
     required this.horizontalPlacement,
     required this.barrierLabel,
     required this.instant,
-    Color? barrierColor,
+    this.barrierColor,
     super.settings,
     super.requestFocus,
-  }) : _barrierColor = barrierColor;
+  });
 
   final Rect anchor;
   final Widget child;
+  final FlClashPopupSourceLease? source;
+  final Rect? placementAnchor;
   final bool preferBelow;
   final double verticalGap;
   final bool overlapAnchor;
@@ -255,14 +281,8 @@ class GlassPopupRoute<T> extends PopupRoute<T> {
   final Alignment? explicitUnfoldAlignment;
   final GlassPopupHorizontalPlacement horizontalPlacement;
   final bool instant;
-  final Color? _barrierColor;
-
-  final ValueNotifier<_GlassPopupOrigin> _resolvedOrigin =
-      ValueNotifier<_GlassPopupOrigin>(_GlassPopupOrigin.initial);
-  bool _disposed = false;
-
   @override
-  Color? get barrierColor => _barrierColor;
+  final Color? barrierColor;
 
   @override
   bool get barrierDismissible => true;
@@ -279,10 +299,23 @@ class GlassPopupRoute<T> extends PopupRoute<T> {
       instant ? Duration.zero : reverseAnimationDuration;
 
   @override
-  void dispose() {
-    _disposed = true;
-    _resolvedOrigin.dispose();
-    super.dispose();
+  bool didPop(T? result) {
+    controller!.addStatusListener(_revealSourceAfterReturn);
+    final value = controller!.value;
+    controller!.reverseDuration = value <= 0
+        ? reverseTransitionDuration
+        : reverseTransitionDuration * (1 / value);
+    final popped = super.didPop(result);
+    if (controller!.isDismissed) {
+      _revealSourceAfterReturn(AnimationStatus.dismissed);
+    }
+    return popped;
+  }
+
+  void _revealSourceAfterReturn(AnimationStatus status) {
+    if (status != AnimationStatus.dismissed) return;
+    source?.reveal();
+    controller?.removeStatusListener(_revealSourceAfterReturn);
   }
 
   @override
@@ -292,6 +325,9 @@ class GlassPopupRoute<T> extends PopupRoute<T> {
     Animation<double> secondaryAnimation,
   ) {
     final mediaQuery = MediaQuery.of(context);
+    final overlay = navigator?.overlay?.context.findRenderObject();
+    final resolvedAnchor =
+        source?.rectIn(overlay is RenderBox ? overlay : null) ?? anchor;
     // 关键：这里**绝对不能**再套一层 `SafeArea`。anchor 是用
     // `Overlay.context.findRenderObject()` 取的全屏坐标；SafeArea 会把子节点的
     // 坐标系压成"安全区内的局部坐标"，再让 `CustomSingleChildLayout` 把 popup
@@ -303,7 +339,7 @@ class GlassPopupRoute<T> extends PopupRoute<T> {
     // 盖到。
     return CustomSingleChildLayout(
       delegate: _GlassPopupLayoutDelegate(
-        anchor: anchor,
+        anchor: placementAnchor ?? resolvedAnchor,
         preferBelow: preferBelow,
         verticalGap: verticalGap,
         overlapAnchor: overlapAnchor,
@@ -313,21 +349,13 @@ class GlassPopupRoute<T> extends PopupRoute<T> {
         textDirection: Directionality.of(context),
         explicitUnfoldAlignment: explicitUnfoldAlignment,
         horizontalPlacement: horizontalPlacement,
-        onOriginResolved: (origin) {
-          if (_resolvedOrigin.value != origin) {
-            scheduleMicrotask(() {
-              if (!_disposed) _resolvedOrigin.value = origin;
-            });
-          }
-        },
       ),
       child: instant
           ? child
-          : _GlassPopupAnimatedFrame(
+          : FlClashPopupTransition(
+              anchor: resolvedAnchor,
               animation: animation,
-              originNotifier: _resolvedOrigin,
-              curve: curve,
-              reverseCurve: reverseCurve,
+              source: source,
               child: child,
             ),
     );
@@ -347,99 +375,6 @@ class GlassPopupRoute<T> extends PopupRoute<T> {
   }
 }
 
-/// Reveals the full-size panel from the trigger without scaling its text.
-/// Layout stays stable throughout both directions, including during IME changes.
-class _GlassPopupAnimatedFrame extends StatefulWidget {
-  const _GlassPopupAnimatedFrame({
-    required this.animation,
-    required this.originNotifier,
-    required this.curve,
-    required this.reverseCurve,
-    required this.child,
-  });
-
-  final Animation<double> animation;
-  final ValueNotifier<_GlassPopupOrigin> originNotifier;
-  final Curve curve;
-  final Curve reverseCurve;
-  final Widget child;
-
-  @override
-  State<_GlassPopupAnimatedFrame> createState() =>
-      _GlassPopupAnimatedFrameState();
-}
-
-class _GlassPopupAnimatedFrameState extends State<_GlassPopupAnimatedFrame> {
-  late final CurvedAnimation _reveal = CurvedAnimation(
-    parent: widget.animation,
-    curve: widget.curve,
-    reverseCurve: widget.reverseCurve,
-  );
-  late final CurvedAnimation _fade = CurvedAnimation(
-    parent: widget.animation,
-    curve: Curves.easeOutCubic,
-    reverseCurve: Curves.easeInCubic,
-  );
-
-  @override
-  void dispose() {
-    _reveal.dispose();
-    _fade.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (MediaQuery.disableAnimationsOf(context)) return widget.child;
-    return ValueListenableBuilder<_GlassPopupOrigin>(
-      valueListenable: widget.originNotifier,
-      child: RepaintBoundary(child: widget.child),
-      builder: (context, origin, innerChild) => AnimatedBuilder(
-        animation: widget.animation,
-        child: innerChild,
-        builder: (context, child) => FadeTransition(
-          opacity: _fade,
-          child: IgnorePointer(
-            ignoring: widget.animation.status == AnimationStatus.reverse,
-            child: ClipRRect(
-              clipper: _PopupRevealClipper(
-                progress: _reveal.value,
-                shadowProgress: const Interval(
-                  0.85,
-                  1,
-                  curve: Curves.easeInOut,
-                ).transform(widget.animation.value),
-                origin: origin,
-              ),
-              child: child,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-@immutable
-class _GlassPopupOrigin {
-  const _GlassPopupOrigin(this.alignment, this.trigger);
-
-  static const initial = _GlassPopupOrigin(Alignment.topCenter, Rect.zero);
-  final Alignment alignment;
-  final Rect trigger;
-
-  @override
-  bool operator ==(Object other) =>
-      other is _GlassPopupOrigin &&
-      alignment == other.alignment &&
-      trigger == other.trigger;
-
-  @override
-  int get hashCode => Object.hash(alignment, trigger);
-}
-
-typedef _OriginCallback = void Function(_GlassPopupOrigin origin);
-
 class _GlassPopupLayoutDelegate extends SingleChildLayoutDelegate {
   _GlassPopupLayoutDelegate({
     required this.anchor,
@@ -451,7 +386,6 @@ class _GlassPopupLayoutDelegate extends SingleChildLayoutDelegate {
     required this.textDirection,
     required this.explicitUnfoldAlignment,
     required this.horizontalPlacement,
-    required this.onOriginResolved,
   });
 
   final Rect anchor;
@@ -463,7 +397,6 @@ class _GlassPopupLayoutDelegate extends SingleChildLayoutDelegate {
   final TextDirection textDirection;
   final Alignment? explicitUnfoldAlignment;
   final GlassPopupHorizontalPlacement horizontalPlacement;
-  final _OriginCallback onOriginResolved;
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
@@ -532,20 +465,6 @@ class _GlassPopupLayoutDelegate extends SingleChildLayoutDelegate {
       x = x.clamp(minX, maxX);
     }
 
-    final localTrigger = anchor.shift(Offset(-x, -y));
-    final center = anchor.center - Offset(x, y);
-    final alignment =
-        explicitUnfoldAlignment ??
-        Alignment(
-          childSize.width <= 0
-              ? 0
-              : (center.dx / childSize.width * 2 - 1).clamp(-1.0, 1.0),
-          placeBelow ? -1 : 1,
-        );
-    onOriginResolved(
-      _GlassPopupOrigin(alignment, overlapAnchor ? localTrigger : Rect.zero),
-    );
-
     return Offset(x, y);
   }
 
@@ -561,52 +480,6 @@ class _GlassPopupLayoutDelegate extends SingleChildLayoutDelegate {
         explicitUnfoldAlignment != oldDelegate.explicitUnfoldAlignment ||
         horizontalPlacement != oldDelegate.horizontalPlacement;
   }
-}
-
-/// Rounded reveal grows from the covered trigger to include the panel's shadow.
-class _PopupRevealClipper extends CustomClipper<RRect> {
-  const _PopupRevealClipper({
-    required this.progress,
-    required this.shadowProgress,
-    required this.origin,
-  });
-
-  final double progress;
-  final double shadowProgress;
-  final _GlassPopupOrigin origin;
-
-  @override
-  RRect getClip(Size size) {
-    final panel = Offset.zero & size;
-    final trigger = origin.trigger.intersect(panel);
-    final start = trigger.width > 0 && trigger.height > 0
-        ? trigger
-        : Rect.fromCenter(
-            center: origin.alignment.alongSize(size),
-            width: 0,
-            height: 0,
-          );
-    // Reveal the panel itself first. Interpolating straight to an inflated
-    // shadow rect exposes the whole menu too early, leaving an idle tail on
-    // open and an idle lead-in on close. Release shadow clipping only near the
-    // fully open endpoint, independently of the eased content reveal.
-    final rect = Rect.lerp(
-      start,
-      panel,
-      progress,
-    )!.inflate(64 * shadowProgress);
-    final radius = (start.shortestSide / 2).clamp(0.0, 20.0);
-    return RRect.fromRectAndRadius(
-      rect,
-      Radius.circular(radius + (20 - radius) * progress),
-    );
-  }
-
-  @override
-  bool shouldReclip(_PopupRevealClipper old) =>
-      progress != old.progress ||
-      shadowProgress != old.shadowProgress ||
-      origin != old.origin;
 }
 
 /// 读取仍处于活动树中的 context 对应的 render object。
@@ -664,6 +537,72 @@ Rect? glassPopupAnchorFromContext(BuildContext anchorContext) {
   return Rect.fromPoints(topLeft, bottomRight);
 }
 
+/// The painted input material in a source's local coordinates. Helper/error
+/// text stays on the page; [glassPopupInputLabelRects] captures floating labels
+/// separately without enlarging this material or its anchor.
+Rect? glassPopupInputContainerRect(
+  BuildContext sourceContext,
+  BuildContext? fieldContentContext,
+) {
+  if (fieldContentContext == null || !fieldContentContext.mounted) return null;
+  final source = findActiveRenderObject(sourceContext);
+  if (source is! RenderBox || !source.hasSize) return null;
+  final container = InputDecorator.containerOf(fieldContentContext);
+  if (container == null || !container.hasSize) return null;
+  return (container.localToGlobal(Offset.zero) -
+          source.localToGlobal(Offset.zero)) &
+      container.size;
+}
+
+/// Floating labels can paint above an InputDecorator's container. Preserve
+/// their transformed paint bounds without enlarging its material or anchor.
+List<Rect> glassPopupInputLabelRects(
+  BuildContext sourceContext,
+  BuildContext? fieldContentContext,
+) {
+  if (fieldContentContext == null || !fieldContentContext.mounted) {
+    return const [];
+  }
+  final source = findActiveRenderObject(sourceContext);
+  if (source is! RenderBox || !source.hasSize) return const [];
+  Element? decoratorElement;
+  fieldContentContext.visitAncestorElements((element) {
+    if (element.widget is InputDecorator) {
+      decoratorElement = element;
+      return false;
+    }
+    return true;
+  });
+  final decorator = decoratorElement?.widget;
+  if (decorator is! InputDecorator) return const [];
+  final decoration = decorator.decoration;
+  RenderBox? label;
+  void findLabel(Element element) {
+    // A selected value may equal labelText; it is not the floating label.
+    if (identical(element, fieldContentContext) || label != null) return;
+    final widget = element.widget;
+    if (identical(widget, decoration.label) ||
+        (decoration.labelText != null &&
+            widget is Text &&
+            widget.data == decoration.labelText)) {
+      final render = element.findRenderObject();
+      if (render is RenderBox && render.hasSize) label = render;
+      return;
+    }
+    element.visitChildren(findLabel);
+  }
+
+  decoratorElement!.visitChildren(findLabel);
+  final box = label;
+  if (box == null) return const [];
+  return [
+    MatrixUtils.transformRect(
+      box.getTransformTo(source),
+      box.paintBounds,
+    ).inflate(1),
+  ];
+}
+
 /// 从全局坐标点构造一个零宽零高的 anchor 矩形（用于触点弹出，如长按消息气泡）。
 Rect? glassPopupAnchorFromGlobalPosition(
   BuildContext context,
@@ -688,7 +627,7 @@ Rect? glassPopupAnchorFromGlobalPosition(
 ///     Flutter 收不到 back"的特殊路径(可选);
 ///   - [Positioned.fill] tap-outside 兜底关闭(可选);
 ///   - [GlassPopupOverlayContent.playReverse] 收起动画 + [OverlayEntry.remove]
-///     的清理时序(含 `_dismissing` 防重入)。
+///     的清理时序(共享关闭 Future 防重入)。
 ///
 /// 返回 [OverlayGlassPopupHandle]:
 ///   - `await handle.future` 拿到 [dismiss] 携带的返回值;
@@ -707,12 +646,18 @@ class OverlayGlassPopupHandle<T> {
   OverlayEntry? _entry;
   ModalRoute<dynamic>? _route;
   _OverlayGlassPopupPopEntry? _popEntry;
-  bool _dismissing = false;
+  Future<void>? _dismissFuture;
+  final _closed = Completer<void>();
+  FlClashPopupSourceLease? _source;
   bool _keepOpenOnNextKeyboardHide = false;
 
   /// 等待 dismiss 携带的返回值。被取消(tap-outside / back / keyboard hide /
   /// 调用方主动 dismiss 不传 result) 时 resolve 为 `null`。
   Future<T?> get future => _completer.future;
+
+  /// Completes after the reverse animation and source restoration, including
+  /// when another caller already requested dismissal.
+  Future<void> get closed => _closed.future;
 
   /// popup 是否还挂在 overlay 上(尚未走完关闭动画 + remove)。
   bool get isOpen => _entry != null;
@@ -736,13 +681,14 @@ class OverlayGlassPopupHandle<T> {
     return false;
   }
 
-  /// 主动关闭 popup。可重复调用(后续调用是 no-op)。
+  /// 主动关闭 popup。重复调用返回同一个 Future，均等待收起和源控件恢复。
   ///
   /// 时序: complete future(让 [future] 的 await 立刻 resolve,UI 后续逻辑可以并行
   /// 起跑) → await playReverse 走完收起动画 → 从 overlay 摘除 entry。
-  Future<void> dismiss([T? result]) async {
-    if (_dismissing) return;
-    _dismissing = true;
+  Future<void> dismiss([T? result]) =>
+      _dismissFuture ??= _performDismiss(result);
+
+  Future<void> _performDismiss(T? result) async {
     final popEntry = _popEntry;
     _popEntry = null;
     if (popEntry != null) {
@@ -759,9 +705,15 @@ class OverlayGlassPopupHandle<T> {
     }
     final entry = _entry;
     _entry = null;
-    if (entry != null && entry.mounted) {
+    if (entry != null) {
+      // Insertion and mounting are separate. A caller can dismiss in the same
+      // frame as insert(), before the overlay has ever built this entry.
       entry.remove();
+      entry.dispose();
     }
+    _source?.release();
+    _source = null;
+    if (!_closed.isCompleted) _closed.complete();
   }
 }
 
@@ -783,6 +735,8 @@ class _OverlayGlassPopupPopEntry extends PopEntry<Object?> {
 /// 见 [OverlayGlassPopupHandle] 类的文档。
 OverlayGlassPopupHandle<T> showOverlayGlassPopup<T>({
   required BuildContext context,
+  BuildContext? sourceContext,
+  Rect? placementAnchor,
   required Rect anchor,
   required Widget Function(OverlayGlassPopupHandle<T> handle) builder,
   bool preferBelow = true,
@@ -792,8 +746,8 @@ OverlayGlassPopupHandle<T> showOverlayGlassPopup<T>({
   Alignment? unfoldAlignment,
   GlassPopupHorizontalPlacement horizontalPlacement =
       GlassPopupHorizontalPlacement.edgeAlign,
-  Duration transitionDuration = const Duration(milliseconds: 240),
-  Duration reverseTransitionDuration = const Duration(milliseconds: 160),
+  Duration transitionDuration = FlClashPopupMotion.openingDuration,
+  Duration reverseTransitionDuration = FlClashPopupMotion.closingDuration,
   Curve curve = Curves.easeOutCubic,
   Curve reverseCurve = Curves.easeInCubic,
   bool useRootOverlay = true,
@@ -801,7 +755,8 @@ OverlayGlassPopupHandle<T> showOverlayGlassPopup<T>({
   bool dismissOnKeyboardHide = true,
   bool dismissOnBackButton = true,
 }) {
-  final handle = OverlayGlassPopupHandle<T>._();
+  final handle = OverlayGlassPopupHandle<T>._()
+    .._source = FlClashPopupSource.captureOf(sourceContext);
   final overlayState = Overlay.of(context, rootOverlay: useRootOverlay);
   final route = ModalRoute.of(context);
 
@@ -821,6 +776,8 @@ OverlayGlassPopupHandle<T> showOverlayGlassPopup<T>({
             GlassPopupOverlayContent(
               key: handle._wrapperKey,
               anchor: anchor,
+              source: handle._source,
+              placementAnchor: placementAnchor,
               preferBelow: preferBelow,
               verticalGap: verticalGap,
               overlapAnchor: overlapAnchor,
