@@ -129,6 +129,226 @@ void main() {
     },
   );
 
+  test('uninstall sends only the agent and captured distribution', () async {
+    final calls = <MethodCall>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return {
+        'ok': true,
+        'agent': {'id': 'pi-acp', 'installed': false},
+      };
+    });
+    final result = await AgentRuntimeService.uninstallAgent(
+      ' pi-acp ',
+      distributionId: ' alpine ',
+    );
+    expect(result['ok'], isTrue);
+    expect(calls.single.method, 'agent/uninstall');
+    expect(calls.single.arguments, {
+      'agentId': 'pi-acp',
+      'distributionId': 'alpine',
+    });
+    await expectLater(
+      AgentRuntimeService.uninstallAgent('pi-acp', distributionId: ' '),
+      throwsArgumentError,
+    );
+    await expectLater(
+      AgentRuntimeService.uninstallAgentInBackground(
+        '',
+        distributionId: 'alpine',
+      ),
+      throwsArgumentError,
+    );
+    expect(calls, hasLength(1));
+    expect(AgentRuntimeService.agentPackageOperations, isEmpty);
+  });
+
+  test(
+    'install and uninstall share a queue and publish their operation types',
+    () async {
+      final install = Completer<Map<String, dynamic>>();
+      final uninstall = Completer<Map<String, dynamic>>();
+      addTearDown(() {
+        if (!install.isCompleted) install.complete({'ok': false});
+        if (!uninstall.isCompleted) uninstall.complete({'ok': false});
+      });
+      final calls = <MethodCall>[];
+      final states = <Map<String, AgentPackageOperation>>[];
+      final installStates = <Set<String>>[];
+      final subscription = AgentRuntimeService.agentPackageOperationChanges
+          .listen(states.add);
+      final installationSubscription = AgentRuntimeService
+          .agentPreparationChanges
+          .listen(installStates.add);
+      addTearDown(subscription.cancel);
+      addTearDown(installationSubscription.cancel);
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return call.method == 'agent/prepare'
+            ? install.future
+            : uninstall.future;
+      });
+
+      final installTask = AgentRuntimeService.prepareAgentInBackground(
+        'codex-acp',
+        force: true,
+        distributionId: 'ubuntu',
+      );
+      final uninstallTask = AgentRuntimeService.uninstallAgentInBackground(
+        'pi-acp',
+        distributionId: 'ubuntu',
+      );
+      expect(AgentRuntimeService.agentPackageOperations, {
+        'codex-acp': AgentPackageOperation.install,
+        'pi-acp': AgentPackageOperation.uninstall,
+      });
+      expect(AgentRuntimeService.preparingAgentIds, {'codex-acp'});
+      expect(
+        identical(
+          uninstallTask,
+          AgentRuntimeService.uninstallAgentInBackground(
+            ' pi-acp ',
+            distributionId: 'ubuntu',
+          ),
+        ),
+        isTrue,
+      );
+      final snapshot = AgentRuntimeService.agentPackageOperations;
+      expect(() => snapshot.clear(), throwsUnsupportedError);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(calls.map((call) => call.method), ['agent/prepare']);
+      expect(AgentRuntimeService.queuedAgentIds, {'pi-acp'});
+      install.complete({'ok': true});
+      await installTask;
+      await Future<void>.delayed(Duration.zero);
+      expect(calls.map((call) => call.method), [
+        'agent/prepare',
+        'agent/uninstall',
+      ]);
+      expect(calls.last.arguments, {
+        'agentId': 'pi-acp',
+        'distributionId': 'ubuntu',
+      });
+      expect(AgentRuntimeService.preparingAgentIds, isEmpty);
+      expect(AgentRuntimeService.queuedAgentIds, isEmpty);
+      expect(AgentRuntimeService.agentPackageOperations, {
+        'pi-acp': AgentPackageOperation.uninstall,
+      });
+      expect(snapshot, hasLength(2));
+      uninstall.complete({'ok': true});
+      await uninstallTask;
+      await Future<void>.delayed(Duration.zero);
+      expect(AgentRuntimeService.agentPackageOperations, isEmpty);
+      expect(
+        states.any(
+          (state) => state['pi-acp'] == AgentPackageOperation.uninstall,
+        ),
+        isTrue,
+      );
+      expect(states.last, isEmpty);
+      expect(installStates.expand((state) => state), isNot(contains('pi-acp')));
+    },
+  );
+
+  test(
+    'a conflicting operation or distribution never reuses the active task',
+    () async {
+      final gate = Completer<Map<String, dynamic>>();
+      addTearDown(() {
+        if (!gate.isCompleted) gate.complete({'ok': false});
+      });
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return gate.future;
+      });
+      final task = AgentRuntimeService.prepareAgentInBackground(
+        'pi-acp',
+        force: true,
+        distributionId: 'alpine',
+      );
+      for (final conflict in [
+        () => AgentRuntimeService.uninstallAgentInBackground(
+          'pi-acp',
+          distributionId: 'alpine',
+        ),
+        () => AgentRuntimeService.prepareAgentInBackground(
+          'pi-acp',
+          force: true,
+          distributionId: 'ubuntu',
+        ),
+        () => AgentRuntimeService.prepareAgentInBackground(
+          'pi-acp',
+          distributionId: 'alpine',
+        ),
+      ]) {
+        await expectLater(conflict(), throwsStateError);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(calls, hasLength(1));
+      expect(AgentRuntimeService.agentPackageOperations, {
+        'pi-acp': AgentPackageOperation.install,
+      });
+      gate.complete({'ok': true});
+      await task;
+      await Future<void>.delayed(Duration.zero);
+      expect(AgentRuntimeService.agentPackageOperations, isEmpty);
+    },
+  );
+
+  test(
+    'failed uninstall releases its task and allows queued work and retry',
+    () async {
+      final gate = Completer<Map<String, dynamic>>();
+      addTearDown(() {
+        if (!gate.isCompleted) gate.complete({'ok': false});
+      });
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return calls.length == 1 ? gate.future : {'ok': true};
+      });
+      final uninstallTask = AgentRuntimeService.uninstallAgentInBackground(
+        'pi-acp',
+        distributionId: 'alpine',
+      );
+      final failed = expectLater(
+        uninstallTask,
+        throwsA(isA<PlatformException>()),
+      );
+      final queuedInstall = AgentRuntimeService.prepareAgentInBackground(
+        'kimi-code-acp',
+        distributionId: 'alpine',
+      );
+      await expectLater(
+        AgentRuntimeService.uninstallAgentInBackground(
+          'pi-acp',
+          distributionId: 'ubuntu',
+        ),
+        throwsStateError,
+      );
+      await Future<void>.delayed(Duration.zero);
+      gate.completeError(PlatformException(code: 'UNINSTALL_FAILED'));
+      await failed;
+      await queuedInstall;
+      await Future<void>.delayed(Duration.zero);
+      final retried = await AgentRuntimeService.uninstallAgentInBackground(
+        'pi-acp',
+        distributionId: 'alpine',
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(retried['ok'], isTrue);
+      expect(calls.map((call) => call.method), [
+        'agent/uninstall',
+        'agent/prepare',
+        'agent/uninstall',
+      ]);
+      expect(AgentRuntimeService.agentPackageOperations, isEmpty);
+      expect(AgentRuntimeService.queuedAgentIds, isEmpty);
+    },
+  );
+
   test('accepts the local ACP cancellation acknowledgement', () {
     expect(
       isAgentCancellationSuccessful(<String, dynamic>{'ok': true}),
@@ -924,12 +1144,39 @@ void main() {
       'command': 'codex-acp',
       'discoveryCommand': 'codex',
       'managedAdapter': true,
+      'uninstallable': true,
       'status': 'unchecked',
     });
 
     expect(agent.discoveryCommand, 'codex');
     expect(agent.managedAdapter, isTrue);
+    expect(agent.uninstallable, isTrue);
+    expect(agent.toMap(), isNot(contains('uninstallable')));
   });
+
+  test(
+    'uninstall capability defaults to false and requires a native boolean',
+    () {
+      for (final value in [null, false, 'true', 1]) {
+        final agent = AcpAgentProfile.fromMap({
+          'id': 'custom-agent',
+          'name': 'Custom',
+          'command': 'custom',
+          'managedAdapter': true,
+          'uninstallable': ?value,
+        });
+        expect(agent.uninstallable, isFalse);
+      }
+      expect(
+        const AcpAgentProfile(
+          id: 'pi-acp',
+          name: 'Pi',
+          command: 'pi',
+        ).uninstallable,
+        isFalse,
+      );
+    },
+  );
 
   test('Na configuration requires explicit native development capability', () {
     final managed = AcpAgentProfile.fromMap({
@@ -1276,6 +1523,55 @@ void main() {
 
     expect(message, contains('请等待完成后再试'));
     expect(message, isNot(contains('Harness preparation is already running')));
+  });
+
+  test('uninstall failure kinds override model diagnostics without exposing them', () {
+    const cases = <String, ({String zh, String en})>{
+      'agent_uninstall_failed': (
+        zh: '卸载未完成，请重试。',
+        en: 'Uninstall did not finish. Try again.',
+      ),
+      'agent_uninstall_external_installation': (
+        zh: '检测到其他安装或无法安全移除的文件，请在终端中检查该助手的安装位置。',
+        en: 'Another installation or files that could not be safely removed remain. Check the assistant\'s installation in the terminal.',
+      ),
+      'agent_uninstall_invalid_request': (
+        zh: '卸载请求无效，请刷新助手列表后重试。',
+        en: 'The uninstall request is invalid. Refresh the assistant list and try again.',
+      ),
+      'agent_uninstall_distribution_changed': (
+        zh: '终端环境已切换，请刷新助手列表后重试。',
+        en: 'The terminal environment changed. Refresh the assistant list and try again.',
+      ),
+      'agent_uninstall_terminal_unavailable': (
+        zh: '终端环境不可用，请恢复终端环境后重试卸载。',
+        en: 'The terminal environment is unavailable. Restore it before trying to uninstall again.',
+      ),
+      'agent_package_operation_in_progress': (
+        zh: '助手正在安装或卸载，请等待完成后再试。',
+        en: 'An assistant is being installed or uninstalled. Try again when it finishes.',
+      ),
+    };
+    for (final entry in cases.entries) {
+      final error = PlatformException(
+        code: 'agent_uninstall_failed',
+        message: 'Timeout, authentication failed, /private/secret-path',
+        details: {'failureKind': entry.key},
+      );
+      final message = formatAgentRuntimeErrorForUser(error);
+      expect(message, entry.value.zh);
+      expect(
+        formatAgentRuntimeErrorForUser(error, english: true),
+        entry.value.en,
+      );
+      expect(formatAgentRuntimeErrorForUser(message), message);
+      expect(
+        formatAgentRuntimeErrorForUser(entry.value.en),
+        entry.value.zh,
+      );
+      expect(message, isNot(contains('secret-path')));
+      expect(message, isNot(contains('更换模型')));
+    }
   });
 
   test('local Agent requests do not read a separate Codex API model', () {
