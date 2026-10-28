@@ -127,9 +127,9 @@ extension _HomeDrawerSelection on HomeDrawerState {
     var submitted = false;
     try {
       if (delete) {
-        final confirmed = await showDialog<bool>(
+        final confirmed = await showOmniGlassCardSheet<bool>(
           context: context,
-          builder: (dialogContext) => AlertDialog(
+          builder: (dialogContext) => OmniGlassAlertDialog(
             title: Text(
               _selectionText('删除所选对话？', 'Delete selected conversations?'),
             ),

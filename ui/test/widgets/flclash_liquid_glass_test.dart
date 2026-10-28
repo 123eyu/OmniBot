@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -163,4 +164,59 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('frost rim follows square bottom corners of a sheet', (
+    tester,
+  ) async {
+    final key = GlobalKey();
+    Future<ByteData> pixels(double shine) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: RepaintBoundary(
+              key: key,
+              child: LiquidGlass(
+                style: const LiquidGlassStyle(
+                  tint: Colors.black,
+                  blur: 0,
+                  rim: 0,
+                  rimWidth: 0,
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(40),
+                ),
+                rim: LiquidGlassRim(side: 0, corner: 0, flat: 0, shine: shine),
+                child: const SizedBox(width: 160, height: 100),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final boundary =
+          key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      // No host: this exercises the pane's frost fallback, including on an
+      // engine where the capture shader happens to be supported.
+      final image = boundary.toImageSync();
+      final data = await tester.runAsync(() => image.toByteData());
+      image.dispose();
+      return data!;
+    }
+
+    final withoutRim = await pixels(0);
+    final withRim = await pixels(1);
+    var topHighlightPixels = 0;
+    for (var y = 5; y < 95; y++) {
+      for (var x = 5; x < 155; x++) {
+        final offset = (y * 160 + x) * 4;
+        final change = withRim.getUint8(offset) - withoutRim.getUint8(offset);
+        if (y < 40 && change > 0) topHighlightPixels++;
+        if (y >= 60) {
+          expect(change, 0, reason: 'No rounded bottom arc at ($x, $y)');
+        }
+      }
+    }
+    expect(topHighlightPixels, greaterThan(0));
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -614,7 +614,10 @@ void main() {
     );
     expect(resultSheet, findsOneWidget);
     expect(find.byType(SettingsDetailSheet), findsOneWidget);
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(
+      find.byWidgetPredicate((widget) => widget is AlertDialog),
+      findsNothing,
+    );
     expect(find.text('助手检查通过'), findsOneWidget);
     expect(find.textContaining('prompt: true'), findsNothing);
     expect(find.text('助手已准备好，可以开始对话。'), findsOneWidget);
@@ -648,7 +651,7 @@ void main() {
       final addButton = find.byTooltip('添加自定义 ACP Agent');
       await tester.tap(addButton);
       await tester.pumpAndSettle();
-      final dialog = find.byType(AlertDialog);
+      final dialog = find.byWidgetPredicate((widget) => widget is AlertDialog);
       final dialogFields = find.descendant(
         of: dialog,
         matching: find.byType(TextField),
@@ -664,7 +667,7 @@ void main() {
       await tester.tap(addButton);
       await tester.pumpAndSettle();
       final reopenedDialogFields = find.descendant(
-        of: find.byType(AlertDialog),
+        of: find.byWidgetPredicate((widget) => widget is AlertDialog),
         matching: find.byType(TextField),
       );
       await tester.tap(reopenedDialogFields.at(1));
@@ -737,6 +740,8 @@ void main() {
         find.byKey(const Key('agent-check-deepseek-harness-acp')),
       );
       await tester.pump();
+      // The page-ready gate publishes the preparation stream after the frame.
+      await tester.pump();
 
       expect(find.text('后台安装 / 升级中'), findsOneWidget);
       await tester.tap(find.byTooltip('添加自定义 ACP Agent'));
@@ -747,6 +752,7 @@ void main() {
       await tester.pump();
       await tester.pumpWidget(buildPage());
       await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
       expect(find.text('后台安装 / 升级中'), findsOneWidget);
 
       await tester.tap(

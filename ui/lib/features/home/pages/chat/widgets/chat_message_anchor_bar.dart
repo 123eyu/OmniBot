@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/flclash/elastic_press.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -507,7 +508,6 @@ class _ChatMessageAnchorBarState extends State<ChatMessageAnchorBar>
   void _handleButtonLongPressStart(LongPressStartDetails details) {
     HapticFeedback.mediumImpact();
     setState(() {
-      _buttonPressed = false;
       _dragSelecting = true;
     });
     _setExpanded(true);
@@ -939,42 +939,55 @@ class _ChatMessageAnchorBarState extends State<ChatMessageAnchorBar>
 
   Widget _buildAnchorButton() {
     final palette = context.omniPalette;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _setExpanded(!_expanded),
-      onTapDown: (_) => setState(() => _buttonPressed = true),
-      onTapUp: (_) => setState(() => _buttonPressed = false),
-      onTapCancel: () => setState(() => _buttonPressed = false),
-      onLongPressStart: _handleButtonLongPressStart,
-      onLongPressMoveUpdate: _handleButtonLongPressMove,
-      onLongPressEnd: _handleButtonLongPressEnd,
-      onLongPressCancel: _handleButtonLongPressCancel,
-      child: AnimatedScale(
-        scale: _buttonPressed ? 0.90 : 1,
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOutCubic,
-        child: AnimatedBuilder(
-          animation: _expandController,
-          builder: (context, _) {
-            final t = _expandController.value.clamp(0.0, 1.0);
-            return _buildButtonSurface(
-              expansion: t,
-              child: Center(
-                child: Icon(
-                  LucideIcons.galleryVerticalEnd,
-                  size: 16,
-                  color: Color.lerp(
-                    palette.textTertiary,
-                    palette.accentPrimary,
-                    t,
+    final glass = LiquidGlassScope.of(context);
+    return FlClashElasticPress(
+      enabled: glass,
+      child: Listener(
+        onPointerDown: (_) => _setButtonPressed(true),
+        onPointerUp: (_) => _setButtonPressed(false),
+        onPointerCancel: (_) => _setButtonPressed(false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _setExpanded(!_expanded),
+          onLongPressStart: _handleButtonLongPressStart,
+          onLongPressMoveUpdate: _handleButtonLongPressMove,
+          onLongPressEnd: _handleButtonLongPressEnd,
+          onLongPressCancel: _handleButtonLongPressCancel,
+          child: AnimatedScale(
+            scale: !glass && _buttonPressed ? 0.90 : 1,
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOutCubic,
+            child: AnimatedBuilder(
+              animation: _expandController,
+              builder: (context, _) {
+                final t = _expandController.value.clamp(0.0, 1.0);
+                return _buildButtonSurface(
+                  expansion: t,
+                  child: Center(
+                    child: Icon(
+                      LucideIcons.galleryVerticalEnd,
+                      size: 16,
+                      color: Color.lerp(
+                        palette.textTertiary,
+                        palette.accentPrimary,
+                        t,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            );
-          },
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
+  }
+
+  void _setButtonPressed(bool pressed) {
+    // A held pointer can still deliver its release after this route is gone.
+    if (mounted && _buttonPressed != pressed) {
+      setState(() => _buttonPressed = pressed);
+    }
   }
 
   Widget _buildButtonSurface({

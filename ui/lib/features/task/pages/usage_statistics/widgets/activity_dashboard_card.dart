@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_segmented_slider.dart';
 import 'package:ui/services/usage_statistics_service.dart';
-import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/omni_theme_palette.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
@@ -43,7 +43,6 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
   static const int _convTab = 0;
   static const int _tokenTab = 1;
   int _currentTab = 0; // 0=对话  1=Token
-  double _tabSwitcherDragDelta = 0;
 
   // -- conversation data --
   Map<String, int> _activityMap = {};
@@ -510,103 +509,18 @@ class _ActivityDashboardCardState extends State<ActivityDashboardCard>
     setState(() => _currentTab = tabIndex);
   }
 
-  void _handleTabSwitcherDragEnd({double velocity = 0}) {
-    final shouldSwitchRight = (_tabSwitcherDragDelta + velocity * 0.015) > 0;
-    final shouldSwitch =
-        _tabSwitcherDragDelta.abs() > 14 || velocity.abs() > 250;
-    if (shouldSwitch) {
-      _switchTab(shouldSwitchRight ? _tokenTab : _convTab);
-    }
-    _tabSwitcherDragDelta = 0;
-  }
-
-  Widget _buildSegmentedControl() {
-    final palette = context.omniPalette;
-    return Builder(
-      builder: (sliderContext) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragUpdate: (details) {
-          _tabSwitcherDragDelta += details.delta.dx;
-        },
-        onHorizontalDragEnd: (details) {
-          _handleTabSwitcherDragEnd(velocity: details.primaryVelocity ?? 0);
-        },
-        onTapUp: (details) {
-          final box = sliderContext.findRenderObject() as RenderBox?;
-          if (box == null || !box.hasSize) return;
-          final local = box.globalToLocal(details.globalPosition);
-          _switchTab(local.dx >= box.size.width / 2 ? _tokenTab : _convTab);
-        },
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: palette.segmentTrack,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: context.isDarkTheme
-                  ? palette.borderSubtle
-                  : AppColors.text10,
-            ),
-          ),
-          child: Stack(
-            children: [
-              AnimatedAlign(
-                duration: const Duration(milliseconds: 280),
-                curve: Curves.easeOutCubic,
-                alignment: _currentTab == _convTab
-                    ? Alignment.centerLeft
-                    : Alignment.centerRight,
-                child: FractionallySizedBox(
-                  widthFactor: 0.5,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 1),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      color: palette.textPrimary,
-                    ),
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  _buildTabButton(
-                    label: LegacyTextLocalizer.isEnglish ? 'Chat' : '对话',
-                    tabIndex: _convTab,
-                  ),
-                  _buildTabButton(label: 'Token', tabIndex: _tokenTab),
-                ],
-              ),
-            ],
-          ),
-        ),
+  Widget _buildSegmentedControl() => OmniSegmentedSlider<int>(
+    value: _currentTab,
+    keyPrefix: 'activity-view',
+    options: [
+      OmniSegmentedOption(
+        value: _convTab,
+        label: LegacyTextLocalizer.isEnglish ? 'Chat' : '对话',
       ),
-    );
-  }
-
-  Widget _buildTabButton({required String label, required int tabIndex}) {
-    final selected = _currentTab == tabIndex;
-    final palette = context.omniPalette;
-    return Expanded(
-      child: Center(
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          scale: selected ? 1 : 0.97,
-          child: AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            style: TextStyle(
-              color: selected ? palette.pageBackground : palette.textSecondary,
-              fontSize: 14,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-            ),
-            child: Text(label),
-          ),
-        ),
-      ),
-    );
-  }
+      const OmniSegmentedOption(value: _tokenTab, label: 'Token'),
+    ],
+    onChanged: _switchTab,
+  );
 
   // -----------------------------------------------------------------------
   //  Conversation tab — heatmap

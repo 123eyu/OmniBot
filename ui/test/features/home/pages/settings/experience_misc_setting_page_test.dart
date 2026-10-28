@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_switch/flutter_switch.dart';
+import 'package:ui/widgets/settings_ui.dart';
 import 'package:ui/features/home/pages/settings/experience_misc_setting_page.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/services/storage_service.dart';
@@ -101,17 +101,17 @@ void main() {
     final tile = find.ancestor(of: title, matching: find.byType(InkWell));
     final toggle = find.descendant(
       of: tile,
-      matching: find.byType(FlutterSwitch),
+      matching: find.byType(OmniSettingsSwitch),
     );
-    expect(tester.widget<FlutterSwitch>(toggle).value, isFalse);
+    expect(tester.widget<OmniSettingsSwitch>(toggle).value, isFalse);
 
-    tester.widget<FlutterSwitch>(toggle).onToggle(true);
+    await tester.tap(toggle);
     await tester.pumpAndSettle();
 
     expect(
       StorageService.getBool(StorageService.kRecentConversationsOnlyEnabledKey),
       isTrue,
     );
-    expect(tester.widget<FlutterSwitch>(toggle).value, isTrue);
+    expect(tester.widget<OmniSettingsSwitch>(toggle).value, isTrue);
   });
 }

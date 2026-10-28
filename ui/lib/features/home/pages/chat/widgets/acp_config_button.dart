@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:ui/widgets/flclash/popup.dart';
 import 'package:flutter/material.dart';
 import 'package:ui/widgets/omni_menu.dart';
+import 'package:ui/widgets/settings_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/services/agent_runtime_service.dart';
 import 'package:ui/widgets/glass_popup.dart';
@@ -350,20 +351,19 @@ class _AcpConfigPanelState extends State<AcpConfigPanel> {
     final label = acpConfigLabel(option, english: _english);
     final value = option['currentValue'];
     final palette = context.omniPalette;
-    final textStyle = OmniMenuStyle.labelStyle.copyWith(
-      color: palette.textPrimary,
-    );
     if (option['type'] == 'boolean') {
-      return SwitchListTile.adaptive(
-        key: ValueKey('acp-config-$id'),
-        contentPadding: OmniMenuStyle.contentPadding,
-        shape: const RoundedRectangleBorder(
-          borderRadius: OmniMenuStyle.rowRadius,
+      return MergeSemantics(
+        child: OmniMenuItem(
+          key: ValueKey('acp-config-$id'),
+          enabled: enabled,
+          onTap: enabled ? () => _save(id, value != true) : null,
+          label: label,
+          trailing: OmniSettingsSwitch(
+            value: value == true,
+            enabled: enabled,
+            onToggle: (next) => _save(id, next),
+          ),
         ),
-        activeTrackColor: palette.accentPrimary,
-        title: Text(label, style: textStyle),
-        value: value == true,
-        onChanged: enabled ? (next) => _save(id, next) : null,
       );
     }
     final values = <Map>[];

@@ -30,7 +30,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
@@ -86,6 +85,7 @@ import com.rk.libcommons.pendingCommand
 import com.rk.libcommons.isOmnibotSetupSessionId
 import com.rk.settings.Settings
 import com.rk.terminal.ui.activities.terminal.MainActivity
+import com.rk.terminal.ui.components.OmniModalSheet
 import com.rk.terminal.ui.routes.MainActivityRoutes
 import com.rk.terminal.ui.screens.settings.SettingsCard
 import com.rk.terminal.ui.screens.settings.WorkingMode
@@ -233,7 +233,7 @@ fun TerminalScreen(
         }
 
         if (showAddDialog){
-            BasicAlertDialog(
+            OmniModalSheet(
                 onDismissRequest = {
                     showAddDialog = false
                 }
@@ -263,7 +263,7 @@ fun TerminalScreen(
                 }
 
 
-                PreferenceGroup {
+                PreferenceGroup(modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 24.dp)) {
                     SettingsCard(
                         title = { Text("Alpine") },
                         description = {Text(stringResource(strings.alpine_desc))},

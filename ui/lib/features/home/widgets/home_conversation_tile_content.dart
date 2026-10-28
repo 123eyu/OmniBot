@@ -5,7 +5,7 @@ import 'package:ui/models/conversation_model.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
 
-/// Shared content for a home conversation row and its context-menu preview.
+/// Content for a home conversation row.
 /// Gesture, selection, editing and runtime ownership remain with the caller.
 class HomeConversationTileContent extends StatelessWidget {
   const HomeConversationTileContent({
@@ -70,8 +70,8 @@ class HomeConversationTileContent extends StatelessWidget {
     if (conversation.mode == ConversationMode.chatOnly) {
       return SvgPicture.asset(
         'assets/home/chat/pure_chat.svg',
-        width: 40,
-        height: 40,
+        width: 30,
+        height: 30,
         colorFilter: ColorFilter.mode(
           context.omniPalette.textPrimary,
           BlendMode.srcIn,

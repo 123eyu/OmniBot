@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/omni_glass.dart';
 
 /// Presents a settings detail card using the app-wide bottom-sheet treatment.
 ///
@@ -14,9 +15,10 @@ Future<T?> showSettingsDetailSheet<T>({
   bool enableDrag = true,
   bool useRootNavigator = false,
 }) {
-  return showModalBottomSheet<T>(
+  return showOmniGlassBottomSheet<T>(
     context: context,
-    backgroundColor: context.omniPalette.surfacePrimary,
+    backgroundColor: Colors.transparent,
+    elevation: 0,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
@@ -95,63 +97,68 @@ class SettingsDetailSheet extends StatelessWidget {
         ],
       ],
     );
-    final sheet = SizedBox(
-      width: double.infinity,
-      child: SafeArea(
-        top: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final content = SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: palette.borderStrong.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(999),
+    final sheet = OmniGlassSheet(
+      child: SizedBox(
+        width: double.infinity,
+        child: SafeArea(
+          top: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final content = SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: palette.borderStrong.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
                       ),
                     ),
-                  ),
-                  if (headerAction == null)
-                    heading
-                  else
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: heading),
-                        const SizedBox(width: 8),
-                        headerAction!,
-                      ],
-                    ),
-                  const SizedBox(height: 14),
-                  body,
-                  if (actions.isNotEmpty) ...[
+                    if (headerAction == null)
+                      heading
+                    else
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: heading),
+                          const SizedBox(width: 8),
+                          headerAction!,
+                        ],
+                      ),
                     const SizedBox(height: 14),
-                    Wrap(
-                      key: actionsKey,
-                      spacing: 6,
-                      runSpacing: 6,
-                      alignment: WrapAlignment.start,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: actions,
-                    ),
+                    body,
+                    if (actions.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Wrap(
+                        key: actionsKey,
+                        spacing: 6,
+                        runSpacing: 6,
+                        alignment: WrapAlignment.start,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: actions,
+                      ),
+                    ],
+                    if (footer != null) ...[
+                      const SizedBox(height: 10),
+                      footer!,
+                    ],
+                    const SizedBox(height: 4),
                   ],
-                  if (footer != null) ...[const SizedBox(height: 10), footer!],
-                  const SizedBox(height: 4),
-                ],
-              ),
-            );
-            if (!fillAvailableHeight || !constraints.hasBoundedHeight) {
-              return content;
-            }
-            return SizedBox(height: constraints.maxHeight, child: content);
-          },
+                ),
+              );
+              if (!fillAvailableHeight || !constraints.hasBoundedHeight) {
+                return content;
+              }
+              return SizedBox(height: constraints.maxHeight, child: content);
+            },
+          ),
         ),
       ),
     );

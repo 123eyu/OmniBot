@@ -52,7 +52,7 @@ class GlassPopupOverlayContent extends StatefulWidget {
     this.unfoldAlignment,
     this.horizontalPlacement = GlassPopupHorizontalPlacement.edgeAlign,
     this.duration = FlClashPopupMotion.openingDuration,
-    this.reverseDuration = FlClashPopupMotion.closingDuration,
+    this.reverseDuration,
     this.curve = Curves.easeOutCubic,
     this.reverseCurve = Curves.easeInCubic,
   });
@@ -74,7 +74,7 @@ class GlassPopupOverlayContent extends StatefulWidget {
   final Alignment? unfoldAlignment;
   final GlassPopupHorizontalPlacement horizontalPlacement;
   final Duration duration;
-  final Duration reverseDuration;
+  final Duration? reverseDuration;
   final Curve curve;
   final Curve reverseCurve;
 
@@ -89,13 +89,17 @@ class GlassPopupOverlayContentState extends State<GlassPopupOverlayContent>
   bool _reduceMotion = false;
   bool _closing = false;
 
+  Duration get _reverseDuration =>
+      widget.reverseDuration ??
+      FlClashPopupMotion.closingDurationFor(hasSource: widget.source != null);
+
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
       duration: widget.duration,
-      reverseDuration: widget.reverseDuration,
+      reverseDuration: _reverseDuration,
     );
     _controller.addStatusListener(_handleStatus);
     _controller.forward();
@@ -132,10 +136,7 @@ class GlassPopupOverlayContentState extends State<GlassPopupOverlayContent>
         _controller.value = 0;
         return;
       }
-      await FlClashPopupMotion.close(
-        _controller,
-        duration: widget.reverseDuration,
-      );
+      await FlClashPopupMotion.close(_controller, duration: _reverseDuration);
     } on TickerCanceled {
       // 收起途中被 dispose,正常退出。
     }
@@ -188,7 +189,7 @@ Future<T?> showGlassPopup<T>({
   bool overlapAnchor = true,
   EdgeInsets screenPadding = const EdgeInsets.all(8),
   Duration transitionDuration = FlClashPopupMotion.openingDuration,
-  Duration reverseTransitionDuration = FlClashPopupMotion.closingDuration,
+  Duration? reverseTransitionDuration,
   Curve curve = Curves.easeOutCubic,
   Curve reverseCurve = Curves.easeInCubic,
   Alignment? unfoldAlignment,
@@ -224,7 +225,8 @@ Future<T?> showGlassPopup<T>({
         : transitionDuration,
     reverseAnimationDuration: MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
-        : reverseTransitionDuration,
+        : reverseTransitionDuration ??
+              FlClashPopupMotion.closingDurationFor(hasSource: source != null),
     curve: curve,
     reverseCurve: reverseCurve,
     explicitUnfoldAlignment: unfoldAlignment,
@@ -747,7 +749,7 @@ OverlayGlassPopupHandle<T> showOverlayGlassPopup<T>({
   GlassPopupHorizontalPlacement horizontalPlacement =
       GlassPopupHorizontalPlacement.edgeAlign,
   Duration transitionDuration = FlClashPopupMotion.openingDuration,
-  Duration reverseTransitionDuration = FlClashPopupMotion.closingDuration,
+  Duration? reverseTransitionDuration,
   Curve curve = Curves.easeOutCubic,
   Curve reverseCurve = Curves.easeInCubic,
   bool useRootOverlay = true,

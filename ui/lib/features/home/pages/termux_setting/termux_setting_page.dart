@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_segmented_slider.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -710,7 +712,7 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
     final saveFailedMessage = context.l10n.alpineBootTaskSaveFailed;
     final addedMessage = context.l10n.alpineBootTaskAdded;
     final updatedMessage = context.l10n.alpineBootTaskUpdated;
-    final formResult = await showDialog<_AutoStartTaskFormResult>(
+    final formResult = await showOmniGlassCardSheet<_AutoStartTaskFormResult>(
       context: context,
       builder: (dialogContext) => _AutoStartTaskDialog(task: task),
     );
@@ -962,37 +964,23 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
-            child: SegmentedButton<EmbeddedTerminalDistribution>(
-              style: SegmentedButton.styleFrom(
-                backgroundColor: context.omniPalette.surfaceSecondary,
-                selectedBackgroundColor: context.omniPalette.accentPrimary,
-                selectedForegroundColor: Theme.of(context)
-                    .colorScheme
-                    .onPrimary,
-                side: BorderSide.none,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              segments: const [
-                ButtonSegment(
+            child: OmniSegmentedSlider<EmbeddedTerminalDistribution>(
+              keyPrefix: 'terminal-distribution',
+              value: _selectedDistribution,
+              options: const [
+                OmniSegmentedOption(
                   value: EmbeddedTerminalDistribution.alpine,
-                  label: Text('Alpine'),
+                  label: 'Alpine',
                 ),
-                ButtonSegment(
+                OmniSegmentedOption(
                   value: EmbeddedTerminalDistribution.ubuntu,
-                  label: Text('Ubuntu'),
+                  label: 'Ubuntu',
                 ),
               ],
-              selected: <EmbeddedTerminalDistribution>{_selectedDistribution},
-              onSelectionChanged: busy
+              onChanged: busy
                   ? null
-                  : (selection) {
-                      if (selection.isNotEmpty) {
-                        unawaited(_switchDistribution(selection.first));
-                      }
-                    },
+                  : (distribution) =>
+                        unawaited(_switchDistribution(distribution)),
             ),
           ),
           if (busy) ...[
@@ -1672,7 +1660,7 @@ class _AutoStartTaskDialogState extends State<_AutoStartTaskDialog> {
   @override
   Widget build(BuildContext context) {
     final editing = widget.task != null;
-    return AlertDialog(
+    return OmniGlassAlertDialog(
       title: Text(
         editing
             ? context.l10n.alpineEditBootTask

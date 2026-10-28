@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_circle_button.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/services/agent_runtime_service.dart';
@@ -534,7 +536,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage>
   }
 
   Future<void> _addCustomAgent() async {
-    final result = await showDialog<AcpAgentProfile>(
+    final result = await showOmniGlassCardSheet<AcpAgentProfile>(
       context: context,
       builder: (dialogContext) => _AddCustomAgentDialog(english: _english),
     );
@@ -1151,11 +1153,12 @@ class _AddCustomAgentDialogState extends State<_AddCustomAgentDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return OmniGlassAlertDialog(
       title: Text(_text('添加自定义 ACP Agent', 'Add custom ACP Agent')),
       content: SizedBox(
         width: 460,
         child: SingleChildScrollView(
+          padding: const EdgeInsets.only(top: 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1343,20 +1346,14 @@ class _AgentContactTile extends StatelessWidget {
                     const SizedBox(width: 10),
                     const _AgentBusyIndicator(),
                   ] else if (quietAction && showAction)
-                    IconButton(
+                    OmniCircleButton(
                       key: actionKey,
-                      tooltip: actionLabel,
+                      tooltip: actionLabel!,
                       onPressed: onAction,
-                      icon: Icon(
-                        LucideIcons.rotateCw,
-                        size: 18,
-                        color: palette.textTertiary,
-                      ),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 36,
-                        height: 40,
-                      ),
+                      icon: LucideIcons.rotateCw,
+                      size: 40,
+                      tapTargetSize: MaterialTapTargetSize.padded,
+                      foregroundColor: palette.textTertiary,
                     ),
                   if (navigationLabel != null)
                     Semantics(

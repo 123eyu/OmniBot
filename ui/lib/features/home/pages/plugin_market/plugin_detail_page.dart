@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/models/omni_plugin_item.dart';
@@ -136,9 +137,9 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
   Future<void> _uninstall() async {
     final plugin = _plugin;
     if (plugin == null || _busy) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showOmniGlassCardSheet<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => OmniGlassAlertDialog(
         title: Text(context.l10n.pluginUninstallTitle),
         content: Text(context.l10n.pluginUninstallConfirmMsg(plugin.name)),
         actions: [

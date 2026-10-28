@@ -772,7 +772,7 @@ Future<void> showOmnibotArtifactPreviewSheet(
     return;
   }
 
-  await showModalBottomSheet<void>(
+  await showOmniGlassBottomSheet<void>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,

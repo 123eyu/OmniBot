@@ -1,5 +1,6 @@
 import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/models/agent_skill_item.dart';
@@ -267,30 +268,31 @@ class _SkillStorePageState extends State<SkillStorePage>
         primary: true,
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Tooltip(
-              message: context.l10n.skillSyncOfficialTooltip,
-              child: IconButton(
-                onPressed: _syncingOfficial ? null : _syncOfficialSkills,
-                icon: _syncingOfficial
-                    ? SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: palette.accentPrimary,
-                        ),
-                      )
-                    : SvgPicture.asset(
-                        _kOfficialSkillsDownloadAsset,
-                        width: 22,
-                        height: 22,
-                        colorFilter: ColorFilter.mode(
-                          palette.textPrimary,
-                          BlendMode.srcIn,
-                        ),
+            padding: const EdgeInsetsDirectional.only(end: 12),
+            child: OmniCircleButton(
+              tooltip: context.l10n.skillSyncOfficialTooltip,
+              icon: Icons.download_rounded,
+              size: 40,
+              tapTargetSize: MaterialTapTargetSize.padded,
+              onPressed: _syncingOfficial ? null : _syncOfficialSkills,
+              iconWidget: _syncingOfficial
+                  ? SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: palette.accentPrimary,
                       ),
-              ),
+                    )
+                  : SvgPicture.asset(
+                      _kOfficialSkillsDownloadAsset,
+                      width: 20,
+                      height: 20,
+                      colorFilter: ColorFilter.mode(
+                        palette.textPrimary,
+                        BlendMode.srcIn,
+                      ),
+                    ),
             ),
           ),
         ],

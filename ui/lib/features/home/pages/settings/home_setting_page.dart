@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_circle_button.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/widgets/home_quick_prompt_icon.dart';
 import 'package:ui/l10n/l10n.dart';
@@ -112,7 +114,7 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
     final promptController = TextEditingController(
       text: prompt == null ? '' : prompt.prompt,
     );
-    final result = await showModalBottomSheet<_PromptEditorResult>(
+    final result = await showOmniGlassBottomSheet<_PromptEditorResult>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -280,33 +282,29 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
             ),
           ),
           const SizedBox(width: 4),
-          IconButton(
+          OmniCircleButton(
             tooltip: context.trLegacy(isPinned ? '取消固定' : '固定到首页'),
             onPressed: () => _togglePinnedPrompt(prompt, settings),
-            icon: Icon(
-              isPinned ? LucideIcons.pinOff : LucideIcons.pin,
-              size: 17,
-              color: isPinned ? palette.accentPrimary : palette.textTertiary,
-            ),
+            icon: isPinned ? LucideIcons.pinOff : LucideIcons.pin,
+            size: 36,
+            foregroundColor: isPinned
+                ? palette.accentPrimary
+                : palette.textTertiary,
           ),
           if (!prompt.builtIn)
-            IconButton(
+            OmniCircleButton(
               tooltip: context.trLegacy('编辑'),
               onPressed: () => _showPromptEditor(prompt: prompt),
-              icon: Icon(
-                LucideIcons.pencil,
-                size: 17,
-                color: palette.textTertiary,
-              ),
+              icon: LucideIcons.pencil,
+              size: 36,
+              foregroundColor: palette.textTertiary,
             ),
-          IconButton(
+          OmniCircleButton(
             tooltip: context.trLegacy('删除'),
             onPressed: () => _deletePrompt(prompt),
-            icon: Icon(
-              LucideIcons.trash2,
-              size: 17,
-              color: palette.textTertiary,
-            ),
+            icon: LucideIcons.trash2,
+            size: 36,
+            foregroundColor: palette.textTertiary,
           ),
         ],
       ),
@@ -427,9 +425,7 @@ class _PromptEditorSheet extends StatelessWidget {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
-      child: Material(
-        color: palette.surfacePrimary,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: OmniGlassSheet(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
           child: Column(

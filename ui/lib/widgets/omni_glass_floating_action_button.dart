@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/flclash/elastic_press.dart';
 import 'package:ui/widgets/flclash/liquid_glass.dart';
 
 /// Glass presentation behind an existing FAB. The builder keeps the original
@@ -26,7 +27,7 @@ class _OmniGlassFloatingActionButtonState
   final _pointers = <int>{};
 
   void _end(PointerEvent event) {
-    if (_pointers.remove(event.pointer)) setState(() {});
+    if (_pointers.remove(event.pointer) && mounted) setState(() {});
   }
 
   @override
@@ -43,34 +44,49 @@ class _OmniGlassFloatingActionButtonState
                 borderRadius: BorderRadius.all(Radius.circular(16)),
               )
             : const CircleBorder());
-    return Listener(
-      onPointerDown: (event) {
-        if (button.onPressed != null) {
-          setState(() => _pointers.add(event.pointer));
-        }
-      },
-      onPointerUp: _end,
-      onPointerCancel: _end,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: glass
-                  ? LiquidGlass(
-                      style: LiquidGlassStyle.regular(theme.colorScheme),
-                      clipper: ShapeBorderClipper(
-                        shape: shape,
-                        textDirection: Directionality.of(context),
-                      ),
-                      pressed: _pointers.isNotEmpty,
-                    )
-                  : const SizedBox.shrink(),
+    return FlClashElasticPress(
+      enabled: glass && button.onPressed != null,
+      child: Listener(
+        onPointerDown: (event) {
+          if (button.onPressed != null) {
+            setState(() => _pointers.add(event.pointer));
+          }
+        },
+        onPointerUp: _end,
+        onPointerCancel: _end,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: glass
+                    ? LiquidGlass(
+                        style: LiquidGlassStyle.regular(theme.colorScheme),
+                        clipper: ShapeBorderClipper(
+                          shape: shape,
+                          textDirection: Directionality.of(context),
+                        ),
+                        pressed: _pointers.isNotEmpty,
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ),
-          ),
-          // Keep this child in the same slot when the material is toggled.
-          button,
-        ],
+            // Keep this child in the same slot when the material is toggled.
+            Theme(
+              data: glass
+                  ? theme.copyWith(
+                      splashFactory: NoSplash.splashFactory,
+                      highlightColor: Colors.transparent,
+                      splashColor: Colors.transparent,
+                      tooltipTheme: theme.tooltipTheme.copyWith(
+                        triggerMode: TooltipTriggerMode.manual,
+                      ),
+                    )
+                  : theme,
+              child: button,
+            ),
+          ],
+        ),
       ),
     );
   }

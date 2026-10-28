@@ -486,10 +486,9 @@ class AppDialog {
     double? buttonTextSize,
     Color? confirmButtonColor,
   }) {
-    return showDialog<bool>(
+    return showOmniGlassCardSheet<bool>(
       context: context,
       barrierDismissible: barrierDismissible,
-      barrierColor: context.omniPalette.overlayScrim,
       builder: (context) => _AppDialogWidget(
         title: title,
         content: content,
@@ -510,10 +509,9 @@ class AppDialog {
     String confirmText = '确定',
     bool barrierDismissible = true,
   }) {
-    return showDialog<void>(
+    return showOmniGlassCardSheet<void>(
       context: context,
       barrierDismissible: barrierDismissible,
-      barrierColor: context.omniPalette.overlayScrim,
       builder: (context) => _AppDialogWidget(
         title: title,
         content: content,
@@ -536,10 +534,9 @@ class AppDialog {
     int maxLines = 1,
     TextInputType keyboardType = TextInputType.text,
   }) {
-    return showDialog<String>(
+    return showOmniGlassCardSheet<String>(
       context: context,
       barrierDismissible: barrierDismissible,
-      barrierColor: context.omniPalette.overlayScrim,
       builder: (context) => _AppDialogWidget(
         title: title,
         content: content,
@@ -563,10 +560,9 @@ class AppDialog {
     int? selectedIndex,
     bool barrierDismissible = true,
   }) {
-    return showDialog<int>(
+    return showOmniGlassCardSheet<int>(
       context: context,
       barrierDismissible: barrierDismissible,
-      barrierColor: context.omniPalette.overlayScrim,
       builder: (context) => _AppDialogWidget(
         title: title,
         content: content,
@@ -585,10 +581,9 @@ class AppDialog {
     dynamic content,
     bool barrierDismissible = false,
   }) {
-    showDialog<void>(
+    showOmniGlassCardSheet<void>(
       context: context,
       barrierDismissible: barrierDismissible,
-      barrierColor: context.omniPalette.overlayScrim,
       builder: (context) => _AppDialogWidget(
         title: title,
         content: content,
@@ -674,34 +669,36 @@ class _AppDialogWidgetState extends State<_AppDialogWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final body = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildTitle(),
-        if (widget.content != null) ...[
-          const SizedBox(height: 8),
-          Flexible(child: SingleChildScrollView(child: _buildContent())),
+    return OmniGlassCardBody(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildTitle(),
+                  if (widget.content != null) ...[
+                    const SizedBox(height: 8),
+                    _buildContent(),
+                  ],
+                  if (widget.type == DialogType.input ||
+                      widget.type == DialogType.select ||
+                      widget.type == DialogType.loading) ...[
+                    const SizedBox(height: 16),
+                    _buildBody(),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (widget.type != DialogType.loading) ...[
+            const SizedBox(height: 16),
+            _buildButtons(),
+          ],
         ],
-        if (widget.type == DialogType.input ||
-            widget.type == DialogType.select ||
-            widget.type == DialogType.loading) ...[
-          const SizedBox(height: 16),
-          _buildBody(),
-        ],
-        if (widget.type != DialogType.loading) ...[
-          const SizedBox(height: 16),
-          _buildButtons(),
-        ],
-      ],
-    );
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      alignment: Alignment.center,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 25, vertical: 50),
-      child: OmniGlassPanel(
-        width: 325,
-        padding: const EdgeInsets.all(24),
-        child: body,
       ),
     );
   }

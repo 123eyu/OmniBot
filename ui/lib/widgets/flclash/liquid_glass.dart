@@ -530,12 +530,18 @@ class LiquidGlassRim {
   }
 
   /// The line, outside the pane; the pane given this rim draws the highlight.
-  void paintLine(Canvas canvas, Rect rect, double radius) {
+  void paintLine(
+    Canvas canvas,
+    Rect rect,
+    double radius, {
+    BorderRadius? borderRadius,
+  }) {
     if (rect.isEmpty) {
       return;
     }
     final round = _roundOf(rect.size, radius);
-    final shape = BorderRadius.circular(round).toRSuperellipse(rect);
+    final shape = (borderRadius ?? BorderRadius.circular(round))
+        .toRSuperellipse(rect);
     final across = math.min(round / rect.width, 0.4);
     Color dark(double alpha) => Colors.black.withValues(alpha: alpha);
     canvas.drawRSuperellipse(
@@ -573,9 +579,15 @@ class LiquidGlassRim {
     ];
   }
 
-  void _paintShine(Canvas canvas, Rect rect, double radius) {
+  void _paintShine(
+    Canvas canvas,
+    Rect rect,
+    double radius, {
+    BorderRadius? borderRadius,
+  }) {
     final round = _roundOf(rect.size, radius);
-    final shape = BorderRadius.circular(round).toRSuperellipse(rect);
+    final shape = (borderRadius ?? BorderRadius.circular(round))
+        .toRSuperellipse(rect);
     final around = _sweepStops(rect.size, round);
     final stops = [for (final (stop, _) in around) stop];
     for (final band in _shineBands) {
@@ -684,17 +696,23 @@ class LiquidGlass extends StatelessWidget {
     super.key,
     required this.style,
     this.borderRadius,
+    this.borderRadiusResolver,
     this.clipper,
     this.shadows = const [],
+    this.rim,
     this.pressed = false,
     this.glow,
     this.child,
-  });
+  }) : assert(clipper == null || borderRadiusResolver == null);
 
   final LiquidGlassStyle style;
 
   /// Rounds each corner on its own in place of the pill.
   final BorderRadius? borderRadius;
+
+  /// Resolves animated capsule corners from the actual laid-out size, keeping
+  /// them on the analytic rounded-corner shader path instead of an outline.
+  final BorderRadius Function(Size size)? borderRadiusResolver;
 
   /// Shapes the pane to its path in place of the pill. The glass bends
   /// to the path by how far it reaches from the pane's center in each
@@ -702,6 +720,10 @@ class LiquidGlass extends StatelessWidget {
   final CustomClipper<Path>? clipper;
 
   final List<BoxShadow> shadows;
+
+  /// Menu/alert glass uses a separate optical rim and outer hairline.
+  /// Keep null for the regular button/lens styles that own their own rim.
+  final LiquidGlassRim? rim;
 
   final bool pressed;
 
@@ -751,8 +773,10 @@ class LiquidGlass extends StatelessWidget {
         group: group,
         style: style,
         borderRadius: borderRadius,
+        borderRadiusResolver: borderRadiusResolver,
         clipper: clipper,
         shadows: shadows,
+        rim: rim,
         press: 0,
         fading: false,
         glow: glow,
@@ -771,8 +795,10 @@ class LiquidGlass extends StatelessWidget {
         group: group,
         style: style,
         borderRadius: borderRadius,
+        borderRadiusResolver: borderRadiusResolver,
         clipper: clipper,
         shadows: shadows,
+        rim: rim,
         press: press,
         fading: !pressed,
         glow: null,
@@ -788,8 +814,10 @@ class _LiquidGlassPane extends SingleChildRenderObjectWidget {
     required this.group,
     required this.style,
     required this.borderRadius,
+    required this.borderRadiusResolver,
     required this.clipper,
     required this.shadows,
+    required this.rim,
     required this.press,
     required this.fading,
     required this.glow,
@@ -799,8 +827,10 @@ class _LiquidGlassPane extends SingleChildRenderObjectWidget {
   final Object? group;
   final LiquidGlassStyle style;
   final BorderRadius? borderRadius;
+  final BorderRadius Function(Size size)? borderRadiusResolver;
   final CustomClipper<Path>? clipper;
   final List<BoxShadow> shadows;
+  final LiquidGlassRim? rim;
   final double press;
   final bool fading;
   final LiquidGlassGlow? glow;
@@ -811,8 +841,10 @@ class _LiquidGlassPane extends SingleChildRenderObjectWidget {
       group: group,
       style: style,
       borderRadius: borderRadius,
+      borderRadiusResolver: borderRadiusResolver,
       clipper: clipper,
       shadows: shadows,
+      rim: rim,
       press: press,
       fading: fading,
       glow: glow,
@@ -828,8 +860,10 @@ class _LiquidGlassPane extends SingleChildRenderObjectWidget {
       ..group = group
       ..style = style
       ..borderRadius = borderRadius
+      ..borderRadiusResolver = borderRadiusResolver
       ..clipper = clipper
       ..shadows = shadows
+      ..rim = rim
       ..press = press
       ..fading = fading
       ..glow = glow;
@@ -841,16 +875,20 @@ class _RenderLiquidGlass extends RenderProxyBox {
     required Object? group,
     required LiquidGlassStyle style,
     required BorderRadius? borderRadius,
+    required BorderRadius Function(Size size)? borderRadiusResolver,
     required CustomClipper<Path>? clipper,
     required List<BoxShadow> shadows,
+    required LiquidGlassRim? rim,
     required double press,
     required bool fading,
     required LiquidGlassGlow? glow,
   }) : _group = group,
        _style = style,
        _borderRadius = borderRadius,
+       _borderRadiusResolver = borderRadiusResolver,
        _clipper = clipper,
        _shadows = shadows,
+       _rim = rim,
        _press = press,
        _fading = fading,
        _glow = glow;
@@ -881,6 +919,13 @@ class _RenderLiquidGlass extends RenderProxyBox {
       return;
     }
     _borderRadius = value;
+    markNeedsPaint();
+  }
+
+  BorderRadius Function(Size size)? _borderRadiusResolver;
+  set borderRadiusResolver(BorderRadius Function(Size size)? value) {
+    if (value == _borderRadiusResolver) return;
+    _borderRadiusResolver = value;
     markNeedsPaint();
   }
 
@@ -917,6 +962,13 @@ class _RenderLiquidGlass extends RenderProxyBox {
       return;
     }
     _shadows = value;
+    markNeedsPaint();
+  }
+
+  LiquidGlassRim? _rim;
+  set rim(LiquidGlassRim? value) {
+    if (value == _rim) return;
+    _rim = value;
     markNeedsPaint();
   }
 
@@ -1005,16 +1057,19 @@ class _RenderLiquidGlass extends RenderProxyBox {
       _pane.clear();
     } else {
       final outline = _currentOutline;
+      final corners =
+          _borderRadiusResolver?.call(size) ??
+          _borderRadius ??
+          BorderRadius.circular(size.shortestSide / 2);
       _pane.paint(
         context,
         offset & size,
         shape: outline != null
             ? LiquidGlassOutline(outline)
-            : LiquidGlassCorners(
-                _borderRadius ?? BorderRadius.circular(size.shortestSide / 2),
-              ),
+            : LiquidGlassCorners(corners),
         style: _style,
         shadows: _shadows,
+        rim: outline == null ? _rim : null,
         group: _group,
         glow:
             _glow ??
@@ -1027,6 +1082,14 @@ class _RenderLiquidGlass extends RenderProxyBox {
               strength: _press * 0.16,
             ),
       );
+      if (outline == null) {
+        _rim?.paintLine(
+          context.canvas,
+          offset & size,
+          corners.topLeft.x,
+          borderRadius: corners,
+        );
+      }
     }
     super.paint(context, offset);
   }
@@ -1568,7 +1631,12 @@ class _LiquidGlassLayer extends Layer {
           shape.deflate(_hairlineWidth / 2),
           hairline..strokeWidth = _hairlineWidth,
         );
-      this.rim?._paintShine(canvas, rect, corners.topLeft.x);
+      this.rim?._paintShine(
+        canvas,
+        rect,
+        corners.topLeft.x,
+        borderRadius: corners,
+      );
     }
   }
 }

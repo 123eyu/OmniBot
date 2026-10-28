@@ -226,34 +226,36 @@ extension _HomeDrawerHeaderFooter on HomeDrawerState {
           ),
           if (stoppable) ...[
             const SizedBox(width: 8),
-            TextButton.icon(
-              key: ValueKey('home-drawer-web-stop-$agentId'),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFFE05252),
-                backgroundColor: const Color(0xFFE05252)
-                    .withValues(alpha: 0.08),
-                minimumSize: const Size(0, 30),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
+            FlClashMenuInteractionIgnore(
+              child: TextButton.icon(
+                key: ValueKey('home-drawer-web-stop-$agentId'),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFE05252),
+                  backgroundColor: const Color(0xFFE05252)
+                      .withValues(alpha: 0.08),
+                  minimumSize: const Size(0, 30),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: disabled
-                  ? null
-                  : () {
-                      Navigator.of(dialogContext).pop();
-                      unawaited(_stopWebQuickAction(action));
-                    },
-              icon: const Icon(LucideIcons.circleStop, size: 13),
-              label: Text(
-                english ? 'Stop' : '停止',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+                onPressed: disabled
+                    ? null
+                    : () {
+                        Navigator.of(dialogContext).pop();
+                        unawaited(_stopWebQuickAction(action));
+                      },
+                icon: const Icon(LucideIcons.circleStop, size: 13),
+                label: Text(
+                  english ? 'Stop' : '停止',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),

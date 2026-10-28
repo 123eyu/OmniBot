@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ui/features/home/pages/chat/widgets/acp_config_button.dart';
 import 'package:ui/widgets/conversation_model_selector.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
+import 'package:ui/widgets/settings_ui.dart';
 
 void main() {
   testWidgets('ACP model handoff waits for source return and runs only once', (
@@ -415,17 +416,21 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('acp-config-back')));
       await tester.pump();
       expect(
-        tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged,
-        isNull,
+        tester
+            .widget<OmniSettingsSwitch>(find.byType(OmniSettingsSwitch))
+            .enabled,
+        isFalse,
       );
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(find.byType(OmniSettingsSwitch));
       await tester.pump();
       expect(writes, 0);
       refresh.complete(response);
       await tester.pumpAndSettle();
       expect(
-        tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged,
-        isNotNull,
+        tester
+            .widget<OmniSettingsSwitch>(find.byType(OmniSettingsSwitch))
+            .enabled,
+        isTrue,
       );
     },
   );
@@ -561,13 +566,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Vendor thought'), findsOneWidget);
       expect(find.text('Experimental setting'), findsOneWidget);
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(
+        find.byKey(const ValueKey('acp-config-vendor_experimental')),
+      );
       await tester.pumpAndSettle();
       expect(writes, [
         ['session-a', 'vendor_experimental', false],
       ]);
       expect(
-        tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+        tester
+            .widget<OmniSettingsSwitch>(find.byType(OmniSettingsSwitch))
+            .value,
         false,
       );
     },
@@ -732,10 +741,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(SwitchListTile));
+    await tester.tap(find.byType(OmniSettingsSwitch));
     await tester.pumpAndSettle();
     expect(
-      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+      tester.widget<OmniSettingsSwitch>(find.byType(OmniSettingsSwitch)).value,
       true,
     );
     expect(find.text('助手暂时无法完成操作，请重试。'), findsOneWidget);
@@ -759,8 +768,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged,
-      isNull,
+      tester
+          .widget<OmniSettingsSwitch>(find.byType(OmniSettingsSwitch))
+          .enabled,
+      isFalse,
     );
   });
 }

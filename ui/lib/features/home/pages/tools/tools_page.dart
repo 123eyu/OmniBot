@@ -1,5 +1,6 @@
 import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/services/tool_catalog_service.dart';
@@ -135,10 +136,21 @@ class _ToolsPageState extends State<ToolsPage>
         title: _text('工具', 'Tools'),
         primary: true,
         actions: [
-          IconButton(
-            tooltip: _text('刷新工具', 'Refresh tools'),
-            onPressed: _loading ? null : _load,
-            icon: const Icon(LucideIcons.refreshCw, size: 20),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 12),
+            child: OmniCircleButton(
+              tooltip: _text('刷新工具', 'Refresh tools'),
+              onPressed: _loading ? null : _load,
+              icon: LucideIcons.refreshCw,
+              size: 40,
+              tapTargetSize: MaterialTapTargetSize.padded,
+              iconWidget: _loading
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : null,
+            ),
           ),
         ],
       ),

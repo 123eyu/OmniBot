@@ -18,11 +18,20 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/omni_menu.dart';
 
 import 'liquid_glass.dart';
+import 'elastic_press.dart';
+import 'menu_interaction.dart';
+
+export 'menu_interaction.dart'
+    show
+        FlClashMenuController,
+        FlClashMenuInteraction,
+        FlClashMenuItemRegion,
+        FlClashMenuInteractionIgnore,
+        FlClashMenuPanelRegion;
 
 part 'popup_geometry.dart';
 
@@ -137,6 +146,9 @@ const _glyphUnderAt = 0.25;
 abstract final class FlClashPopupMotion {
   static const openingDuration = _openDuration;
   static const closingDuration = _dismissDuration;
+  static const shrinkingDuration = Duration(milliseconds: 200);
+  static Duration closingDurationFor({required bool hasSource}) =>
+      hasSource ? closingDuration : shrinkingDuration;
 
   static Future<void> close(
     AnimationController controller, {
@@ -453,6 +465,7 @@ class FlClashPopupTransition extends StatefulWidget {
     this.sourceShape,
     this.sourceGlass,
     this.sourceOverflow = const [],
+    this.menuController,
   });
 
   final Rect anchor;
@@ -464,6 +477,7 @@ class FlClashPopupTransition extends StatefulWidget {
   final ShapeBorder? sourceShape;
   final bool? sourceGlass;
   final List<Rect> sourceOverflow;
+  final FlClashMenuController? menuController;
 
   @override
   State<FlClashPopupTransition> createState() => _FlClashPopupTransitionState();
@@ -484,8 +498,7 @@ class _FlClashPopupTransitionState extends State<FlClashPopupTransition> {
     final glass = LiquidGlassScope.of(context);
     final scheme = Theme.of(context).colorScheme;
     final reducedMotion = MediaQuery.disableAnimationsOf(context);
-    if (reducedMotion && !glass) return widget.child;
-    return _PopupMorph(
+    final morph = _PopupMorph(
       anchor: widget.anchor,
       animation: reducedMotion
           ? const AlwaysStoppedAnimation(1.0)
@@ -524,7 +537,7 @@ class _FlClashPopupTransitionState extends State<FlClashPopupTransition> {
             )
           : null,
       child: LiquidGlassSurfaceScope(
-        enabled: glass,
+        enabled: true,
         child: AnimatedBuilder(
           animation: widget.animation,
           child: RepaintBoundary(child: widget.child),
@@ -533,6 +546,20 @@ class _FlClashPopupTransitionState extends State<FlClashPopupTransition> {
             child: child,
           ),
         ),
+      ),
+    );
+    return AnimatedBuilder(
+      animation: widget.animation,
+      child: morph,
+      builder: (_, child) => FlClashMenuInteraction(
+        controller: widget.menuController,
+        enabled:
+            reducedMotion ||
+            widget.animation.isCompleted ||
+            (widget.animation.status == AnimationStatus.reverse &&
+                widget.source == null &&
+                widget.sourceImage == null),
+        child: child!,
       ),
     );
   }
@@ -591,7 +618,7 @@ class _FlClashPopupRoute<T> extends PopupRoute<T> {
   }
 
   final _pin = _PopupPin();
-  final _press = _CarriedPress();
+  final _press = FlClashMenuController();
 
   @override
   Widget buildPage(
@@ -599,10 +626,6 @@ class _FlClashPopupRoute<T> extends PopupRoute<T> {
     Animation<double> animation,
     Animation<double> secondaryAnimation,
   ) {
-    final glass = LiquidGlassScope.of(context);
-    final color = glass
-        ? Colors.transparent
-        : context.omniPalette.surfacePrimary;
     return FocusScope(
       autofocus: navigator?.widget.requestFocus ?? true,
       child: FocusTraversalGroup(
@@ -613,20 +636,11 @@ class _FlClashPopupRoute<T> extends PopupRoute<T> {
           namesRoute: true,
           explicitChildNodes: true,
           label: MaterialLocalizations.of(context).popupMenuLabel,
-          child: DecoratedBox(
-            decoration: ShapeDecoration(
-              color: color,
-              shape: _shape(_cardRadius),
-              shadows: glass
-                  ? null
-                  : _menuShadows(Theme.of(context).colorScheme),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              shape: _shape(_cardRadius),
-              clipBehavior: Clip.antiAlias,
-              child: _FlatPopupMenu(press: _press, child: builder(context)),
-            ),
+          child: Material(
+            type: MaterialType.transparency,
+            shape: _shape(_cardRadius),
+            clipBehavior: Clip.antiAlias,
+            child: FlClashMenuPanelRegion(child: builder(context)),
           ),
         ),
       ),
@@ -668,6 +682,7 @@ class _FlClashPopupRoute<T> extends PopupRoute<T> {
               sourceShape: sourceShape,
               sourceGlass: sourceGlass,
               sourceOverflow: sourceOverflow,
+              menuController: _press,
               child: child,
             ),
           ),
@@ -678,206 +693,18 @@ class _FlClashPopupRoute<T> extends PopupRoute<T> {
   }
 }
 
-/// The press that opened a popup on its control's pointer down. Its events
-/// keep reaching the control, which hands them on for the menu to follow.
-class _CarriedPress {
-  ValueSetter<Offset>? onMove;
-  ValueSetter<Offset>? onRelease;
-  VoidCallback? onCancel;
-}
-
-/// A flat popup entry that participates in FlClash's carried opening press.
-/// Its value is returned through Navigator.pop, as for [PopupMenuItem].
-class FlClashPopupMenuItem<T> extends PopupMenuItem<T> {
+/// Flat entries use the same row tracking, keyboard activation and visuals as
+/// menus opened by showOmniMenu or the focus-preserving overlay owner.
+class FlClashPopupMenuItem<T> extends OmniPopupMenuItem<T> {
   const FlClashPopupMenuItem({
     super.key,
     super.value,
     super.onTap,
-    super.enabled = true,
+    super.enabled,
     required super.child,
-    this.selected = false,
-    this.destructive = false,
-  }) : super(height: OmniMenuStyle.minHeight, padding: EdgeInsets.zero);
-
-  final bool selected;
-  final bool destructive;
-
-  @override
-  PopupMenuItemState<T, FlClashPopupMenuItem<T>> createState() =>
-      _FlClashPopupMenuItemState<T>();
-}
-
-class _FlClashPopupMenuItemState<T>
-    extends PopupMenuItemState<T, FlClashPopupMenuItem<T>> {
-  // An item keeps its identity if asynchronous menu content is rebuilt.
-  final _identity = Object();
-
-  @override
-  void handleTap() {
-    if (!widget.enabled || ModalRoute.of(context)?.isCurrent != true) return;
-    super.handleTap();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final pressed = _FlatMenuScope.maybeOf(context)?.pressed == _identity;
-    return MetaData(
-      metaData: _MenuRow(_identity, widget.enabled ? handleTap : null),
-      behavior: HitTestBehavior.opaque,
-      child: Semantics(
-        role: SemanticsRole.menuItem,
-        child: DecoratedBox(
-          decoration: ShapeDecoration(
-            color: pressed ? Theme.of(context).highlightColor : null,
-            shape: _shape(16),
-          ),
-          child: OmniMenuItem(
-            enabled: widget.enabled,
-            selected: widget.selected,
-            destructive: widget.destructive,
-            onTap: handleTap,
-            child: widget.child ?? const SizedBox.shrink(),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MenuRow {
-  const _MenuRow(this.identity, this.onTap);
-
-  final Object identity;
-  final VoidCallback? onTap;
-}
-
-class _FlatMenuScope extends InheritedWidget {
-  const _FlatMenuScope({required this.pressed, required super.child});
-
-  final Object? pressed;
-
-  static _FlatMenuScope? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<_FlatMenuScope>();
-
-  @override
-  bool updateShouldNotify(_FlatMenuScope oldWidget) =>
-      pressed != oldWidget.pressed;
-}
-
-/// The flat part of CommonPopupMenu: a single owner follows the opening
-/// pointer across rows, highlights the hit row, then selects where it ends.
-class _FlatPopupMenu extends StatefulWidget {
-  const _FlatPopupMenu({required this.press, required this.child});
-
-  final _CarriedPress press;
-  final Widget child;
-
-  @override
-  State<_FlatPopupMenu> createState() => _FlatPopupMenuState();
-}
-
-class _FlatPopupMenuState extends State<_FlatPopupMenu> {
-  final _menuKey = GlobalKey();
-  Object? _pressed;
-
-  void _bind(_CarriedPress press) {
-    press
-      ..onMove = _slideCarried
-      ..onRelease = _releaseCarried
-      ..onCancel = _cancelCarried;
-  }
-
-  void _unbind(_CarriedPress press) {
-    press
-      ..onMove = null
-      ..onRelease = null
-      ..onCancel = null;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _bind(widget.press);
-  }
-
-  @override
-  void didUpdateWidget(covariant _FlatPopupMenu oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.press != widget.press) {
-      _unbind(oldWidget.press);
-      _bind(widget.press);
-    }
-  }
-
-  @override
-  void dispose() {
-    _unbind(widget.press);
-    super.dispose();
-  }
-
-  _MenuRow? _rowAt(Offset position) {
-    final box = _menuKey.currentContext?.findRenderObject();
-    if (box is! RenderBox || !box.hasSize || box.size.isEmpty) return null;
-    final result = BoxHitTestResult();
-    box.hitTest(result, position: box.globalToLocal(position));
-    for (final entry in result.path) {
-      if (entry.target case RenderMetaData(metaData: final _MenuRow row)) {
-        return row;
-      }
-    }
-    return null;
-  }
-
-  bool _startPress(Offset position) {
-    final row = _rowAt(position);
-    if (row == null) return false;
-    _hold(row);
-    return true;
-  }
-
-  void _slidePress(Offset position) {
-    final row = _rowAt(position);
-    final identity = row?.onTap == null ? null : row!.identity;
-    if (identity == _pressed) return;
-    if (identity != null) HapticFeedback.selectionClick();
-    _hold(row);
-  }
-
-  void _hold(_MenuRow? row) {
-    final identity = row?.onTap == null ? null : row!.identity;
-    setState(() => _pressed = identity);
-  }
-
-  void _endPress(Offset position) {
-    final onTap = _rowAt(position)?.onTap;
-    _cancelPress();
-    onTap?.call();
-  }
-
-  void _cancelPress() {
-    if (mounted && _pressed != null) setState(() => _pressed = null);
-  }
-
-  void _slideCarried(Offset position) => _slidePress(position);
-  void _releaseCarried(Offset position) => _endPress(position);
-  void _cancelCarried() => _cancelPress();
-
-  @override
-  Widget build(BuildContext context) => RawGestureDetector(
-    key: _menuKey,
-    gestures: {
-      _RowPressRecognizer:
-          GestureRecognizerFactoryWithHandlers<_RowPressRecognizer>(
-            () => _RowPressRecognizer(debugOwner: this),
-            (recognizer) => recognizer
-              ..onStart = _startPress
-              ..onUpdate = _slidePress
-              ..onEnd = _endPress
-              ..onCancel = _cancelPress,
-          ),
-    },
-    child: _FlatMenuScope(pressed: _pressed, child: widget.child),
-  );
+    super.selected,
+    super.destructive,
+  });
 }
 
 /// The part of the popup's box that returns into its control, when not all
@@ -1037,7 +864,9 @@ class _RenderPopupMorph extends RenderProxyBox {
     _closing = true;
     _closingFrom = _animation.value;
     _closingFrame = _frame();
-    _closingSurface = hasSize ? surface.rectIn?.call(this) : null;
+    _closingSurface = hasSize
+        ? surface.rectIn?.call(this) ?? FlClashElasticPress.paintBoundsOf(this)
+        : null;
   }
 
   /// Where the opening stands, or null once it has settled.
@@ -1208,7 +1037,7 @@ class _RenderPopupMorph extends RenderProxyBox {
   /// The anchor in this box's coordinates; it comes in those of the layout
   /// box that places this one.
   Rect get _localAnchor =>
-      _anchor.shift(-(parentData! as BoxParentData).offset);
+      _anchor.shift(-FlClashMenuInteraction.layoutOffsetOf(this));
 
   @override
   void paint(PaintingContext context, Offset offset) {
@@ -1317,6 +1146,12 @@ class _RenderPopupMorph extends RenderProxyBox {
       final glass = _glass;
       if (glass == null || size.isEmpty) {
         _pane.clear();
+        if (!size.isEmpty) {
+          final rect = offset & size;
+          final path = _shape(_cardRadius).getOuterPath(rect);
+          _paintShadows(context.canvas, path, rect, _cardRadius, 1);
+          context.canvas.drawPath(path, Paint()..color = _surfaceColor);
+        }
       } else {
         // A shared popup owner keeps one pane after the morph settles, so its
         // generic menu contents never add a second capture or an opaque fill.
@@ -2047,7 +1882,7 @@ class _FlClashPopupBoxState<T> extends State<FlClashPopupBox<T>> {
     _pressMoved =
         _pressMoved || (event.position - _pressOrigin).distance > slop;
     if (_pressMoved) {
-      _route?._press.onMove?.call(event.position);
+      _route?._press.drag(event.position);
     }
   }
 
@@ -2057,7 +1892,7 @@ class _FlClashPopupBoxState<T> extends State<FlClashPopupBox<T>> {
     }
     _pointer = null;
     if (_pressMoved) {
-      _route?._press.onRelease?.call(event.position);
+      _route?._press.release(event.position);
     }
   }
 
@@ -2066,7 +1901,7 @@ class _FlClashPopupBoxState<T> extends State<FlClashPopupBox<T>> {
       return;
     }
     _pointer = null;
-    _route?._press.onCancel?.call();
+    _route?._press.cancel();
   }
 
   void _open() {
@@ -2269,86 +2104,4 @@ class _PopupPressRecognizer extends OneSequenceGestureRecognizer {
 
   @override
   String get debugDescription => 'popup press';
-}
-
-/// Follows a press on a row across the rows and picks the one it is let go
-/// on, as iOS menus do. It claims the pointer only then, so a menu that
-/// scrolls takes a drag first, and a row's own tap never fires on a press.
-class _RowPressRecognizer extends OneSequenceGestureRecognizer {
-  _RowPressRecognizer({super.debugOwner});
-
-  bool Function(Offset position)? onStart;
-  ValueSetter<Offset>? onUpdate;
-  ValueSetter<Offset>? onEnd;
-  VoidCallback? onCancel;
-
-  int? _pointer;
-  Offset? _release;
-  bool _accepted = false;
-
-  @override
-  bool isPointerAllowed(PointerDownEvent event) =>
-      _pointer == null &&
-      event.buttons == kPrimaryButton &&
-      super.isPointerAllowed(event);
-
-  @override
-  void addAllowedPointer(PointerDownEvent event) {
-    if (!(onStart?.call(event.position) ?? false)) {
-      return;
-    }
-    _pointer = event.pointer;
-    _release = null;
-    _accepted = false;
-    startTrackingPointer(event.pointer, event.transform);
-  }
-
-  @override
-  void handleEvent(PointerEvent event) {
-    if (event is PointerMoveEvent) {
-      onUpdate?.call(event.position);
-    } else if (event is PointerUpEvent) {
-      _release = event.position;
-      stopTrackingPointer(event.pointer);
-      if (_accepted) {
-        _finish();
-      } else {
-        resolve(GestureDisposition.accepted);
-      }
-    } else if (event is PointerCancelEvent) {
-      resolve(GestureDisposition.rejected);
-    }
-  }
-
-  @override
-  void acceptGesture(int pointer) {
-    _accepted = true;
-    if (pointer == _pointer && _release != null) {
-      _finish();
-    }
-  }
-
-  @override
-  void rejectGesture(int pointer) {
-    stopTrackingPointer(pointer);
-    if (pointer != _pointer) {
-      return;
-    }
-    _pointer = null;
-    _release = null;
-    onCancel?.call();
-  }
-
-  void _finish() {
-    final release = _release!;
-    _pointer = null;
-    _release = null;
-    onEnd?.call(release);
-  }
-
-  @override
-  void didStopTrackingLastPointer(int pointer) {}
-
-  @override
-  String get debugDescription => 'menu row press';
 }

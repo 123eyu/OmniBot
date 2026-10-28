@@ -21,6 +21,12 @@ OmnibotApp's separate commercial license.
 | `ui/lib/widgets/flclash/search_header.dart` and `search_surface.dart` | Proxy page `lib/ui/scaffold.dart`, `lib/ui/search_field.dart`, `lib/ui/button.dart`, `lib/ui/motion.dart`, and the solid/liquid-glass surface and press portions of `lib/ui/goo.dart` and `lib/ui/navigation_dock.dart` |
 | `ui/lib/widgets/flclash/liquid_glass.dart`, `liquid_glass_capture.dart`, and `ui/shaders/liquid_glass.frag` | `lib/ui/liquid_glass.dart`, `lib/ui/liquid_glass_capture.dart`, and `shaders/liquid_glass.frag`; Flutter Material/HCT/reduced-motion adapters replace the upstream app helpers |
 | `ui/lib/widgets/flclash/popup.dart` and `popup_geometry.dart`, shared by `glass_popup.dart` and `omni_menu.dart` | `lib/ui/popup.dart` (flat popup, source-control morph and liquid-glass platter), `lib/ui/goo.dart`, `lib/ui/motion.dart`, and the solid `menuShadows` constants from `lib/ui/liquid_glass.dart` |
+| `ui/lib/features/home/widgets/conversation_context_menu.dart` | Profile long-press entry from `lib/ui/context_menu.dart` and the independent no-source route in `lib/ui/popup.dart`; the existing OmnibotApp action-panel position is retained |
+| `ui/lib/widgets/flclash/elastic_press.dart` and `menu_interaction.dart` | `ElasticPress` and its spring/paint transform from `lib/ui/navigation_dock.dart`; row press, carried press and painted hit testing from `CommonPopupMenu` in `lib/ui/popup.dart` |
+| `ui/lib/widgets/flclash/common_switch.dart`, exposed by `OmniSettingsSwitch` | `lib/ui/switch.dart` (`CommonSwitch` track/thumb geometry, lifted glass lens, toggle/press timing, drag and focus behavior); controlled-value, cancellation and reduced-motion handling adapted to OmnibotApp |
+| `OmniSettingsSearchField` in `ui/lib/widgets/settings_ui.dart` | `lib/ui/search_field.dart` (44 dp capsule, 20 dp search icon, 41 dp text inset, 49 dp clear slot and keyboard-only focus ring), using the shared glass surface |
+| `ui/lib/widgets/omni_sheet_motion.dart` | `lib/ui/snap_sheet.dart` (0.55 rubber-band coefficient, 100 dp extent, mass 3/stiffness 1000 critically damped return and scroll handoff), adapted to existing Flutter modal routes |
+| Glass alert/sheet adapters in `omni_glass.dart` and `omni_glass_routes.dart` | Alert rim, hairline, shadow and veil composition in `lib/ui/dialog.dart` and `lib/ui/liquid_glass.dart`; default alert/sheet scrim values in `lib/ui/color.dart`. Flutter routes and alert layout retain focus, results, keyboard insets and back guards; the shared sheet motion adapter owns gesture handoff and requests dismissal through the route. |
 
 The navigation dock retains the upstream floating-navigation layout, spring
 simulations, drag selection, lens deformation and per-icon selection effects.
@@ -140,3 +146,55 @@ press glow. Glass mode removes the FAB's separate material shadow; disabling
 glass restores the original solid appearance and elevation.
 The chat message-anchor button uses the same regular glass surface and
 glass-aware fade while retaining its tap, long-press and fan interaction.
+
+Home conversation long presses follow the profile `ContextMenuRegion` menu path:
+the independent menu opens from the actual press point over 450 ms and shrinks
+to 0.8 while fading over 200 ms on close. OmnibotApp additionally retains its
+selected-conversation lift, scale and mild veil: an inert preview temporarily
+replaces the source row visually, and the original row is restored on the same
+frame that the closing preview disappears.
+The menu uses the shared popup renderer and action rows; its final x/y retain
+the previous conversation action-panel position, including bottom-edge
+avoidance, as requested. The original long-press pointer is not carried into
+the menu, matching upstream. A new press on the menu can drag between actions.
+Business actions still wait for the closing overlay to be removed.
+
+The shared menu rows use the upstream 24 dp superellipse panel, 8 dp inset,
+16 dp row corners, 12 dp row padding, 20 dp icons and 15 sp/20 dp labels.
+Menus share the upstream elastic press: spring-driven lift, bounded pull
+beyond the pane edges, axis stretch and spring return, with hit testing mapped
+to the painted bounds. Ordinary scrolling retains its gesture owner; menu row
+press tracking yields to scrolling and excludes embedded editors and controls.
+Glass and content transform together on one surface. Reduced motion retains
+selection behavior without the elastic transforms.
+
+Standalone round controls and glass FABs share the same `ElasticPress` spring
+and bounded drag transform from `navigation_dock.dart`. Their original hit
+targets, keyboard activation, Hero and action callbacks remain in place; press
+feedback follows the upstream `ElasticButton` no-ink style. The chat-anchor
+control retains its existing long-press selection gesture while its material
+and icon stretch together. Glass-off and reduced-motion modes disable this
+presentation transform.
+
+Existing modal surfaces use a single glass owner with the upstream alert rim
+and shadows. Their route barriers separate the uniform veil from the capture,
+as FlClash does, instead of sampling a painted dim layer into the pane. Explicit
+caller barrier colors remain supported. The chat composer resolves its capsule
+and expanded corners against its actual size on the analytic corner shader
+path; this avoids profiling a very wide stadium outline. Shared segmented
+controls use the upstream lens style and elastic lift, with OmnibotApp retaining
+its existing track layout and controlled selection callbacks.
+
+Settings toggles use the upstream 52 by 32 dp track and 24 dp resting thumb.
+Pressing lifts the thumb into a glass lens; dragging follows the finger and
+settles back to the owner-provided value. Keyboard activation, screen-reader
+semantics, cancellation and reduced motion remain supported. Settings search
+fields use the same capsule geometry, icon insets and keyboard-only focus ring,
+while refresh and other round actions share the existing elastic glass button.
+
+Modal sheet motion uses the upstream snap-sheet rubber-band and critically
+damped spring. A deliberate pull stretches the single pane; ordinary list
+scrolling and text selection retain their gesture owners. Existing custom
+extent controls report only their unconsumed overdrag to the same elastic
+surface, preserving their height and navigation policy. Compact environment
+editing opts into content-fitting height instead of reserving half the screen.

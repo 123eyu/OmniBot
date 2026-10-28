@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_segmented_slider.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:ui/models/scheduled_task.dart';
 import 'package:ui/theme/theme_context.dart';
@@ -20,7 +22,7 @@ class ScheduleTaskSheet extends StatefulWidget {
     required BuildContext context,
     required ScheduledTask existingTask,
   }) {
-    return showModalBottomSheet<ScheduledTask>(
+    return showOmniGlassBottomSheet<ScheduledTask>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -77,11 +79,8 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    return Container(
-      decoration: BoxDecoration(
-        color: palette.surfacePrimary,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-      ),
+    return OmniGlassSheet(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
       child: SafeArea(
         top: false,
         child: Column(
@@ -233,83 +232,32 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
     );
   }
 
-  /// 构建标签页选择器
-  Widget _buildTabSelector() {
-    final palette = context.omniPalette;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: palette.segmentTrack,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildTabButton(
-              title: LegacyTextLocalizer.isEnglish ? 'Fixed time' : '固定时间',
-              isSelected: _selectedTabIndex == 0,
-              onTap: () {
-                setState(() {
-                  _selectedTabIndex = 0;
-                });
-                _pageController.animateToPage(
-                  0,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                );
-              },
-            ),
-          ),
-          Expanded(
-            child: _buildTabButton(
-              title: LegacyTextLocalizer.isEnglish ? 'Countdown' : '倒计时',
-              isSelected: _selectedTabIndex == 1,
-              onTap: () {
-                setState(() {
-                  _selectedTabIndex = 1;
-                });
-                _pageController.animateToPage(
-                  1,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 构建单个标签按钮
-  Widget _buildTabButton({
-    required String title,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    final palette = context.omniPalette;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? palette.segmentThumb : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
+  Widget _buildTabSelector() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    child: OmniSegmentedSlider<int>(
+      keyPrefix: 'schedule-time-mode',
+      value: _selectedTabIndex,
+      options: [
+        OmniSegmentedOption(
+          value: 0,
+          label: LegacyTextLocalizer.isEnglish ? 'Fixed time' : '固定时间',
         ),
-        child: Center(
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
-              color: isSelected ? palette.accentPrimary : palette.textSecondary,
-            ),
-          ),
+        OmniSegmentedOption(
+          value: 1,
+          label: LegacyTextLocalizer.isEnglish ? 'Countdown' : '倒计时',
         ),
-      ),
-    );
-  }
+      ],
+      onChanged: (index) {
+        if (_selectedTabIndex == index) return;
+        setState(() => _selectedTabIndex = index);
+        _pageController.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      },
+    ),
+  );
 
   /// 构建固定时间选择
   Widget _buildFixedTimeTab() {
@@ -418,7 +366,7 @@ class _ScheduleTaskSheetState extends State<ScheduleTaskSheet> {
 
   /// 显示倒计时输入对话框
   Future<void> _showCountdownInputDialog() async {
-    final minutes = await showDialog<int>(
+    final minutes = await showOmniGlassCardSheet<int>(
       context: context,
       useRootNavigator: false,
       builder: (_) => _CountdownInputDialog(initialMinutes: _countdownMinutes),
@@ -556,12 +504,11 @@ class _CountdownInputDialogState extends State<_CountdownInputDialog> {
       borderSide: BorderSide(color: palette.accentPrimary),
     );
     return PopScope(
-      canPop: false,
+      canPop: true,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        _close();
+        if (didPop) _focusNode.unfocus();
       },
-      child: AlertDialog(
+      child: OmniGlassAlertDialog(
         backgroundColor: palette.surfacePrimary,
         surfaceTintColor: Colors.transparent,
         title: Text(

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:ui/services/agent_runtime_service.dart';
 import 'package:ui/services/omnibot_resource_service.dart';
@@ -557,10 +558,21 @@ class _CodexRemoteFilePreviewPageState
           title: title,
           primary: true,
           actions: [
-            IconButton(
-              tooltip: _isEnglish ? 'Reload' : '刷新',
-              onPressed: _loading ? null : () => unawaited(_loadFile()),
-              icon: const Icon(Icons.refresh_rounded),
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 12),
+              child: OmniCircleButton(
+                tooltip: _isEnglish ? 'Reload' : '刷新',
+                onPressed: _loading ? null : () => unawaited(_loadFile()),
+                icon: Icons.refresh_rounded,
+                size: 40,
+                tapTargetSize: MaterialTapTargetSize.padded,
+                iconWidget: _loading
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : null,
+              ),
             ),
           ],
         ),

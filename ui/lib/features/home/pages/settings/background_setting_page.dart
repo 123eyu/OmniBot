@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -2450,13 +2451,11 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Tooltip(
-                      message: context.trLegacy('刷新'),
-                      child: IconButton(
-                        onPressed: _petBusy ? null : _refreshPetOptions,
-                        icon: const Icon(LucideIcons.refreshCw, size: 18),
-                        color: palette.textSecondary,
-                      ),
+                    OmniCircleButton(
+                      tooltip: context.trLegacy('刷新'),
+                      onPressed: _petBusy ? null : _refreshPetOptions,
+                      icon: LucideIcons.refreshCw,
+                      foregroundColor: palette.textSecondary,
                     ),
                     const SizedBox(width: 2),
                     Icon(

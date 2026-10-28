@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/flclash/elastic_press.dart';
 import 'package:ui/widgets/flclash/liquid_glass.dart';
 import 'package:ui/widgets/flclash/popup.dart';
 
@@ -54,11 +55,34 @@ class OmniCircleButton extends StatelessWidget {
   final Widget? iconWidget;
 
   /// Cross-fades the standard surface with a temporary transition shape.
-  /// Ordinary buttons retain their original fill, shadow and press feedback.
+  /// Glass buttons use the shared elastic press without a separate ink fill.
   final double surfaceOpacity;
 
   @override
   Widget build(BuildContext context) {
+    final glass = LiquidGlassScope.of(context);
+    final enabled = _popupSource ? onOpen != null : onPressed != null;
+    return FlClashElasticPress(
+      enabled: glass && enabled,
+      // Keep the 48 dp hit target while the visible circle owns the spring.
+      panelOf: (box) => Rect.fromCenter(
+        center: box.size.center(Offset.zero),
+        width: size,
+        height: size,
+      ),
+      child: TooltipTheme(
+        // Long presses belong to the glass spring; hover tooltips and the
+        // button's semantic label remain available.
+        data: glass
+            ? TooltipTheme.of(context)
+                  .copyWith(triggerMode: TooltipTriggerMode.manual)
+            : TooltipTheme.of(context),
+        child: _buildSource(context),
+      ),
+    );
+  }
+
+  Widget _buildSource(BuildContext context) {
     if (_popupSource) {
       final open = onOpen;
       return FlClashPopupSource(
@@ -101,6 +125,7 @@ class OmniCircleButton extends StatelessWidget {
                       ).scale(surfaceOpacity),
                     )
                   : const ButtonStyle())
+              .merge(glass ? FlClashElasticPress.buttonStyle : null)
               .merge(
                 IconButton.styleFrom(
                   foregroundColor: foregroundColor ?? palette.textPrimary,

@@ -533,7 +533,7 @@ extension _HomeDrawerHome on HomeDrawerState {
                               BlendMode.srcIn,
                             ),
                           ),
-                          const SizedBox(width: 14),
+                          const SizedBox(width: OmniMenuStyle.iconGap),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -560,7 +560,7 @@ extension _HomeDrawerHome on HomeDrawerState {
                       child: Row(
                         children: [
                           _shortcutIcon(actions[i], size: 20),
-                          const SizedBox(width: 14),
+                          const SizedBox(width: OmniMenuStyle.iconGap),
                           Expanded(child: Text(actions[i].label)),
                         ],
                       ),

@@ -387,23 +387,8 @@ class _ContextThresholdSheetState extends State<_ContextThresholdSheet> {
         top: false,
         child: Padding(
           padding: EdgeInsets.only(top: 12, bottom: bottomInset),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: palette.surfacePrimary,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
-              border: Border(top: BorderSide(color: dividerColor)),
-              boxShadow: isDark
-                  ? const []
-                  : [
-                      BoxShadow(
-                        color: palette.shadowColor.withValues(alpha: 0.18),
-                        blurRadius: 24,
-                        offset: const Offset(0, -8),
-                      ),
-                    ],
-            ),
+          child: OmniGlassSheet(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
               child: Column(

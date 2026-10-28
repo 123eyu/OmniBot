@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_segmented_slider.dart';
 import 'package:ui/theme/omni_theme_palette.dart';
 
+import 'common_switch.dart';
 import 'liquid_glass.dart';
 
 /// Shared controls for isolated previews; the solid previews keep their layout.
@@ -54,24 +56,25 @@ class _LiquidGlassPreviewFrameState extends State<LiquidGlassPreviewFrame> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: SegmentedButton<LiquidGlassQuality>(
-                            segments: const [
-                              ButtonSegment(
+                          child: OmniSegmentedSlider<LiquidGlassQuality>(
+                            keyPrefix: 'preview-glass-quality',
+                            value: _quality,
+                            options: const [
+                              OmniSegmentedOption(
                                 value: LiquidGlassQuality.standard,
-                                label: Text('标准'),
+                                label: '标准',
                               ),
-                              ButtonSegment(
+                              OmniSegmentedOption(
                                 value: LiquidGlassQuality.ultra,
-                                label: Text('极致'),
+                                label: '极致',
                               ),
                             ],
-                            selected: {_quality},
-                            onSelectionChanged: (value) =>
-                                setState(() => _quality = value.single),
+                            onChanged: (value) =>
+                                setState(() => _quality = value),
                           ),
                         ),
                         const SizedBox(width: 12),
-                        Switch(
+                        CommonSwitch(
                           value: _enabled,
                           onChanged: (value) =>
                               setState(() => _enabled = value),

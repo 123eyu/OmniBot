@@ -13,6 +13,7 @@ import 'package:ui/services/models_dev_catalog_service.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/widgets/flclash/popup.dart';
+import 'package:ui/widgets/omni_glass.dart';
 
 final _discoveryModels = <String, List<ProviderModelOption>>{};
 
@@ -133,6 +134,67 @@ void main() {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(assistCoreChannel, null);
     ModelsDevCatalogService.resetForTesting();
+  });
+
+  testWidgets('model input sheet can swipe close and submit above keyboard', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 720);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: const ModelProviderSettingPage(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final addModel = find.byIcon(LucideIcons.plus).last;
+    await tester.ensureVisible(addModel);
+    await tester.pumpAndSettle();
+    await tester.tap(addModel);
+    await tester.pumpAndSettle();
+    final pane = find.byType(OmniGlassPanel);
+    await tester.dragFrom(
+      tester.getTopLeft(pane) + const Offset(100, 24),
+      const Offset(0, 500),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(OmniGlassAlertDialog), findsNothing);
+    expect(find.byType(ModelProviderSettingPage), findsOneWidget);
+
+    await tester.ensureVisible(addModel);
+    await tester.pumpAndSettle();
+    await tester.tap(addModel);
+    await tester.pumpAndSettle();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pumpAndSettle();
+    final input = find.descendant(
+      of: find.byType(OmniGlassAlertDialog),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(input, 'local-test-model');
+    final submit = find
+        .descendant(
+          of: find.byType(OmniGlassAlertDialog),
+          matching: find.byType(TextButton),
+        )
+        .last;
+    expect(tester.getRect(submit).bottom, lessThan(420));
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+    expect(find.byType(OmniGlassAlertDialog), findsNothing);
+    expect(find.byType(ModelProviderSettingPage), findsOneWidget);
+    expect(
+      await ModelProviderConfigService.getManualModelIds(
+        profileId: 'provider-1',
+      ),
+      contains('local-test-model'),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

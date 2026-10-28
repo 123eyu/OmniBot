@@ -1,5 +1,6 @@
 import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/models/remote_mcp_server.dart';
@@ -192,10 +193,11 @@ class _RemoteMcpServersPageState extends State<RemoteMcpServersPage>
   }
 
   Future<void> _showServerEditor({RemoteMcpServer? server}) async {
-    final saved = await showModalBottomSheet<RemoteMcpServer>(
+    final saved = await showOmniGlassBottomSheet<RemoteMcpServer>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.omniPalette.surfacePrimary,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -556,81 +558,87 @@ class _RemoteMcpServerEditorSheetState
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(
-        left: 22,
-        right: 22,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.server == null
-                ? (Localizations.localeOf(context).languageCode == 'en'
-                      ? 'Add MCP Service'
-                      : '添加 MCP 服务')
-                : (Localizations.localeOf(context).languageCode == 'en'
-                      ? 'Edit MCP Service'
-                      : '编辑 MCP 服务'),
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 16),
-          _InputField(
-            controller: _nameController,
-            focusNode: _nameFocusNode,
-            label: Localizations.localeOf(context).languageCode == 'en'
-                ? 'Name'
-                : '名称',
-          ),
-          const SizedBox(height: 12),
-          _InputField(
-            controller: _endpointController,
-            label: 'Endpoint URL',
-            hint: 'https://example.com/mcp',
-          ),
-          const SizedBox(height: 12),
-          _InputField(
-            controller: _tokenController,
-            label: Localizations.localeOf(context).languageCode == 'en'
-                ? 'Bearer Token (Optional)'
-                : 'Bearer Token（可选）',
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  Localizations.localeOf(context).languageCode == 'en'
-                      ? 'Enabled'
-                      : '启用',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: context.omniPalette.textPrimary,
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: OmniGlassSheet(
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.server == null
+                      ? (Localizations.localeOf(context).languageCode == 'en'
+                            ? 'Add MCP Service'
+                            : '添加 MCP 服务')
+                      : (Localizations.localeOf(context).languageCode == 'en'
+                            ? 'Edit MCP Service'
+                            : '编辑 MCP 服务'),
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              ),
-              OmniSettingsSwitch(
-                value: _enabled,
-                onToggle: (value) => setState(() => _enabled = value),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _submit,
-              child: Text(
-                Localizations.localeOf(context).languageCode == 'en'
-                    ? 'Save'
-                    : '保存',
-              ),
+                const SizedBox(height: 16),
+                _InputField(
+                  controller: _nameController,
+                  focusNode: _nameFocusNode,
+                  label: Localizations.localeOf(context).languageCode == 'en'
+                      ? 'Name'
+                      : '名称',
+                ),
+                const SizedBox(height: 12),
+                _InputField(
+                  controller: _endpointController,
+                  label: 'Endpoint URL',
+                  hint: 'https://example.com/mcp',
+                ),
+                const SizedBox(height: 12),
+                _InputField(
+                  controller: _tokenController,
+                  label: Localizations.localeOf(context).languageCode == 'en'
+                      ? 'Bearer Token (Optional)'
+                      : 'Bearer Token（可选）',
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        Localizations.localeOf(context).languageCode == 'en'
+                            ? 'Enabled'
+                            : '启用',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: context.omniPalette.textPrimary,
+                        ),
+                      ),
+                    ),
+                    OmniSettingsSwitch(
+                      value: _enabled,
+                      onToggle: (value) => setState(() => _enabled = value),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _submit,
+                    child: Text(
+                      Localizations.localeOf(context).languageCode == 'en'
+                          ? 'Save'
+                          : '保存',
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

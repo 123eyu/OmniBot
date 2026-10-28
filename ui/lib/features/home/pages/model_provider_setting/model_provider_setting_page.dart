@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:ui/widgets/flclash/popup.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -1266,10 +1267,10 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage>
     if (current == null || current.readOnly || _profiles.length <= 1) {
       return;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showOmniGlassCardSheet<bool>(
       context: context,
       builder: (context) {
-        return AlertDialog(
+        return OmniGlassAlertDialog(
           title: Text(context.l10n.modelDeleteProviderTitle),
           content: Text(context.l10n.modelDeleteProviderMsg(current.name)),
           actions: [
@@ -1337,7 +1338,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage>
     if (current == null || current.readOnly) {
       return;
     }
-    final modelId = await showDialog<String>(
+    final modelId = await showOmniGlassCardSheet<String>(
       context: context,
       useRootNavigator: false,
       builder: (_) => const _AddModelIdDialog(),
@@ -2040,16 +2041,14 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage>
             ),
           ),
           const SizedBox(width: 8),
-          IconButton(
+          OmniCircleButton(
             tooltip: _headerText('删除', 'Delete'),
             onPressed: readOnly
                 ? null
                 : () => _removeCustomHeaderEntry(entry.id),
-            icon: Icon(
-              LucideIcons.trash2,
-              size: 18,
-              color: readOnly ? _tertiaryTextColor : AppColors.alertRed,
-            ),
+            icon: LucideIcons.trash2,
+            size: 36,
+            foregroundColor: readOnly ? _tertiaryTextColor : AppColors.alertRed,
           ),
         ],
       ),
@@ -3786,12 +3785,11 @@ class _AddModelIdDialogState extends State<_AddModelIdDialog> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
+      canPop: true,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        _close();
+        if (didPop) _focusNode.unfocus();
       },
-      child: AlertDialog(
+      child: OmniGlassAlertDialog(
         title: Text(context.l10n.modelIdHint),
         content: TextField(
           controller: _controller,

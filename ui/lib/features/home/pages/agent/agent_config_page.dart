@@ -643,20 +643,22 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (_naDevelopmentAvailable)
-          SwitchListTile(
-            key: const Key('na-development-connection'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(_text('使用独立测试服务', 'Use a development server')),
-            value: _naDevelopment,
-            onChanged: _saving
-                ? null
-                : (value) => setState(() {
-                    _naDevelopment = value;
-                    _apiKeyController.clear();
-                    if (value) {
-                      _baseUrlController.text = 'http://127.0.0.1:8787';
-                    }
-                  }),
+          OmniSettingsTile(
+            tileKey: const Key('na-development-connection'),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            title: _text('使用独立测试服务', 'Use a development server'),
+            translateText: false,
+            trailing: OmniSettingsSwitch(
+              value: _naDevelopment,
+              enabled: !_saving,
+              onToggle: (value) => setState(() {
+                _naDevelopment = value;
+                _apiKeyController.clear();
+                if (value) {
+                  _baseUrlController.text = 'http://127.0.0.1:8787';
+                }
+              }),
+            ),
           ),
         if (!_naDevelopment) ...[
           Text(

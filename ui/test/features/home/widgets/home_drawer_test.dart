@@ -10,6 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/features/home/state/habitual_hand_controller.dart';
 import 'package:ui/features/home/widgets/home_drawer.dart';
+import 'package:ui/features/home/widgets/conversation_context_menu.dart';
+import 'package:ui/widgets/omni_menu.dart';
 import 'package:ui/features/home/widgets/home_search_header.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
 import 'package:ui/l10n/app_language_mode.dart';
@@ -546,7 +548,7 @@ void main() {
 
   for (final scheduledParent in [false, true]) {
     testWidgets(
-      'home ${scheduledParent ? 'scheduled parent' : 'regular row'} returns on the first transparent context frame',
+      'home ${scheduledParent ? 'scheduled parent' : 'regular row'} returns from its focused context preview',
       (tester) async {
         final now = DateTime.now().millisecondsSinceEpoch;
         nativeConversations = [selectionRow(1, '聚焦目标')];
@@ -570,45 +572,80 @@ void main() {
         }
         await pumpSelectionHome(tester);
         final source = find.byKey(const ValueKey('home-source-row-agent:1'));
+        final sourceVisibility = find.byKey(
+          const ValueKey('home-context-source-visibility-agent:1'),
+        );
+        final preview = find.byKey(
+          const ValueKey('conversation-context-preview'),
+        );
         final originalRect = tester.getRect(source);
-        expect(tester.widget<Opacity>(source).opacity, 1);
+        void expectSource({bool focused = false, bool samePosition = true}) {
+          expect(tester.widget(source), isA<GestureDetector>());
+          if (samePosition) expect(tester.getRect(source), originalRect);
+          expect(
+            tester.widget<Opacity>(sourceVisibility).opacity,
+            focused ? 0 : 1,
+          );
+          expect(preview, focused ? findsOneWidget : findsNothing);
+          expect(find.text('聚焦目标'), findsNWidgets(focused ? 2 : 1));
+        }
+
+        expectSource();
         await tester.longPress(find.text('聚焦目标'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 40));
-        expect(tester.widget<Opacity>(source).opacity, 0);
-        expect(tester.getRect(source), originalRect);
+        expectSource(focused: true);
+        final earlyPreview = tester.getRect(preview);
         await tester.pumpAndSettle();
+        expect(tester.getRect(preview).top, lessThan(earlyPreview.top));
+        // A duplicate long-press callback cannot create a second menu owner.
+        tester.widget<GestureDetector>(source).onLongPressStart!(
+          LongPressStartDetails(globalPosition: originalRect.center),
+        );
+        await tester.pump();
+        expect(find.byType(ConversationContextMenu), findsOneWidget);
         final contextRoute = ModalRoute.of(
-          tester.element(
-            find.byKey(const ValueKey('conversation-context-preview')),
-          ),
+          tester.element(find.byType(ConversationContextMenu)),
         )!;
+        expect(
+          contextRoute.transitionDuration,
+          const Duration(milliseconds: 450),
+        );
+        expect(
+          contextRoute.reverseTransitionDuration,
+          const Duration(milliseconds: 200),
+        );
+        expect(contextRoute.barrierColor, isNull);
         await tester.binding.handlePopRoute();
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 160));
-        expect(tester.widget<Opacity>(source).opacity, 0);
-        expect(
-          find.byKey(const ValueKey('conversation-context-preview')),
-          findsOneWidget,
-        );
-        // Inspect the actual final animation frame, before a settling pump can
-        // hide a gap between the overlay disappearing and the source returning.
-        await tester.pump(const Duration(milliseconds: 160));
-        expect(contextRoute.animation!.value, 0);
-        expect(tester.widget<Opacity>(source).opacity, 1);
+        expect(find.byType(ConversationContextMenu), findsOneWidget);
+        expectSource(focused: true);
+        await tester.pump(const Duration(milliseconds: 40));
+        expect(tester.widget<Opacity>(sourceVisibility).opacity, 1);
         await tester.pumpAndSettle();
-        expect(tester.widget<Opacity>(source).opacity, 1);
-        expect(tester.getRect(source), originalRect);
+        expectSource();
+
+        await tester.longPress(find.text('聚焦目标'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 40));
+        expectSource(focused: true);
+        await tester.binding.handlePopRoute();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(tester.widget<Opacity>(sourceVisibility).opacity, 1);
+        await tester.pumpAndSettle();
+        expectSource();
 
         await tester.longPress(find.text('聚焦目标'));
         await tester.pumpAndSettle();
         final selectAction = tester
-            .widget<InkWell>(
+            .widget<OmniMenuItem>(
               find.byKey(const ValueKey('home-drawer-context-select')),
             )
             .onTap!;
         final secondAction = tester
-            .widget<InkWell>(
+            .widget<OmniMenuItem>(
               find.byKey(const ValueKey('home-drawer-context-delete')),
             )
             .onTap!;
@@ -616,22 +653,95 @@ void main() {
         secondAction();
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 160));
-        expect(tester.widget<Opacity>(source).opacity, 0);
+        expectSource(focused: true);
         expect(
           find.byKey(const ValueKey('home-selection-count')),
           findsNothing,
         );
         await tester.pumpAndSettle();
-        expect(tester.widget<Opacity>(source).opacity, 1);
+        expectSource(samePosition: false);
         expect(find.text('已选择 1 项'), findsOneWidget);
-        expect(
-          find.byKey(const ValueKey('conversation-context-preview')),
-          findsNothing,
-        );
+        expect(find.byType(ConversationContextMenu), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );
   }
+
+  testWidgets('a scrolled home row returns to its captured list position', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    nativeConversations = [
+      for (var id = 1; id <= 20; id++)
+        selectionRow(id, '滚动会话 $id', updatedAt: now - id * 1000),
+    ];
+    await pumpSelectionHome(tester);
+    final source = find.byKey(const ValueKey('home-source-row-agent:12'));
+    await tester.scrollUntilVisible(
+      source,
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    final originalRect = tester.getRect(source);
+    await tester.longPress(source);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ConversationContextMenu>(find.byType(ConversationContextMenu))
+          .anchor,
+      originalRect,
+    );
+    final sourceVisibility = find.byKey(
+      const ValueKey('home-context-source-visibility-agent:12'),
+    );
+    expect(tester.widget<Opacity>(sourceVisibility).opacity, 0);
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.widget<Opacity>(sourceVisibility).opacity, 1);
+    expect(tester.getRect(source), originalRect);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reduced-motion early dismissal restores the home source', (
+    tester,
+  ) async {
+    nativeConversations = [selectionRow(1, '立即关闭')];
+    await pumpSelectionHome(tester, disableAnimations: true);
+    final source = find.byKey(const ValueKey('home-source-row-agent:1'));
+    tester.widget<GestureDetector>(source).onLongPressStart!(
+      LongPressStartDetails(globalPosition: tester.getCenter(source)),
+    );
+    Navigator.of(tester.element(source), rootNavigator: true).pop();
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<Opacity>(
+            find.byKey(
+              const ValueKey('home-context-source-visibility-agent:1'),
+            ),
+          )
+          .opacity,
+      1,
+    );
+    expect(find.byType(ConversationContextMenu), findsNothing);
+    await tester.longPress(source);
+    await tester.pumpAndSettle();
+    expect(find.byType(ConversationContextMenu), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('home date headings stay visible despite legacy folded dates', (
     tester,
@@ -656,8 +766,12 @@ void main() {
   });
 
   testWidgets(
-    'home row and long-press preview use the conversation Agent and latest message',
+    'home focused preview keeps its Agent, latest message, and running state',
     (tester) async {
+      final coordinator = ChatConversationRuntimeCoordinator.instance;
+      coordinator.resetForTest();
+      coordinator.ensureInitialized();
+      addTearDown(coordinator.resetForTest);
       nativeConversations = [
         {
           ...selectionRow(1, '检查项目配置'),
@@ -667,6 +781,11 @@ void main() {
           'contextSummary': '不可作为会话预览的内部上下文',
         },
       ];
+      coordinator.beginAcpTurn(
+        taskId: 'focused-preview-running-task',
+        conversationId: 1,
+        mode: kChatRuntimeModeAgent,
+      );
       await pumpSelectionHome(tester, initialCategory: 'all');
       final row = find.byKey(const ValueKey('home-source-row-agent:1'));
       final icon = find.descendant(
@@ -685,9 +804,11 @@ void main() {
       );
       await tester.longPress(find.text('检查项目配置'));
       await tester.pumpAndSettle();
+      expect(find.byType(ConversationContextMenu), findsOneWidget);
       final preview = find.byKey(
         const ValueKey('conversation-context-preview'),
       );
+      expect(preview, findsOneWidget);
       expect(
         find.descendant(of: preview, matching: find.text('已检查配置 没有发现冲突')),
         findsOneWidget,
@@ -703,6 +824,26 @@ void main() {
             .agentId,
         'codex-acp',
       );
+      expect(find.text('不可作为会话预览的内部上下文'), findsNothing);
+      expect(
+        find.descendant(
+          of: preview,
+          matching: find.byKey(
+            const ValueKey('home-conversation-executing-dot'),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<Opacity>(
+              find.byKey(
+                const ValueKey('home-context-source-visibility-agent:1'),
+              ),
+            )
+            .opacity,
+        0,
+      );
       await tester.tapAt(const Offset(5, 5));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
@@ -710,7 +851,7 @@ void main() {
   );
 
   testWidgets(
-    'long-press search preview retains the matched snippet and archive marker',
+    'long-press focused preview keeps the searched snippet and archive marker',
     (tester) async {
       nativeConversations = [
         {
@@ -737,16 +878,14 @@ void main() {
       );
       await tester.longPress(find.text('归档会话'));
       await tester.pumpAndSettle();
+      expect(find.byType(ConversationContextMenu), findsOneWidget);
       final preview = find.byKey(
         const ValueKey('conversation-context-preview'),
       );
+      expect(preview, findsOneWidget);
       expect(
         find.descendant(of: preview, matching: find.text('历史匹配摘要')),
         findsOneWidget,
-      );
-      expect(
-        find.descendant(of: preview, matching: find.text('最新消息内容')),
-        findsNothing,
       );
       expect(
         find.descendant(
@@ -755,6 +894,17 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(
+        tester
+            .widget<Opacity>(
+              find.byKey(
+                const ValueKey('home-context-source-visibility-agent:1'),
+              ),
+            )
+            .opacity,
+        0,
+      );
+      expect(find.text('最新消息内容'), findsNothing);
       await tester.tapAt(const Offset(5, 5));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
@@ -1175,7 +1325,13 @@ void main() {
             ),
           ),
         );
-        await tester.pump(const Duration(milliseconds: 400));
+        if (duringConfirmation) {
+          // Let the sheet finish entering before interacting with its action;
+          // the owner change still happens while confirmation is pending.
+          await tester.pumpAndSettle();
+        } else {
+          await tester.pump(const Duration(milliseconds: 400));
+        }
         nativeConversations.removeWhere((row) => row['agentId'] == 'na-cloud');
         final handled = Completer<void>();
         await tester.binding.defaultBinaryMessenger.handlePlatformMessage(

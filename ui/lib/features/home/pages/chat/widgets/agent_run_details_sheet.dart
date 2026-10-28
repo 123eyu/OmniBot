@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_glass.dart';
+import 'package:ui/widgets/omni_sheet_motion.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/chat/tool_activity_utils.dart';
 import 'package:ui/features/home/pages/chat/utils/agent_run_timeline.dart';
@@ -38,6 +41,7 @@ Future<void> showAgentRunDetailsSheet({
   final localizations = MaterialLocalizations.of(context);
   return navigator.push<void>(
     _AgentRunDetailsRoute(
+      glass: LiquidGlassScope.of(context),
       capturedThemes: InheritedTheme.capture(
         from: context,
         to: navigator.context,
@@ -60,6 +64,7 @@ Future<void> showAgentRunDetailsSheet({
 /// follows detail -> timeline -> conversation through the existing PopScope.
 class _AgentRunDetailsRoute extends ModalBottomSheetRoute<void> {
   _AgentRunDetailsRoute({
+    required this.glass,
     required super.builder,
     required super.capturedThemes,
     required super.barrierLabel,
@@ -73,6 +78,8 @@ class _AgentRunDetailsRoute extends ModalBottomSheetRoute<void> {
          modalBarrierColor: Colors.black.withValues(alpha: 0.10),
        );
 
+  final bool glass;
+
   void _dismissFromBarrier() {
     if (isCurrent) navigator?.pop();
   }
@@ -80,7 +87,7 @@ class _AgentRunDetailsRoute extends ModalBottomSheetRoute<void> {
   @override
   Widget buildModalBarrier() {
     final barrier = super.buildModalBarrier();
-    return switch (barrier) {
+    final dismissibleBarrier = switch (barrier) {
       AnimatedModalBarrier() => AnimatedModalBarrier(
         key: const ValueKey('agent-run-details-scrim'),
         color: barrier.color,
@@ -103,6 +110,9 @@ class _AgentRunDetailsRoute extends ModalBottomSheetRoute<void> {
       ),
       _ => barrier,
     };
+    return glass
+        ? wrapOmniGlassModalBarrier(dismissibleBarrier)
+        : dismissibleBarrier;
   }
 }
 
@@ -117,17 +127,20 @@ class AgentRunDetailsSheet extends StatefulWidget {
   State<AgentRunDetailsSheet> createState() => _AgentRunDetailsSheetState();
 }
 
-class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet> {
+class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet>
+    with SingleTickerProviderStateMixin {
   static const _initialExtent = 0.53;
   static const _minimumExtent = 0.32;
   static const _maximumExtent = 0.92;
   final _extentController = DraggableScrollableController();
+  late final _elastic = OmniSheetElasticController(this);
   ScrollController? _scrollController;
   String? _selectedMessageId;
   double _timelineOffset = 0;
 
   @override
   void dispose() {
+    _elastic.dispose();
     _extentController.dispose();
     super.dispose();
   }
@@ -156,15 +169,32 @@ class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet> {
   void _resize(DragUpdateDetails details) {
     if (!_extentController.isAttached) return;
     final availableHeight = MediaQuery.sizeOf(context).height;
-    _extentController.jumpTo(
-      (_extentController.size - details.delta.dy / availableHeight).clamp(
-        _minimumExtent,
-        _maximumExtent,
-      ),
+    final elasticEnabled =
+        LiquidGlassScope.of(context) &&
+        !MediaQuery.disableAnimationsOf(context);
+    final limit =
+        (availableHeight * (1 - _maximumExtent) -
+                MediaQuery.paddingOf(context).top -
+                14)
+            .clamp(0.0, 100.0);
+    var upward = -details.delta.dy;
+    if (elasticEnabled && _elastic.pull > 0) {
+      upward -= _elastic.dragBy(upward, limit: limit);
+    }
+    final before = _extentController.size;
+    final after = (before + upward / availableHeight).clamp(
+      _minimumExtent,
+      _maximumExtent,
     );
+    _extentController.jumpTo(after);
+    final excess = upward - (after - before) * availableHeight;
+    if (elasticEnabled && excess > 0) {
+      _elastic.dragBy(excess, limit: limit);
+    }
   }
 
   void _finishResize(DragEndDetails details) {
+    _elastic.release(velocity: -(details.primaryVelocity ?? 0));
     if (!_extentController.isAttached) return;
     final extent = _extentController.size;
     final velocity = details.primaryVelocity ?? 0;
@@ -200,18 +230,12 @@ class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet> {
             expand: false,
             builder: (context, scrollController) {
               _scrollController = scrollController;
-              return Material(
+              final pane = OmniGlassSheet(
                 key: ValueKey('agent-run-details-sheet-${group.taskId}'),
-                color: palette.pageBackground,
-                shape: RoundedRectangleBorder(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(20),
-                  ),
-                  side: context.isDarkTheme
-                      ? BorderSide(color: palette.borderSubtle)
-                      : BorderSide.none,
+                backgroundColor: palette.pageBackground,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
                 ),
-                clipBehavior: Clip.antiAlias,
                 child: SafeArea(
                   top: false,
                   child: Column(
@@ -221,6 +245,7 @@ class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet> {
                         behavior: HitTestBehavior.opaque,
                         onVerticalDragUpdate: _resize,
                         onVerticalDragEnd: _finishResize,
+                        onVerticalDragCancel: _elastic.release,
                         child: Column(
                           children: [
                             SizedBox(
@@ -349,6 +374,7 @@ class _AgentRunDetailsSheetState extends State<AgentRunDetailsSheet> {
                   ),
                 ),
               );
+              return OmniSheetElasticSurface(controller: _elastic, child: pane);
             },
           ),
         );

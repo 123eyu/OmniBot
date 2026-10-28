@@ -163,7 +163,7 @@ void main() {
     expect(await _paintedContent(tester), panel);
     final closed = key.currentState!.playReverse();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(milliseconds: 100));
     expect(tester.getRect(find.byKey(_panel)), panel);
     expect((await _paintedContent(tester))!.width, lessThan(panel.width));
     await tester.pumpAndSettle();
@@ -171,7 +171,7 @@ void main() {
   });
 
   testWidgets(
-    'interrupted reveal keeps its painted frame and full return clock',
+    'interrupted reveal keeps its frame and full 200ms no-source close',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(400, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -189,7 +189,7 @@ void main() {
       );
       await tester.pump();
       expect(await _paintedContent(tester), before);
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 150));
       expect(finished, isFalse);
       expect(tester.getRect(find.byKey(_panel)), panel);
       await tester.pumpAndSettle();

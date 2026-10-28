@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/omni_glass_floating_action_button.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ui/features/task/pages/execution_history/widgets/run_log_timeline_components.dart';
@@ -111,7 +112,7 @@ class _RunLogDetailPageState extends State<RunLogDetailPage> {
     try {
       final state = await OmniFlowToolClient.getRunLogState(stateId);
       if (!mounted) return;
-      await showModalBottomSheet<void>(
+      await showOmniGlassModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
         builder: (context) => _StateSheet(state: state, action: action),
@@ -129,7 +130,7 @@ class _RunLogDetailPageState extends State<RunLogDetailPage> {
     int fallbackIndex,
     RunLogTokenUsage? tokenUsage,
   ) {
-    return showModalBottomSheet<void>(
+    return showOmniGlassBottomSheet<void>(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,

@@ -1,7 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/flclash/liquid_glass.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/widgets/omni_menu.dart';
+import 'package:ui/widgets/settings_ui.dart';
 import 'package:ui/widgets/flclash/popup.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:flutter/services.dart';
@@ -100,23 +103,12 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
     return Material(
-      elevation: 18,
+      elevation: LiquidGlassScope.of(context) ? 0 : 18,
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFD8E4F4)),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x1F1930D9),
-              blurRadius: 24,
-              offset: Offset(0, 10),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
+      child: OmniGlassSheet(
+        backgroundColor: Colors.white,
+        borderRadius: BorderRadius.circular(20),
         child: Stack(
           children: [
             Column(
@@ -209,13 +201,15 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
               : const Color(0xFF617390));
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFFF8FBFF), Color(0xFFF3F7FD)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-        border: Border(bottom: BorderSide(color: Color(0xFFE3EBF8))),
+      decoration: BoxDecoration(
+        gradient: LiquidGlassScope.of(context)
+            ? null
+            : const LinearGradient(
+                colors: [Color(0xFFF8FBFF), Color(0xFFF3F7FD)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+        border: const Border(bottom: BorderSide(color: Color(0xFFE3EBF8))),
       ),
       child: Row(
         children: [
@@ -653,9 +647,9 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
     return Container(
       height: 44,
       padding: const EdgeInsets.fromLTRB(8, 5, 8, 7),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF7F9FC),
-        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(
+        color: LiquidGlassScope.of(context) ? null : const Color(0xFFF7F9FC),
+        border: const Border(top: BorderSide(color: Color(0xFFE2E8F0))),
       ),
       child: Row(
         children: [
@@ -1036,7 +1030,7 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
 
   Future<void> _showHistorySheet() async {
     final entries = widget.snapshot.history;
-    await showModalBottomSheet<void>(
+    await showOmniGlassModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (context) {
@@ -1093,7 +1087,7 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
 
   Future<void> _showBookmarksSheet() async {
     final entries = widget.snapshot.bookmarks;
-    await showModalBottomSheet<void>(
+    await showOmniGlassModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (context) {
@@ -1147,7 +1141,7 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
 
   Future<void> _showDownloadsSheet() async {
     final snapshot = widget.snapshot;
-    await showModalBottomSheet<void>(
+    await showOmniGlassModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -1185,6 +1179,10 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
     final progress = item.progress;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      color: LiquidGlassScope.of(context)
+          ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.24)
+          : null,
+      elevation: LiquidGlassScope.of(context) ? 0 : null,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -1283,7 +1281,7 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
   Future<void> _showUserscriptSheet() async {
     final snapshot = widget.snapshot;
     final pendingInstall = snapshot.userscriptSummary.pendingInstall;
-    await showModalBottomSheet<void>(
+    await showOmniGlassModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -1361,7 +1359,10 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
     final blocked = pending.blockedGrants;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: const Color(0xFFF8FAFC),
+      color: LiquidGlassScope.of(context)
+          ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.24)
+          : const Color(0xFFF8FAFC),
+      elevation: LiquidGlassScope.of(context) ? 0 : null,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -1411,9 +1412,9 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
   Widget _buildUserscriptTile(BrowserUserscriptItem script) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: Switch(
+      leading: OmniSettingsSwitch(
         value: script.enabled,
-        onChanged: (value) => _runCommand(
+        onToggle: (value) => _runCommand(
           AgentBrowserSessionService.setUserscriptEnabled(script.id, value),
         ),
       ),
@@ -1450,10 +1451,10 @@ class _ChatBrowserOverlayState extends State<ChatBrowserOverlay> {
 
   Future<void> _handleInstallUserscriptFromUrl() async {
     final controller = TextEditingController();
-    final result = await showDialog<String>(
+    final result = await showOmniGlassCardSheet<String>(
       context: context,
       builder: (context) {
-        return AlertDialog(
+        return OmniGlassAlertDialog(
           title: Text(_text('从 URL 安装脚本', 'Install script from URL')),
           content: TextField(
             controller: controller,

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui/widgets/flclash/common_switch.dart';
 import 'package:ui/widgets/flclash/liquid_glass.dart';
 import 'package:ui/widgets/flclash/navigation_dock_previews.dart';
 import 'package:ui/widgets/flclash/search_header_previews.dart';
@@ -70,7 +71,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(LiquidGlassHost.debugHeldCaptures, greaterThan(0));
-      await tester.tap(find.byType(Switch));
+      await tester.tap(find.byType(CommonSwitch));
       await tester.pumpAndSettle();
       expect(LiquidGlassHost.debugHeldCaptures, 0);
       await tester.pumpWidget(const SizedBox.shrink());

@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:ui/widgets/glass_popup.dart';
-import 'package:ui/widgets/flclash/popup.dart';
+import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ui/features/home/pages/agent/codex_remote_directory_picker.dart';
@@ -848,13 +848,8 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                   ),
                 ),
               ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                constraints: const BoxConstraints.tightFor(
-                  width: 28,
-                  height: 28,
-                ),
-                padding: EdgeInsets.zero,
+              OmniCircleButton(
+                size: 32,
                 tooltip: _isEnglish ? 'Copy path' : '复制路径',
                 onPressed: () => unawaited(
                   _copyText(
@@ -862,11 +857,8 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                     _isEnglish ? 'Workspace path copied' : '已复制工作区路径',
                   ),
                 ),
-                icon: Icon(
-                  Icons.copy_rounded,
-                  size: 15,
-                  color: palette.textTertiary,
-                ),
+                icon: Icons.copy_rounded,
+                foregroundColor: palette.textTertiary,
               ),
             ],
           ),
@@ -1124,28 +1116,16 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : FlClashPopupSource(
-                            glass: false,
-                            color: Colors.transparent,
-                            shape: const CircleBorder(),
-                            builder: (buttonContext) => IconButton(
-                              visualDensity: VisualDensity.compact,
-                              constraints: const BoxConstraints.tightFor(
-                                width: 34,
-                                height: 34,
-                              ),
-                              padding: EdgeInsets.zero,
-                              tooltip: _isEnglish
-                                  ? 'Session actions'
-                                  : 'Session 操作',
-                              onPressed: () => unawaited(
-                                _showSessionActions(session, buttonContext),
-                              ),
-                              icon: Icon(
-                                Icons.more_horiz_rounded,
-                                color: palette.textTertiary,
-                              ),
+                        : OmniCircleButton.popup(
+                            size: 36,
+                            tooltip: _isEnglish
+                                ? 'Session actions'
+                                : 'Session 操作',
+                            onOpen: (buttonContext) => unawaited(
+                              _showSessionActions(session, buttonContext),
                             ),
+                            icon: Icons.more_horiz_rounded,
+                            foregroundColor: palette.textTertiary,
                           ),
                   ],
                 ),

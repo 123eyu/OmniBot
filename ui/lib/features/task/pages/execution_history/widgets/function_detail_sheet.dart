@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/theme/theme_context.dart';
 
 class FunctionDetailSheet extends StatefulWidget {
@@ -99,10 +100,9 @@ class _FunctionDetailSheetState extends State<FunctionDetailSheet> {
         initialChildSize: 0.82,
         minChildSize: 0.48,
         maxChildSize: 0.96,
-        builder: (context, controller) => Material(
-          color: palette.pageBackground,
+        builder: (context, controller) => OmniGlassSheet(
+          backgroundColor: palette.pageBackground,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-          clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
               const SizedBox(height: 9),
