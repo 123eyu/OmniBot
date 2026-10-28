@@ -117,7 +117,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
             onSelected: (_) => this._handleContextUsageRingLongPress(),
           ),
       ],
-      if (_isHdPadLandscapeForMediaQuery(MediaQuery.of(context)))
+      if (isHdPadLandscapeViewport(MediaQuery.sizeOf(context)))
         ChatAppBarAction(
           label: english ? 'Conversation sidebar' : '会话侧栏',
           icon: LucideIcons.panelLeft,
@@ -150,7 +150,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     if (hasFocus && composerLiftWasLatched && !chatInputWasFocused) {
       // A previously lost chat focus may have left the lift latched against a
       // stable IME inset, so no new focus/metrics notification is guaranteed.
-      setState(() {});
+      _chatKeyboardLayoutChanges.value++;
     }
   }
 
@@ -204,9 +204,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     if (hasFocus) {
       _armComposerLiftIntent();
     }
-    setState(() {
-      _modeState(mode).messageListInputFocused = hasFocus;
-    });
+    _modeState(mode).messageListInputFocused = hasFocus;
+    _chatKeyboardLayoutChanges.value++;
   }
 
   double _resolveNormalSurfaceComposerInset({
@@ -822,9 +821,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       _modeState(_activeMode).inputAreaHeight = normalized;
       return;
     }
-    setState(() {
-      _modeState(_activeMode).inputAreaHeight = normalized;
-    });
+    _modeState(_activeMode).inputAreaHeight = normalized;
+    _chatKeyboardLayoutChanges.value++;
   }
 
   Widget _buildNormalSurfaceTransition({
@@ -969,9 +967,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
   Widget _buildModeMessagePage(
     ChatPageMode mode,
     AppBackgroundConfig appearanceConfig,
-    AppBackgroundVisualProfile visualProfile, {
-    double bottomOverlayInset = 0,
-  }) {
+    AppBackgroundVisualProfile visualProfile,
+  ) {
     final runtime = _runtimeForMode(mode);
     final resolvedMessages = resolveVisibleChatMessages(
       runtimeMessages: runtime?.messages,
@@ -985,15 +982,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     // Chat-only disables tool execution, not reasoning. Keep reasoning cards
     // in the ordinary conversation surface so ACP providers do not appear to
     // have lost all thought output; only tool/request cards are execution UI.
-    final visibleMessages = chatOnly
-        ? resolvedMessages
-              .where((message) {
-                final cardType = message.cardData?['type']?.toString();
-                return cardType != 'agent_tool_summary' &&
-                    cardType != 'agent_request';
-              })
-              .toList(growable: false)
-        : resolvedMessages;
     // `runtime.activeAgentTurnIds` is the single source of truth for which
     // turns are in flight. Only fall back to the page-level dispatch id when
     // there is no runtime yet to own it.
@@ -1007,18 +995,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       // means the turn has not been admitted yet; rendering a page-local
       // dispatch id here would reintroduce a second lifecycle source.
     }
-    final bottomInset = MediaQuery.maybeOf(context)?.viewInsets.bottom ?? 0.0;
-    final internalInputKeyboardInset =
-        mode == _activeMode && _isMessageListInputFocusedForMode(mode)
-        ? bottomInset + _kChatMessageBottomSafeSpacing
-        : 0.0;
-    final reservedBottomOverlayInset = math.max(
-      bottomOverlayInset,
-      internalInputKeyboardInset,
-    );
-    final liftEmptyGreeting =
-        mode == _activeMode &&
-        _emptyGreetingKeyboardLiftTracker.resolveForBuild(bottomInset);
     final homeGreetingSettings = HomeGreetingSettingsService.notifier.value;
     final activeAcpAgentId = _activeAcpAgentId;
     // Normal chat is ACP-backed at the transport/session layer, but it keeps
@@ -1028,66 +1004,82 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     // Harness changes the provider identity and capabilities, not the event
     // or card layout. Pure chat is simply an ACP run with no tool cards.
     final useAcpPresentation = true;
-    return ChatHistoryLoadingTransition(
-      isLoading: _isConversationHistoryLoading,
-      bottomInset:
-          reservedBottomOverlayInset +
-          (mode == _activeMode ? _slashCommandPanelOccupiedHeight : 0),
-      textColor:
-          !appearanceConfig.isActive &&
-              appearanceConfig.chatTextColorMode !=
-                  AppBackgroundTextColorMode.custom
-          ? context.omniPalette.textSecondary
-          : visualProfile.secondaryTextColor,
-      child: ChatMessageList(
-        messages: visibleMessages,
-        activeAgentTurnIds: activeAgentTurnIds,
-        useAcpPresentation: useAcpPresentation,
-        activeAcpAgentId: activeAcpAgentId,
-        onRetryAgentMessage: this._retryFailedAgentTurn,
-        showEmptyGreeting:
-            homeGreetingSettings.greetingEnabled &&
-            (_resolvedThreadTarget ?? widget.threadTarget)?.isNewConversation ==
-                true,
-        liftEmptyGreeting: liftEmptyGreeting,
-        emptyGreetingQuickPrompts: homeGreetingSettings.quickPrompts,
-        emptyGreetingPinnedQuickPromptIds:
-            homeGreetingSettings.pinnedQuickPromptIds,
-        onQuickPromptSelected: _applyHomeQuickPrompt,
-        emptyGreetingAgentName: mode == ChatPageMode.agent
-            ? _activeAcpAgentDisplayName
-            : null,
-        emptyGreetingAgentWorkspaceName: mode == ChatPageMode.agent
-            ? _remoteCodexWorkspaceNameForGreeting()
-            : null,
-        onEmptyGreetingAgentWorkspaceTap: mode == ChatPageMode.agent
-            ? () => unawaited(_openRemoteCodexWorkspacePicker())
-            : null,
-        scrollController: _scrollControllerForMode(mode),
-        navigator: _modeState(mode).messageListNavigator,
-        bottomOverlayInset:
-            reservedBottomOverlayInset +
-            (mode == _activeMode ? _slashCommandPanelOccupiedHeight : 0),
-        onInternalInputFocusChanged: (hasFocus) {
-          _handleMessageListInputFocusChanged(mode, hasFocus);
-        },
-        onBeforeTaskExecute: handleBeforeTaskExecute,
-        onCancelTask: _onCancelTaskFromCard,
-        onRequestAuthorize: mode == ChatPageMode.openclaw
-            ? null
-            : _requestAuthorizeForExecution,
-        onUserMessageLongPressStart: switch (mode) {
-          ChatPageMode.normal => this._handleUserMessageLongPressStart,
-          ChatPageMode.agent => this._handleUserMessageLongPressStart,
-          ChatPageMode.openclaw => null,
-        },
-        onLatestUserMessageEditTap: mode == ChatPageMode.openclaw
-            ? null
-            : this._startEditingLatestUserMessage,
-        onLoadMore: loadMoreMessages,
-        hasMore: hasMoreMessages,
-        visualProfile: visualProfile,
-        appearanceConfig: appearanceConfig,
+    return ChatKeyboardLayoutBuilder(
+      builder: (context, metrics, child) {
+        final internalInputKeyboardInset =
+            mode == _activeMode && _isMessageListInputFocusedForMode(mode)
+            ? metrics.bottomInset + _kChatMessageBottomSafeSpacing
+            : 0.0;
+        final reservedBottomOverlayInset = math.max(
+          metrics.composerReservedInset,
+          internalInputKeyboardInset,
+        );
+        final liftEmptyGreeting =
+            mode == _activeMode && metrics.liftEmptyGreeting;
+        return ChatMessageViewport(
+          bottomOverlayInset:
+              reservedBottomOverlayInset +
+              (mode == _activeMode ? _slashCommandPanelOccupiedHeight : 0),
+          liftEmptyGreeting: liftEmptyGreeting,
+          child: child!,
+        );
+      },
+      child: ChatHistoryLoadingTransition(
+        isLoading: _isConversationHistoryLoading,
+        textColor:
+            !appearanceConfig.isActive &&
+                appearanceConfig.chatTextColorMode !=
+                    AppBackgroundTextColorMode.custom
+            ? context.omniPalette.textSecondary
+            : visualProfile.secondaryTextColor,
+        child: ChatMessageList(
+          messages: resolvedMessages,
+          hideToolCards: chatOnly,
+          activeAgentTurnIds: activeAgentTurnIds,
+          useAcpPresentation: useAcpPresentation,
+          activeAcpAgentId: activeAcpAgentId,
+          onRetryAgentMessage: this._retryFailedAgentTurn,
+          showEmptyGreeting:
+              homeGreetingSettings.greetingEnabled &&
+              (_resolvedThreadTarget ?? widget.threadTarget)
+                      ?.isNewConversation ==
+                  true,
+          emptyGreetingQuickPrompts: homeGreetingSettings.quickPrompts,
+          emptyGreetingPinnedQuickPromptIds:
+              homeGreetingSettings.pinnedQuickPromptIds,
+          onQuickPromptSelected: _applyHomeQuickPrompt,
+          emptyGreetingAgentName: mode == ChatPageMode.agent
+              ? _activeAcpAgentDisplayName
+              : null,
+          emptyGreetingAgentWorkspaceName: mode == ChatPageMode.agent
+              ? _remoteCodexWorkspaceNameForGreeting()
+              : null,
+          onEmptyGreetingAgentWorkspaceTap: mode == ChatPageMode.agent
+              ? () => unawaited(_openRemoteCodexWorkspacePicker())
+              : null,
+          scrollController: _scrollControllerForMode(mode),
+          navigator: _modeState(mode).messageListNavigator,
+          onInternalInputFocusChanged: (hasFocus) {
+            _handleMessageListInputFocusChanged(mode, hasFocus);
+          },
+          onBeforeTaskExecute: handleBeforeTaskExecute,
+          onCancelTask: _onCancelTaskFromCard,
+          onRequestAuthorize: mode == ChatPageMode.openclaw
+              ? null
+              : _requestAuthorizeForExecution,
+          onUserMessageLongPressStart: switch (mode) {
+            ChatPageMode.normal => this._handleUserMessageLongPressStart,
+            ChatPageMode.agent => this._handleUserMessageLongPressStart,
+            ChatPageMode.openclaw => null,
+          },
+          onLatestUserMessageEditTap: mode == ChatPageMode.openclaw
+              ? null
+              : this._startEditingLatestUserMessage,
+          onLoadMore: loadMoreMessages,
+          hasMore: hasMoreMessages,
+          visualProfile: visualProfile,
+          appearanceConfig: appearanceConfig,
+        ),
       ),
     );
   }
@@ -1280,9 +1272,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     required AppBackgroundConfig backgroundConfig,
     required AppBackgroundVisualProfile visualProfile,
     required bool backgroundActive,
-    required double inputBottomPadding,
-    required double keyboardSpacer,
-    required double commandPanelBottomOffset,
     required Widget conversationBody,
     required bool hideWorkspaceOverlays,
     required bool showMenuButton,
@@ -1298,15 +1287,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         : const <Map<String, dynamic>>[];
     final showSlashCommandStrip =
         _isInputAreaVisible && slashCommandCards.isNotEmpty;
-    final overlayAnchor = showSlashCommandStrip
-        ? _resolveCommandAnchorGeometry(
-            layoutContext: layoutContext,
-            constraints: constraints,
-            inputBottomPadding: inputBottomPadding,
-            keyboardSpacer: keyboardSpacer,
-            inputAreaHeight: _inputAreaHeight,
-          )
-        : null;
     if (!showSlashCommandStrip &&
         !_showModelMentionPanel &&
         !_openClawPanelExpanded &&
@@ -1332,11 +1312,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     final bottomRegionBackgroundColor = !backgroundActive && context.isDarkTheme
         ? context.omniPalette.pageBackground
         : Colors.transparent;
-    final composerBottomOffset = inputBottomPadding + keyboardSpacer;
-    final composerReservedInset = _resolveNormalSurfaceComposerInset(
-      inputBottomPadding: inputBottomPadding,
-      keyboardSpacer: keyboardSpacer,
-    );
     return Stack(
       clipBehavior: Clip.hardEdge,
       children: [
@@ -1406,8 +1381,13 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               viewportWidth: constraints.maxWidth,
               child: ColoredBox(
                 color: bottomRegionBackgroundColor,
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: composerBottomOffset),
+                child: ChatKeyboardLayoutBuilder(
+                  builder: (context, metrics, child) => Padding(
+                    padding: EdgeInsets.only(
+                      bottom: metrics.composerBottomOffset,
+                    ),
+                    child: child,
+                  ),
                   child: Container(
                     key: _inputAreaKey,
                     child: ChatInputWrapper(
@@ -1516,37 +1496,49 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
             ),
           ),
         if (showSlashCommandStrip)
-          Positioned(
-            left: overlayAnchor?.rect.left ?? 24,
-            width:
-                overlayAnchor?.rect.width ??
-                math.max(0.0, constraints.maxWidth - 48),
-            bottom: overlayAnchor?.bottom ?? 0,
-            child: _buildNormalSurfaceTransition(
-              viewportWidth: constraints.maxWidth,
-              child: Container(
-                key: _slashCommandStripKey,
-                child: KeyedSubtree(
-                  key: ValueKey<String>(
-                    'slash-command-${_resolveSlashCommandPanelRoute(_messageController.text).name}',
-                  ),
-                  child: ChatCommandActivityStrip(
-                    commands: slashCommandCards,
-                    anchorRect: overlayAnchor?.rect,
-                    onOccupiedHeightChanged:
-                        _scheduleSlashCommandOccupiedHeightSync,
-                    suppressSurfaceShadow: true,
-                    onSelectCommand: _handleSlashCommandCardSelected,
+          ChatKeyboardLayoutBuilder(
+            builder: (context, metrics, _) {
+              final overlayAnchor = _resolveCommandAnchorGeometry(
+                layoutContext: layoutContext,
+                constraints: constraints,
+                inputBottomPadding: metrics.inputBottomPadding,
+                keyboardSpacer: metrics.keyboardSpacer,
+                inputAreaHeight: _inputAreaHeight,
+              );
+              return Positioned(
+                left: overlayAnchor.rect.left,
+                width: overlayAnchor.rect.width,
+                bottom: overlayAnchor.bottom,
+                child: _buildNormalSurfaceTransition(
+                  viewportWidth: constraints.maxWidth,
+                  child: Container(
+                    key: _slashCommandStripKey,
+                    child: KeyedSubtree(
+                      key: ValueKey<String>(
+                        'slash-command-${_resolveSlashCommandPanelRoute(_messageController.text).name}',
+                      ),
+                      child: ChatCommandActivityStrip(
+                        commands: slashCommandCards,
+                        anchorRect: overlayAnchor.rect,
+                        onOccupiedHeightChanged:
+                            _scheduleSlashCommandOccupiedHeightSync,
+                        suppressSurfaceShadow: true,
+                        onSelectCommand: _handleSlashCommandCardSelected,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         if (_showModelMentionPanel || _openClawPanelExpanded)
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: commandPanelBottomOffset,
+          ChatKeyboardLayoutBuilder(
+            builder: (context, metrics, child) => Positioned(
+              left: 24,
+              right: 24,
+              bottom: metrics.commandPanelBottomOffset,
+              child: child!,
+            ),
             child: _buildNormalSurfaceTransition(
               viewportWidth: constraints.maxWidth,
               child: _buildSlashCommandPanel(),
@@ -1569,8 +1561,10 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         Positioned.fill(
           child: _buildNormalSurfaceTransition(
             viewportWidth: constraints.maxWidth,
-            child: _buildMessageAnchorBarOverlay(
-              composerReservedInset: composerReservedInset,
+            child: ChatKeyboardLayoutBuilder(
+              builder: (context, metrics, _) => _buildMessageAnchorBarOverlay(
+                composerReservedInset: metrics.composerReservedInset,
+              ),
             ),
           ),
         ),
@@ -1677,9 +1671,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     required AppBackgroundConfig backgroundConfig,
     required AppBackgroundVisualProfile visualProfile,
     required bool backgroundActive,
-    required double inputBottomPadding,
-    required double keyboardSpacer,
-    required double commandPanelBottomOffset,
   }) {
     const shellPadding = EdgeInsets.fromLTRB(8, 10, 8, 10);
     return LayoutBuilder(
@@ -1814,18 +1805,10 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                         backgroundConfig: backgroundConfig,
                         visualProfile: visualProfile,
                         backgroundActive: backgroundActive,
-                        inputBottomPadding: inputBottomPadding,
-                        keyboardSpacer: keyboardSpacer,
-                        commandPanelBottomOffset: commandPanelBottomOffset,
                         conversationBody: _buildModeMessagePage(
                           _primaryChatMessagePageMode,
                           backgroundConfig,
                           visualProfile,
-                          bottomOverlayInset:
-                              _resolveNormalSurfaceComposerInset(
-                                inputBottomPadding: inputBottomPadding,
-                                keyboardSpacer: keyboardSpacer,
-                              ),
                         ),
                         hideWorkspaceOverlays: false,
                         showMenuButton: true,
@@ -1921,11 +1904,9 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final isHdPadLandscape = _isHdPadLandscapeForMediaQuery(mediaQuery);
+  ChatKeyboardLayoutMetrics _resolveKeyboardLayout(MediaQueryData mediaQuery) {
     final bottomInset = mediaQuery.viewInsets.bottom;
+    _emptyGreetingKeyboardLiftTracker.update(bottomInset);
     final viewPaddingBottom = mediaQuery.viewPadding.bottom;
     final activeMessageListInputFocused = _isMessageListInputFocusedForMode(
       _activeMode,
@@ -1951,148 +1932,162 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         (_popupMenuBottomOffset() + inputBottomPadding + keyboardSpacer + 6)
             .toDouble();
 
-    final chatPage = ValueListenableBuilder<AppBackgroundConfig>(
-      valueListenable: AppBackgroundService.notifier,
-      builder: (context, backgroundConfig, _) {
-        final backgroundActive = backgroundConfig.isActive;
-        return ValueListenableBuilder<AppBackgroundVisualProfile>(
-          valueListenable: AppBackgroundService.visualProfileNotifier,
-          builder: (context, visualProfile, _) {
-            final handlesBackLocally =
-                _isFirstUseTourActive ||
-                _conversationModelSelectorHandle != null ||
-                (isHdPadLandscape &&
-                    !_hdPadRightPaneCollapsed &&
-                    _workspaceBrowserCanGoUp);
-            return PopScope(
-              // Predictive back requires the framework to declare whether it can
-              // pop before the gesture starts. At the root, let Android own the
-              // gesture so it can animate the app window back to the launcher.
-              canPop: !handlesBackLocally,
-              onPopInvokedWithResult: (didPop, _) {
-                if (didPop) return;
-                if (_isFirstUseTourActive) {
-                  _handleFirstUseTourBack();
-                  return;
-                }
-                // 模型选择器是 OverlayEntry，不在 Navigator 栈里，由页面先关闭。
-                if (_conversationModelSelectorHandle != null) {
-                  unawaited(_conversationModelSelectorHandle?.dismiss());
-                  return;
-                }
-                if (isHdPadLandscape &&
-                    !_hdPadRightPaneCollapsed &&
-                    _workspaceBrowserCanGoUp) {
-                  if (_shouldUseRemoteCodexWorkspace()) {
-                    _hdPadRemoteWorkspaceBrowserKey.currentState
-                        ?.openParentDirectory();
-                  } else {
-                    _hdPadWorkspaceBrowserKey.currentState
-                        ?.openParentDirectory();
+    return (
+      bottomInset: bottomInset,
+      composerBottomOffset: inputBottomPadding + keyboardSpacer,
+      composerReservedInset: _resolveNormalSurfaceComposerInset(
+        inputBottomPadding: inputBottomPadding,
+        keyboardSpacer: keyboardSpacer,
+      ),
+      commandPanelBottomOffset: commandPanelBottomOffset,
+      inputBottomPadding: inputBottomPadding,
+      keyboardSpacer: keyboardSpacer,
+      liftEmptyGreeting: _emptyGreetingKeyboardLiftTracker.shouldLift,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isHdPadLandscape = isHdPadLandscapeViewport(
+      MediaQuery.sizeOf(context),
+    );
+    final chatPage = ChatKeyboardLayout(
+      changes: _chatKeyboardLayoutChanges,
+      resolve: _resolveKeyboardLayout,
+      child: ValueListenableBuilder<AppBackgroundConfig>(
+        valueListenable: AppBackgroundService.notifier,
+        builder: (context, backgroundConfig, _) {
+          final backgroundActive = backgroundConfig.isActive;
+          return ValueListenableBuilder<AppBackgroundVisualProfile>(
+            valueListenable: AppBackgroundService.visualProfileNotifier,
+            builder: (context, visualProfile, _) {
+              final handlesBackLocally =
+                  _isFirstUseTourActive ||
+                  _conversationModelSelectorHandle != null ||
+                  (isHdPadLandscape &&
+                      !_hdPadRightPaneCollapsed &&
+                      _workspaceBrowserCanGoUp);
+              return PopScope(
+                // Predictive back requires the framework to declare whether it can
+                // pop before the gesture starts. At the root, let Android own the
+                // gesture so it can animate the app window back to the launcher.
+                canPop: !handlesBackLocally,
+                onPopInvokedWithResult: (didPop, _) {
+                  if (didPop) return;
+                  if (_isFirstUseTourActive) {
+                    _handleFirstUseTourBack();
+                    return;
                   }
-                  return;
-                }
-                if (_isWorkspaceSurface && _workspaceBrowserCanGoUp) {
-                  return;
-                }
-              },
-              child: Scaffold(
-                backgroundColor: Colors.transparent,
-                resizeToAvoidBottomInset: false,
-                // Conversation history lives on the home route. Keep the
-                // system edge free for predictive back; the workspace remains
-                // the second page of the horizontal PageView below.
-                drawerEnableOpenDragGesture: false,
-                body: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Positioned.fill(
-                      child: backgroundActive
-                          ? AppBackgroundLayer(
-                              config: backgroundConfig,
-                              fallbackColor:
-                                  context.omniPalette.previewFallback,
-                              layerKey: const ValueKey('chat-page-background'),
-                            )
-                          : ColoredBox(
-                              color: context.omniPalette.pageBackground,
-                            ),
-                    ),
-                    SafeArea(
-                      child: ClipRect(
-                        child: Listener(
-                          behavior: HitTestBehavior.translucent,
-                          onPointerDown: (event) {
-                            unawaited(_handleOutsideTap(event.position));
-                          },
-                          child: isHdPadLandscape
-                              ? _buildHdPadLandscapeShell(
-                                  backgroundConfig: backgroundConfig,
-                                  visualProfile: visualProfile,
-                                  backgroundActive: backgroundActive,
-                                  inputBottomPadding: inputBottomPadding,
-                                  keyboardSpacer: keyboardSpacer,
-                                  commandPanelBottomOffset:
-                                      commandPanelBottomOffset,
-                                )
-                              : LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    return _buildChatPaneShell(
-                                      layoutContext: context,
-                                      constraints: constraints,
-                                      backgroundConfig: backgroundConfig,
-                                      visualProfile: visualProfile,
-                                      backgroundActive: backgroundActive,
-                                      inputBottomPadding: inputBottomPadding,
-                                      keyboardSpacer: keyboardSpacer,
-                                      commandPanelBottomOffset:
-                                          commandPanelBottomOffset,
-                                      conversationBody: ClipRect(
-                                        child: NotificationListener<ScrollNotification>(
-                                          onNotification:
-                                              _handleModePageScrollNotification,
-                                          child: PageView(
-                                            controller: _modePageController,
-                                            onPageChanged:
-                                                _handleModePageChanged,
-                                            children: [
-                                              _buildModeMessagePage(
-                                                _primaryChatMessagePageMode,
-                                                backgroundConfig,
-                                                visualProfile,
-                                                bottomOverlayInset:
-                                                    _resolveNormalSurfaceComposerInset(
-                                                      inputBottomPadding:
-                                                          inputBottomPadding,
-                                                      keyboardSpacer:
-                                                          keyboardSpacer,
-                                                    ),
-                                              ),
-                                              _buildWorkspaceSurfacePage(),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      hideWorkspaceOverlays:
-                                          _isWorkspaceSurface,
-                                      showMenuButton: true,
-                                      showSurfaceSwitcher: true,
-                                    );
-                                  },
+                  // 模型选择器是 OverlayEntry，不在 Navigator 栈里，由页面先关闭。
+                  if (_conversationModelSelectorHandle != null) {
+                    unawaited(_conversationModelSelectorHandle?.dismiss());
+                    return;
+                  }
+                  if (isHdPadLandscape &&
+                      !_hdPadRightPaneCollapsed &&
+                      _workspaceBrowserCanGoUp) {
+                    if (_shouldUseRemoteCodexWorkspace()) {
+                      _hdPadRemoteWorkspaceBrowserKey.currentState
+                          ?.openParentDirectory();
+                    } else {
+                      _hdPadWorkspaceBrowserKey.currentState
+                          ?.openParentDirectory();
+                    }
+                    return;
+                  }
+                  if (_isWorkspaceSurface && _workspaceBrowserCanGoUp) {
+                    return;
+                  }
+                },
+                child: Scaffold(
+                  backgroundColor: Colors.transparent,
+                  resizeToAvoidBottomInset: false,
+                  // Conversation history lives on the home route. Keep the
+                  // system edge free for predictive back; the workspace remains
+                  // the second page of the horizontal PageView below.
+                  drawerEnableOpenDragGesture: false,
+                  body: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Positioned.fill(
+                        child: backgroundActive
+                            ? AppBackgroundLayer(
+                                config: backgroundConfig,
+                                fallbackColor:
+                                    context.omniPalette.previewFallback,
+                                layerKey: const ValueKey(
+                                  'chat-page-background',
                                 ),
+                              )
+                            : ColoredBox(
+                                color: context.omniPalette.pageBackground,
+                              ),
+                      ),
+                      SafeArea(
+                        child: ClipRect(
+                          child: Listener(
+                            behavior: HitTestBehavior.translucent,
+                            onPointerDown: (event) {
+                              unawaited(_handleOutsideTap(event.position));
+                            },
+                            child: isHdPadLandscape
+                                ? _buildHdPadLandscapeShell(
+                                    backgroundConfig: backgroundConfig,
+                                    visualProfile: visualProfile,
+                                    backgroundActive: backgroundActive,
+                                  )
+                                : LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      return _buildChatPaneShell(
+                                        layoutContext: context,
+                                        constraints: constraints,
+                                        backgroundConfig: backgroundConfig,
+                                        visualProfile: visualProfile,
+                                        backgroundActive: backgroundActive,
+                                        conversationBody: ClipRect(
+                                          child:
+                                              NotificationListener<
+                                                ScrollNotification
+                                              >(
+                                                onNotification:
+                                                    _handleModePageScrollNotification,
+                                                child: PageView(
+                                                  controller:
+                                                      _modePageController,
+                                                  onPageChanged:
+                                                      _handleModePageChanged,
+                                                  children: [
+                                                    _buildModeMessagePage(
+                                                      _primaryChatMessagePageMode,
+                                                      backgroundConfig,
+                                                      visualProfile,
+                                                    ),
+                                                    _buildWorkspaceSurfacePage(),
+                                                  ],
+                                                ),
+                                              ),
+                                        ),
+                                        hideWorkspaceOverlays:
+                                            _isWorkspaceSurface,
+                                        showMenuButton: true,
+                                        showSurfaceSwitcher: true,
+                                      );
+                                    },
+                                  ),
+                          ),
                         ),
                       ),
-                    ),
-                    ChatMessageAnchorSystemBarsScrim(
-                      expanded: _messageAnchorExpanded,
-                    ),
-                  ],
+                      ChatMessageAnchorSystemBarsScrim(
+                        expanded: _messageAnchorExpanded,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
     );
     if (!_isFirstUseTourActive) {
       return chatPage;

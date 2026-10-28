@@ -118,6 +118,8 @@ class _StartupAccountPromptState extends State<StartupAccountPrompt> {
       final dialogResult = await showOmniGlassCardSheet<bool>(
         context: navigatorContext,
         barrierDismissible: true,
+        fitsContent: true,
+        showDragHandle: false,
         builder: (dialogContext) => _StartupAccountCard(
           onAuthenticated: () => Navigator.of(dialogContext).pop(true),
         ),
@@ -153,26 +155,25 @@ class _StartupAccountCard extends StatelessWidget {
       key: const ValueKey('startup-account-card'),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final desiredHeaderHeight = (constraints.maxWidth / 2.2).clamp(
-            132.0,
-            190.0,
-          );
           final sloganFontSize = (constraints.maxWidth * 0.05).clamp(
             18.0,
             22.0,
           );
-          final cardHeight = (desiredHeaderHeight + 372).clamp(
-            0.0,
-            constraints.maxHeight,
+          // The sheet owns the insets. Its available height also contracts
+          // above the keyboard, leaving more room for the active form.
+          final headerHeight = (constraints.maxHeight * 0.18).clamp(
+            72.0,
+            112.0,
           );
-          final headerHeight = desiredHeaderHeight.clamp(
-            0.0,
-            cardHeight * 0.36,
-          );
-          return SizedBox(
-            key: const ValueKey('startup-account-card-content'),
-            height: cardHeight,
+          return AnimatedSize(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.bottomCenter,
             child: Column(
+              key: const ValueKey('startup-account-card-content'),
+              mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
                   key: const ValueKey('startup-account-card-header'),
@@ -205,14 +206,31 @@ class _StartupAccountCard extends StatelessWidget {
                         ),
                       ),
                       Positioned(
+                        top: 12,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Container(
+                            width: 32,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: palette.textSecondary.withValues(
+                                alpha: 0.3,
+                              ),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
                         left: 20,
-                        right: 68,
-                        bottom: 18,
+                        right: 64,
+                        bottom: 16,
                         child: _StartupAccountSlogan(fontSize: sloganFontSize),
                       ),
                       Positioned(
-                        top: 10,
-                        right: 10,
+                        top: 4,
+                        right: 8,
                         child: IconButton(
                           key: const ValueKey('startup-account-close'),
                           tooltip:
@@ -222,22 +240,32 @@ class _StartupAccountCard extends StatelessWidget {
                               : 'Close and don\'t remind me again',
                           onPressed: () => Navigator.of(context).pop(false),
                           style: IconButton.styleFrom(
-                            backgroundColor: palette.surfacePrimary.withValues(
-                              alpha: 0.82,
-                            ),
                             foregroundColor: palette.textPrimary,
-                            minimumSize: const Size.square(44),
+                            fixedSize: const Size.square(48),
+                            padding: const EdgeInsets.all(8),
+                            shape: const CircleBorder(),
                           ),
-                          icon: const Icon(LucideIcons.x, size: 20),
+                          icon: Ink(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: palette.surfacePrimary.withValues(
+                                alpha: 0.78,
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(LucideIcons.x, size: 18),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                Expanded(
+                Flexible(
                   child: AccountPage.authOnly(
                     key: const ValueKey('startup-account-auth-form'),
                     showAuthHeading: false,
+                    fitAuthContent: true,
                     onAuthenticated: onAuthenticated,
                   ),
                 ),

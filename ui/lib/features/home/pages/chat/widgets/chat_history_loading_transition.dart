@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ui/theme/theme_context.dart';
 
 import '../../command_overlay/widgets/cards/bot_status.dart';
+import 'chat_message_viewport.dart';
 
 /// Presents history hydration without treating an empty snapshot as a new chat.
 /// The caller owns loading; this widget only coordinates its visual handoff.
@@ -111,26 +112,33 @@ class _ChatHistoryLoadingTransitionState
         letterSpacing: -0.5,
       ),
     );
-    final loading = IgnorePointer(
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: widget.bottomInset.clamp(0.0, double.infinity),
-        ),
-        child: Align(
-          alignment: const Alignment(0, -0.18),
-          child: Semantics(
-            label: loadingLabel,
-            liveRegion: true,
-            excludeSemantics: true,
-            child: RepaintBoundary(
-              child: TickerMode(
-                enabled: !_reduceMotion,
-                child: _reduceMotion
-                    ? label
-                    : ShimmeringStatusText(baseColor: color, child: label),
-              ),
-            ),
+    final loadingContent = Align(
+      alignment: const Alignment(0, -0.18),
+      child: Semantics(
+        label: loadingLabel,
+        liveRegion: true,
+        excludeSemantics: true,
+        child: RepaintBoundary(
+          child: TickerMode(
+            enabled: !_reduceMotion,
+            child: _reduceMotion
+                ? label
+                : ShimmeringStatusText(baseColor: color, child: label),
           ),
+        ),
+      ),
+    );
+    final loading = IgnorePointer(
+      child: Builder(
+        builder: (context) => Padding(
+          padding: EdgeInsets.only(
+            bottom:
+                (ChatMessageViewport.maybeOf(context)?.bottomOverlayInset ??
+                        widget.bottomInset)
+                    .clamp(0.0, double.infinity)
+                    .toDouble(),
+          ),
+          child: loadingContent,
         ),
       ),
     );

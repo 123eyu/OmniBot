@@ -40,7 +40,7 @@ class HomeSearchHeader extends StatelessWidget {
     return FlClashSearchHeader(
       title: Row(
         children: [
-          Flexible(child: agentSwitcher),
+          Expanded(child: agentSwitcher),
           if (!searching) updateIndicator,
         ],
       ),

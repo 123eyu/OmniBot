@@ -184,6 +184,187 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('captured fallback invalidates every drawing input', (
+    tester,
+  ) async {
+    final firstFrame = Completer<void>();
+    LiquidGlass.debugResetShaderLoading(
+      waitForFirstFrame: () => firstFrame.future,
+    );
+    final sceneKey = GlobalKey();
+    Key paneKey = UniqueKey();
+    var tint = const Color(0x30404040);
+    var saturation = 1.0;
+    var brightness = 1.0;
+    var rimStrength = 0.2;
+    var hairline = 0.0;
+    var haze = 0.0;
+    var hazeBlur = 0.0;
+    var dispersion = 0.0;
+    var corners = BorderRadius.circular(20);
+    var size = const Size(160, 85);
+    var position = const Offset(35, 38);
+    LiquidGlassRim? rim;
+    CustomClipper<Path>? clipper;
+    var quality = LiquidGlassQuality.ultra;
+
+    Future<Uint8List> pixels() async {
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: MediaQuery(
+            data: const MediaQueryData(),
+            child: Center(
+              child: SizedBox(
+                width: 240,
+                height: 160,
+                child: RepaintBoundary(
+                  key: sceneKey,
+                  child: LiquidGlassScope(
+                    enabled: true,
+                    quality: quality,
+                    child: LiquidGlassHost(
+                      enabled: true,
+                      child: Stack(
+                        children: [
+                          const Positioned.fill(
+                            child: RepaintBoundary(
+                              child: Stack(
+                                children: [
+                                  Positioned.fill(
+                                    child: ColoredBox(color: Color(0xFFE9E2D0)),
+                                  ),
+                                  Positioned(
+                                    left: 40,
+                                    top: 0,
+                                    width: 45,
+                                    height: 160,
+                                    child: ColoredBox(color: Color(0xFF2070D0)),
+                                  ),
+                                  Positioned(
+                                    left: 0,
+                                    top: 75,
+                                    width: 240,
+                                    height: 15,
+                                    child: ColoredBox(color: Color(0xFFE04020)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: position.dx,
+                            top: position.dy,
+                            child: RepaintBoundary(
+                              key: paneKey,
+                              child: LiquidGlass(
+                                style: LiquidGlassStyle(
+                                  tint: tint,
+                                  blur: 3,
+                                  saturation: saturation,
+                                  brightness: brightness,
+                                  rim: rimStrength,
+                                  hairline: hairline,
+                                  haze: haze,
+                                  hazeBlur: hazeBlur,
+                                  dispersion: dispersion,
+                                ),
+                                borderRadius: corners,
+                                clipper: clipper,
+                                rim: rim,
+                                glow: LiquidGlassGlow.none,
+                                child: SizedBox.fromSize(size: size),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final boundary =
+          sceneKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final image = boundary.toImageSync();
+      final data = (await tester.runAsync(() => image.toByteData()))!;
+      image.dispose();
+      return data.buffer.asUint8List();
+    }
+
+    var previous = await pixels();
+    final mutations = <(String, VoidCallback)>[
+      ('tint', () => tint = const Color(0x90602010)),
+      ('saturation', () => saturation = 0),
+      ('brightness', () => brightness = 0.6),
+      (
+        'rim and hairline',
+        () {
+          rimStrength = 0.8;
+          hairline = 1;
+        },
+      ),
+      (
+        'rim shine',
+        () => rim = const LiquidGlassRim(
+          side: 0.5,
+          corner: 0.2,
+          flat: 0.1,
+          shine: 1,
+        ),
+      ),
+      (
+        'corners',
+        () => corners = const BorderRadius.vertical(top: Radius.circular(35)),
+      ),
+      ('size', () => size = const Size(175, 95)),
+      ('position and sampling', () => position = const Offset(20, 30)),
+      (
+        'haze',
+        () {
+          haze = 0.6;
+          hazeBlur = 12;
+          dispersion = 4;
+        },
+      ),
+      ('effective standard style', () => quality = LiquidGlassQuality.standard),
+      (
+        'outline',
+        () => clipper = const ShapeBorderClipper(
+          shape: BeveledRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(25)),
+          ),
+        ),
+      ),
+    ];
+    for (final (name, mutate) in mutations) {
+      final atlas = LiquidGlassHost.debugLastCapture!.panes.single.atlas;
+      mutate();
+      final updated = await pixels();
+      expect(updated, isNot(orderedEquals(previous)), reason: name);
+      if (name == 'tint' || name == 'saturation' || name == 'brightness') {
+        expect(
+          LiquidGlassHost.debugLastCapture!.panes.single.atlas,
+          same(atlas),
+          reason: '$name must update the pane while reusing its backdrop',
+        );
+      }
+      // Recreating the pane bypasses its picture cache. Its pixels must match
+      // the retained pane after the same input change.
+      paneKey = UniqueKey();
+      final fresh = await pixels();
+      expect(updated, orderedEquals(fresh), reason: name);
+      previous = fresh;
+    }
+    expect(LiquidGlass.debugShaderReady, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(LiquidGlassHost.debugHeldCaptures, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'same-level panes share one capture atlas and reuse static bands',
     (tester) async {

@@ -137,9 +137,9 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final mediaQuery = MediaQuery.maybeOf(context);
-    if (mediaQuery != null) {
-      final isHdPadLandscape = _isHdPadLandscapeForMediaQuery(mediaQuery);
+    final viewportSize = MediaQuery.maybeSizeOf(context);
+    if (viewportSize != null) {
+      final isHdPadLandscape = isHdPadLandscapeViewport(viewportSize);
       if (_wasHdPadLandscape == true && !isHdPadLandscape) {
         _embeddedDrawerKey.currentState?.unfocusSearch();
       }
@@ -167,21 +167,6 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
         '${oldWidget.threadTarget} -> ${widget.threadTarget}',
       );
       unawaited(_reloadConversationForCurrentTarget());
-    }
-  }
-
-  @override
-  void didChangeMetrics() {
-    super.didChangeMetrics();
-    _syncEmptyGreetingKeyboardLiftFromView();
-  }
-
-  void _syncEmptyGreetingKeyboardLiftFromView() {
-    if (!mounted) return;
-    final view = View.of(context);
-    final bottomInset = view.viewInsets.bottom / view.devicePixelRatio;
-    if (_emptyGreetingKeyboardLiftTracker.update(bottomInset)) {
-      setState(() {});
     }
   }
 
@@ -866,6 +851,7 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     _agentMessageScrollController.dispose();
     _modePageController.dispose();
     _inputFocusNode.dispose();
+    _chatKeyboardLayoutChanges.dispose();
     _openClawBaseUrlController.dispose();
     _openClawTokenController.dispose();
     _openClawUserIdController.dispose();
@@ -1081,7 +1067,7 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     if (_inputFocusNode.hasFocus) {
       _armComposerLiftIntent();
     }
-    setState(() {});
+    _chatKeyboardLayoutChanges.value++;
   }
 
   void _handleHomeGreetingSettingsChanged() {

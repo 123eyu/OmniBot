@@ -23,6 +23,7 @@ Future<T?> showOmniGlassCardSheet<T>({
   AnimationStyle? animationStyle,
   bool forceDark = false,
   bool fitsContent = false,
+  bool showDragHandle = true,
 }) => showOmniGlassBottomSheet<T>(
   context: context,
   backgroundColor: Colors.transparent,
@@ -47,6 +48,7 @@ Future<T?> showOmniGlassCardSheet<T>({
     dismissible: barrierDismissible,
     forceDark: forceDark,
     fitsContent: fitsContent,
+    showDragHandle: showDragHandle,
     child: Builder(builder: builder),
   ),
 );
@@ -66,12 +68,14 @@ class _OmniGlassCardSheet extends StatelessWidget {
     required this.dismissible,
     required this.forceDark,
     required this.fitsContent,
+    required this.showDragHandle,
     required this.child,
   });
 
   final bool dismissible;
   final bool forceDark;
   final bool fitsContent;
+  final bool showDragHandle;
   final Widget child;
 
   @override
@@ -114,28 +118,31 @@ class _OmniGlassCardSheet extends StatelessWidget {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Semantics(
-                                label: MaterialLocalizations.of(context)
-                                    .modalBarrierDismissLabel,
-                                button: dismissible,
-                                onTap: dismissible
-                                    ? () => Navigator.of(context).maybePop()
-                                    : null,
-                                child: SizedBox(
-                                  height: kMinInteractiveDimension,
-                                  width: double.infinity,
-                                  child: Center(
-                                    child: Container(
-                                      width: 32,
-                                      height: 4,
-                                      decoration: BoxDecoration(
-                                        color: palette.borderStrong,
-                                        borderRadius: BorderRadius.circular(99),
+                              if (showDragHandle)
+                                Semantics(
+                                  label: MaterialLocalizations.of(context)
+                                      .modalBarrierDismissLabel,
+                                  button: dismissible,
+                                  onTap: dismissible
+                                      ? () => Navigator.of(context).maybePop()
+                                      : null,
+                                  child: SizedBox(
+                                    height: kMinInteractiveDimension,
+                                    width: double.infinity,
+                                    child: Center(
+                                      child: Container(
+                                        width: 32,
+                                        height: 4,
+                                        decoration: BoxDecoration(
+                                          color: palette.borderStrong,
+                                          borderRadius: BorderRadius.circular(
+                                            99,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
                               Flexible(child: child),
                             ],
                           ),

@@ -1909,8 +1909,11 @@ class AssistsCoreManager(private val context: Context) {
     fun getSceneVoiceConfig(call: MethodCall, result: MethodChannel.Result) {
         workJob.launch {
             try {
+                val config = withContext(Dispatchers.IO) {
+                    SceneVoiceConfigStore.getConfig().toMap()
+                }
                 withContext(Dispatchers.Main) {
-                    result.success(SceneVoiceConfigStore.getConfig().toMap())
+                    result.success(config)
                 }
             } catch (e: Exception) {
                 OmniLog.e(TAG, "getSceneVoiceConfig error: ${e.message}")

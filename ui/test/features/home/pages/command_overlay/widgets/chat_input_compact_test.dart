@@ -15,6 +15,87 @@ void main() {
   );
   final send = find.byKey(const ValueKey('chat-input-send-or-stop-button'));
 
+  for (final independentSendButton in [true, false]) {
+    testWidgets(
+      'first tap requests IME before expansion and keeps one input connection '
+      '(independentSend=$independentSendButton)',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 858);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetViewInsets);
+        final fixture = _ComposerFixture(tester);
+        var sends = 0;
+        await fixture.pump(
+          independentSendButton: independentSendButton,
+          onSend: () => sends++,
+        );
+        const draft = TextEditingValue(
+          text: 'Unsent draft',
+          selection: TextSelection.collapsed(offset: 6),
+          composing: TextRange(start: 0, end: 6),
+        );
+        fixture.controller.value = draft;
+        await tester.pump();
+        final editor = tester.state<EditableTextState>(
+          find.byType(EditableText),
+        );
+        tester.testTextInput.log.clear();
+
+        // Exercise the pointer path, not WidgetTester.showKeyboard(), which
+        // requests focus directly and would miss a delayed first tap.
+        // The idle field deliberately routes this point through its enclosing
+        // tap target so the first tap retains the restored draft selection.
+        await tester.tapAt(tester.getCenter(find.byType(TextField)));
+        await tester.pump();
+        expect(fixture.focus.hasFocus, isTrue);
+        expect(tester.testTextInput.isVisible, isTrue);
+        expect(tester.getSize(shell).height, 50);
+        expect(fixture.controller.value, draft);
+        expect(
+          tester.testTextInput.setClientArgs!['inputAction'],
+          independentSendButton
+              ? 'TextInputAction.newline'
+              : 'TextInputAction.send',
+        );
+
+        const composing = TextEditingValue(
+          text: 'Unsent draft input',
+          selection: TextSelection.collapsed(offset: 18),
+          composing: TextRange(start: 13, end: 18),
+        );
+        tester.testTextInput.updateEditingValue(composing);
+        for (final inset in [40.0, 120.0, 220.0, 300.0]) {
+          tester.view.viewInsets = FakeViewPadding(bottom: inset);
+          await tester.pump(const Duration(milliseconds: 60));
+        }
+        await tester.pumpAndSettle();
+        expect(tester.getSize(shell).height, 97);
+        expect(fixture.controller.value, composing);
+        expect(
+          tester.state<EditableTextState>(find.byType(EditableText)),
+          same(editor),
+        );
+        final methods = tester.testTextInput.log.map((call) => call.method);
+        expect(
+          methods.where((method) => method == 'TextInput.setClient'),
+          hasLength(1),
+        );
+        expect(methods, isNot(contains('TextInput.updateConfig')));
+        expect(methods, isNot(contains('TextInput.clearClient')));
+
+        await tester.testTextInput.receiveAction(
+          independentSendButton
+              ? TextInputAction.newline
+              : TextInputAction.send,
+        );
+        expect(sends, independentSendButton ? 0 : 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final dark in [false, true]) {
     for (final quality in LiquidGlassQuality.values) {
       testWidgets(
@@ -653,6 +734,7 @@ class _ComposerFixture {
     bool glass = false,
     LiquidGlassQuality quality = LiquidGlassQuality.standard,
     bool minimalComposer = true,
+    bool independentSendButton = true,
     bool disableAnimations = false,
     bool dark = false,
     double textScale = 1,
@@ -701,6 +783,7 @@ class _ComposerFixture {
                     controller: controller,
                     focusNode: focus,
                     minimalComposer: minimalComposer,
+                    useIndependentSendButton: independentSendButton,
                     useLargeComposerStyle: !minimalComposer,
                     isProcessing: isProcessing,
                     hasExternalSendPayload: hasExternalPayload,

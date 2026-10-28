@@ -1400,7 +1400,7 @@ class _LiquidGlassLayer extends Layer {
   int _capturedPass = -1;
   ui.Picture? _captured;
   ui.FragmentShader? _captureShader;
-  (ui.Image, Path?, BlendMode, ui.FragmentProgram?, List<double>)? _captureKey;
+  (ui.Image, Path?, BlendMode, ui.FragmentProgram?, List<Object?>)? _captureKey;
 
   @override
   bool get alwaysNeedsAddToScene => true;
@@ -1499,24 +1499,38 @@ class _LiquidGlassLayer extends Layer {
   ) {
     _capturedPass = pass;
     final program = this.program;
-    final uniforms = <double>[
-      atlas.width.toDouble(),
-      atlas.height.toDouble(),
-      -rect.left,
-      -rect.top,
-      1,
-      1,
-      ...mapping,
-      ..._look(style),
-    ];
+    final uniforms = program == null
+        ? null
+        : <double>[
+            atlas.width.toDouble(),
+            atlas.height.toDouble(),
+            -rect.left,
+            -rect.top,
+            1,
+            1,
+            ...mapping,
+            ..._look(style),
+          ];
+    // Frost uses the capture and ordinary canvas shapes, not the shader's
+    // superellipse/profile uniforms. Keep all of its drawing inputs in the
+    // cache key, including the original style used by _drawFrost.
+    final List<Object?> values =
+        uniforms ??
+        <Object?>[rect, corners, style, this.style, rim, ...mapping];
     if (_captureKey
-        case (final image, final path, final mode, final shaded, final values)?
+        case (
+              final image,
+              final path,
+              final mode,
+              final shaded,
+              final previous,
+            )?
         when _captured != null &&
             identical(image, atlas) &&
             identical(path, outline) &&
             mode == blendMode &&
             identical(shaded, program) &&
-            listEquals(values, uniforms)) {
+            listEquals(previous, values)) {
       return;
     }
     final recorder = ui.PictureRecorder();
@@ -1526,7 +1540,7 @@ class _LiquidGlassLayer extends Layer {
     } else {
       final shader = _captureShader ??= program.fragmentShader();
       shader.setImageSampler(0, atlas, filterQuality: FilterQuality.low);
-      for (final (index, value) in uniforms.indexed) {
+      for (final (index, value) in uniforms!.indexed) {
         shader.setFloat(index, value);
       }
       final paint = Paint()
@@ -1539,7 +1553,7 @@ class _LiquidGlassLayer extends Layer {
       }
     }
     _hold(recorder.endRecording());
-    _captureKey = (atlas, outline, blendMode, program, uniforms);
+    _captureKey = (atlas, outline, blendMode, program, values);
   }
 
   /// Frosts the pane, without bending it, from the part of [atlas] behind it,

@@ -504,6 +504,78 @@ void main() {
     expect(tester.takeException(), isNull);
   }
 
+  for (final existing in [false, true]) {
+    testWidgets('chat keeps its editor and messages above the keyboard without rebuilding page content '
+        '(existing=$existing)', (tester) async {
+      addTearDown(tester.view.resetViewInsets);
+      const conversationId = 805;
+      if (existing) {
+        conversations = [
+          historyConversation(conversationId, ConversationMode.agent),
+        ];
+        historyPages[conversationId] = historyMessage(conversationId);
+      }
+      await pumpChat(
+        tester,
+        existing
+            ? const ConversationThreadTarget.existing(
+                conversationId: conversationId,
+                mode: ConversationMode.agent,
+              )
+            : const ConversationThreadTarget.newConversation(
+                mode: ConversationMode.agent,
+                requestKey: 'keyboard-layout-regression',
+                agentId: 'xiaowan-acp',
+              ),
+      );
+      // New drafts autofocus after bootstrap. Close that initial focus so the
+      // test exercises a real tap from the resting capsule in both cases.
+      composer(tester).focusNode.unfocus();
+      await tester.pumpAndSettle();
+      final originalComposer = composer(tester);
+      expect(originalComposer.focusNode.hasFocus, isFalse);
+      final originalAppBar = tester.widget<ChatAppBar>(find.byType(ChatAppBar));
+      final originalMessages = tester.widget<ChatMessageList>(
+        find.byType(ChatMessageList),
+      );
+      final editor = tester.state<EditableTextState>(find.byType(EditableText));
+      final field = find.byType(TextField);
+      agentCalls.clear();
+      assistCalls.clear();
+      await tester.tapAt(tester.getCenter(field));
+      await tester.pump();
+      expect(originalComposer.focusNode.hasFocus, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      for (final inset in [40.0, 120.0, 220.0, 300.0]) {
+        tester.view.viewInsets = FakeViewPadding(bottom: inset);
+        await tester.pump(const Duration(milliseconds: 60));
+        expect(tester.getRect(field).bottom, lessThanOrEqualTo(844 - inset));
+        expect(composer(tester), same(originalComposer));
+        expect(
+          tester.widget<ChatAppBar>(find.byType(ChatAppBar)),
+          same(originalAppBar),
+        );
+        expect(
+          tester.state<EditableTextState>(find.byType(EditableText)),
+          same(editor),
+        );
+        expect(
+          tester.widget<ChatMessageList>(find.byType(ChatMessageList)),
+          same(originalMessages),
+        );
+        if (existing) {
+          expect(find.text('已加载历史消息 $conversationId'), findsOneWidget);
+        }
+      }
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expectNoSessionAdmission();
+      if (!existing) expectNoPersistedDraft();
+      await disposeChat(tester);
+    });
+  }
+
   for (final mode in [ConversationMode.chatOnly, ConversationMode.agent]) {
     testWidgets(
       '${mode.storageValue} history shows OmniBot from its first frame through metadata and message reads',

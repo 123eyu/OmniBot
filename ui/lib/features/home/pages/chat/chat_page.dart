@@ -84,6 +84,8 @@ import 'mixins/conversation_manager.dart';
 // 导入 Widgets
 import 'chat_page_models.dart';
 import 'widgets/chat_widgets.dart';
+import 'widgets/chat_keyboard_layout.dart';
+import 'widgets/chat_message_viewport.dart';
 import 'widgets/chat_browser_overlay.dart';
 import 'widgets/chat_history_loading_transition.dart';
 import 'widgets/chat_message_anchor_bar.dart';
@@ -245,6 +247,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       TextEditingController();
   final GlobalKey _openClawPanelKey = GlobalKey();
   final GlobalKey _inputAreaKey = GlobalKey();
+  final ValueNotifier<int> _chatKeyboardLayoutChanges = ValueNotifier<int>(0);
   final KeyboardInsetMotionTracker _emptyGreetingKeyboardLiftTracker =
       KeyboardInsetMotionTracker();
   final ComposerLiftIntentTracker _composerLiftIntentTracker =
@@ -2089,9 +2092,8 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   Widget _buildModeMessagePage(
     ChatPageMode mode,
     AppBackgroundConfig appearanceConfig,
-    AppBackgroundVisualProfile visualProfile, {
-    double bottomOverlayInset = 0,
-  });
+    AppBackgroundVisualProfile visualProfile,
+  );
 
   Widget _buildWorkspaceSurfacePage();
 }

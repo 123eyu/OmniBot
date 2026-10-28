@@ -229,7 +229,7 @@ class MessageBubble extends StatelessWidget {
       // 用户消息：整块气泡长按触发快捷操作。
       return LayoutBuilder(
         builder: (context, constraints) {
-          final fallbackMaxWidth = MediaQuery.of(context).size.width * 0.75;
+          final fallbackMaxWidth = MediaQuery.sizeOf(context).width * 0.75;
           final availableWidth = constraints.maxWidth.isFinite
               ? constraints.maxWidth
               : fallbackMaxWidth;

@@ -24,7 +24,6 @@ import cn.com.omnimind.bot.mcp.McpServerManager
 import cn.com.omnimind.bot.plugin.OmniPluginHost
 import cn.com.omnimind.bot.plugin.official.OfficialOmniPluginProviders
 import cn.com.omnimind.bot.quicklog.QuickLogWidgetUpdater
-import cn.com.omnimind.bot.terminal.EmbeddedTerminalRuntime
 import cn.com.omnimind.bot.update.AppUpdateManager
 import cn.com.omnimind.bot.util.NestedBackgroundStateUtil
 import cn.com.omnimind.bot.vlm.DebugOmniMindProviderBootstrap
@@ -90,7 +89,7 @@ class App : BaseApplication() {
         measureStartupStep("Credentials and providers") {
             MMKV.initialize(this)
             CredentialEndpointSecurity.configureDebugLoopback(BuildConfig.DEBUG)
-            AppSecretStore.initialize(this)
+            AppSecretStore.prepare(this)
             ModelProviderConfigStore.initialize(this)
             cn.com.omnimind.baselib.llm.chatgpt.ChatGptOAuthManager.initialize(this)
             DebugOmniMindProviderBootstrap.install(this)
@@ -171,11 +170,9 @@ class App : BaseApplication() {
             // local MCP listener or background MCP work at all.
             McpServerManager.stopServer()
         }
-        CoroutineScope(Dispatchers.IO).launch {
-            runCatching {
-                EmbeddedTerminalRuntime.warmup(this@App)
-            }
-        }
+        // Terminal entry points prepare their own runtime before creating a
+        // session. Avoid competing with the first frame (or a background-only
+        // process start) to install/check an environment that may not be used.
         OmniLog.d(
             "AppStartup",
             "App onCreate total cost: ${SystemClock.elapsedRealtime() - appStartTime}ms"

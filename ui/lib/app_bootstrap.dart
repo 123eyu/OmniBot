@@ -51,24 +51,9 @@ Future<void> bootstrapMain(List<String> args) async {
   }
   WidgetsFlutterBinding.ensureInitialized();
   installOmnibotErrorWidget();
-  try {
-    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  } catch (error, stackTrace) {
-    debugPrint('[FlutterStartup] system UI mode setup failed: $error');
-    debugPrint('$stackTrace');
-  }
-
+  final prerequisites = initializeMainStartupPrerequisites();
   final container = ProviderContainer();
-  // Keep the first frame fail-open. A transient platform/plugin failure during
-  // startup must not leave the Flutter engine alive behind a permanently
-  // blank window. Services that depend on storage or a native channel can
-  // retry from their own pages after the shell is visible.
-  try {
-    await StorageService.init();
-  } catch (error, stackTrace) {
-    debugPrint('[FlutterStartup] StorageService.init failed: $error');
-    debugPrint('$stackTrace');
-  }
+  await prerequisites;
   try {
     SystemChrome.setSystemUIOverlayStyle(
       AppTheme.overlayStyleForBrightness(
@@ -99,21 +84,38 @@ Future<void> bootstrapMain(List<String> args) async {
   );
 }
 
+/// Starts independent platform setup together, settling both before the saved
+/// theme is read or the app is mounted. Each step remains fail-open so a
+/// transient plugin failure cannot leave the engine behind a blank window.
+Future<void> initializeMainStartupPrerequisites({
+  Future<void> Function()? configureSystemUi,
+  Future<void> Function()? initializeStorage,
+}) async {
+  await Future.wait<void>([
+    _runStartupStep(
+      'system UI mode setup',
+      configureSystemUi ??
+          () => SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
+    ),
+    _runStartupStep(
+      'StorageService.init',
+      initializeStorage ?? StorageService.init,
+    ),
+  ]);
+}
+
 Future<void> _initializeDeferredStartupServices() async {
   await Future.wait(<Future<void>>[
-    _runDeferredStartupStep(
+    _runStartupStep(
       'ModelsDevCatalogService.migrateLegacyCache',
       ModelsDevCatalogService.migrateLegacyCache,
     ),
-    _runDeferredStartupStep(
-      'AppBackgroundService.load',
-      AppBackgroundService.load,
-    ),
-    _runDeferredStartupStep(
+    _runStartupStep('AppBackgroundService.load', AppBackgroundService.load),
+    _runStartupStep(
       'ScheduledTaskSchedulerService.initialize',
       ScheduledTaskSchedulerService.initialize,
     ),
-    _runDeferredStartupStep(
+    _runStartupStep(
       'OmnibotResourceService.ensureWorkspacePathsLoaded',
       () async {
         await OmnibotResourceService.ensureWorkspacePathsLoaded();
@@ -122,7 +124,7 @@ Future<void> _initializeDeferredStartupServices() async {
   ]);
 }
 
-Future<void> _runDeferredStartupStep(
+Future<void> _runStartupStep(
   String name,
   Future<void> Function() operation,
 ) async {
