@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/services/agent_runtime_service.dart';
@@ -42,8 +43,9 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   Map<String, AgentWebStatus> _webActionStatuses =
       const <String, AgentWebStatus>{};
   int _catalogRequestId = 0;
-  late Set<String> _preparingAgentIds;
-  StreamSubscription<Set<String>>? _preparationSubscription;
+  late Map<String, AgentPackageOperation> _packageOperations;
+  StreamSubscription<Map<String, AgentPackageOperation>>?
+  _packageOperationSubscription;
   String _sharedModelLabel = '';
   // 远程 PC Bridge 状态：先用缓存同步渲染，后台再刷新，避免一帧加载闪烁。
   bool _remoteBridgeEnabled =
@@ -57,12 +59,15 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   @override
   void initState() {
     super.initState();
-    _preparingAgentIds = AgentRuntimeService.preparingAgentIds;
-    _preparationSubscription = AgentRuntimeService.agentPreparationChanges
-        .listen((agentIds) {
+    _packageOperations = AgentRuntimeService.agentPackageOperations;
+    _packageOperationSubscription = AgentRuntimeService
+        .agentPackageOperationChanges
+        .listen((operations) {
           if (!mounted) return;
-          final completed = _preparingAgentIds.difference(agentIds).isNotEmpty;
-          setState(() => _preparingAgentIds = agentIds);
+          final completed = _packageOperations.keys.any(
+            (id) => !operations.containsKey(id),
+          );
+          setState(() => _packageOperations = operations);
           if (completed) unawaited(_load());
         });
     // The native agent/list endpoint returns cached health. Keep route entry
@@ -76,7 +81,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
 
   @override
   void dispose() {
-    unawaited(_preparationSubscription?.cancel());
+    unawaited(_packageOperationSubscription?.cancel());
     super.dispose();
   }
 
@@ -191,7 +196,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   }
 
   Future<void> _checkUpdates() async {
-    if (_checkingUpdates) return;
+    if (_checkingUpdates || _packageOperations.isNotEmpty) return;
     setState(() => _checkingUpdates = true);
     try {
       final catalog = await AgentRuntimeService.checkAgentUpdates();
@@ -220,13 +225,14 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
             (agent) =>
                 agent.enabled &&
                 agent.managedAdapter &&
+                agent.installed != false &&
                 agent.packageVersion?.updateAvailable == true,
           )
           .toList(growable: false);
 
   Future<void> _upgradeAll() async {
     final agents = _updatableAgents;
-    if (agents.isEmpty || _preparingAgentIds.isNotEmpty || _upgradingAll) {
+    if (agents.isEmpty || _packageOperations.isNotEmpty || _upgradingAll) {
       return;
     }
     final english = _english;
@@ -322,7 +328,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
 
   Future<void> _test(AcpAgentProfile agent) async {
     if (_busyAgentId == agent.id ||
-        _preparingAgentIds.contains(agent.id) ||
+        _packageOperations.containsKey(agent.id) ||
         !agent.enabled) {
       return;
     }
@@ -330,7 +336,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   }
 
   void _prepare(AcpAgentProfile agent) {
-    if (_preparingAgentIds.contains(agent.id) || !agent.enabled) return;
+    if (_packageOperations.containsKey(agent.id) || !agent.enabled) return;
     unawaited(
       _runAgentAction(
         agent,
@@ -338,6 +344,127 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
         upgrade: agent.packageVersion?.updateAvailable == true,
       ),
     );
+  }
+
+  Future<void> _uninstall(AcpAgentProfile agent) async {
+    if (!agent.uninstallable ||
+        _packageOperations.containsKey(agent.id) ||
+        _busyAgentId == agent.id) {
+      return;
+    }
+    final distributionId = _catalog?.distributionId;
+    if (distributionId == null || distributionId.isEmpty) {
+      await _showActionResult(
+        agent,
+        _text('无法卸载', 'Could not uninstall'),
+        _text('请刷新 Agent 列表后重试。', 'Refresh the Agent list and try again.'),
+      );
+      return;
+    }
+    final confirmed = await showSettingsDetailSheet<bool>(
+      context: context,
+      builder: (sheetContext) => SettingsDetailSheet(
+        key: ValueKey('agent-uninstall-confirm-${agent.id}'),
+        title: _text('卸载 ${agent.name}？', 'Uninstall ${agent.name}?'),
+        body: Text(
+          _text(
+            '卸载当前终端环境中的程序，保留配置、登录信息和历史记录。',
+            'Uninstall the program from the current terminal environment. Keep configuration, sign-in information, and history.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            key: Key('agent-uninstall-cancel-${agent.id}'),
+            style: settingsDetailSheetActionStyle(sheetContext),
+            onPressed: () => Navigator.of(sheetContext).pop(false),
+            child: Text(_text('取消', 'Cancel')),
+          ),
+          TextButton(
+            key: Key('agent-uninstall-confirm-action-${agent.id}'),
+            style: settingsDetailSheetActionStyle(
+              sheetContext,
+              foregroundColor: Theme.of(sheetContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(sheetContext).pop(true),
+            child: Text(_text('卸载', 'Uninstall')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _runUninstall(agent, distributionId);
+  }
+
+  Future<void> _runUninstall(
+    AcpAgentProfile agent,
+    String distributionId,
+  ) async {
+    // The service owns the queued operation after this page is disposed.
+    // A retry stays attached to the originally confirmed distribution.
+    while (mounted) {
+      if (_packageOperations.containsKey(agent.id)) return;
+      var ok = false;
+      Object? failure;
+      try {
+        final result = await AgentRuntimeService.uninstallAgentInBackground(
+          agent.id,
+          distributionId: distributionId,
+        );
+        ok = result['ok'] == true;
+        failure = ok
+            ? null
+            : PlatformException(
+                code: 'agent_uninstall_failed',
+                message: result['error']?.toString(),
+                details: result,
+              );
+      } catch (error) {
+        failure = error;
+      }
+      if (!mounted) return;
+      await _load();
+      if (!mounted) return;
+      final retry = await showSettingsDetailSheet<bool>(
+        context: context,
+        builder: (sheetContext) => SettingsDetailSheet(
+          key: ValueKey('agent-uninstall-result-${agent.id}'),
+          title: ok
+              ? _text('助手已卸载', 'Assistant uninstalled')
+              : _text('卸载未完成', 'Uninstall did not finish'),
+          body: SelectableText(
+            ok
+                ? _text(
+                    '${agent.name} 已卸载。配置、登录信息和历史记录已保留。',
+                    '${agent.name} was uninstalled. Configuration, sign-in information, and history were kept.',
+                  )
+                : formatAgentRuntimeErrorForUser(
+                    failure,
+                    english: _english,
+                    fallback: _text(
+                      '卸载未完成，请重试。',
+                      'Uninstall did not finish. Try again.',
+                    ),
+                  ),
+          ),
+          actions: [
+            TextButton(
+              key: Key('agent-uninstall-result-close-${agent.id}'),
+              style: settingsDetailSheetActionStyle(sheetContext),
+              onPressed: () => Navigator.of(sheetContext).pop(false),
+              child: Text(_text('关闭', 'Close')),
+            ),
+            if (!ok)
+              TextButton(
+                key: Key('agent-uninstall-retry-${agent.id}'),
+                style: settingsDetailSheetActionStyle(sheetContext),
+                onPressed: () => Navigator.of(sheetContext).pop(true),
+                child: Text(_text('重试', 'Retry')),
+              ),
+          ],
+        ),
+      );
+      if (retry != true || !mounted) return;
+    }
   }
 
   Future<void> _runAgentAction(
@@ -484,7 +611,10 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   }
 
   Future<void> _openAgentConfig(AcpAgentProfile agent) async {
-    if (!agent.configurationAvailable) return;
+    if (!agent.configurationAvailable ||
+        _packageOperations.containsKey(agent.id)) {
+      return;
+    }
     final changed = await GoRouterManager.pushForResult<bool>(
       '/home/agent_config/${Uri.encodeComponent(agent.id)}',
     );
@@ -539,7 +669,8 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
         actions: [
           IconButton(
             tooltip: _text('刷新检测', 'Refresh detection'),
-            onPressed: _refreshing || _checkingUpdates
+            onPressed:
+                _refreshing || _checkingUpdates || _packageOperations.isNotEmpty
                 ? null
                 : () => _load(refresh: true),
             icon: _refreshing
@@ -817,9 +948,16 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
         (agent.lastCheckError ?? '').isNotEmpty && agent.status != 'online';
     final canTest =
         agent.enabled && (agent.status != 'missing' || agent.managedAdapter);
-    final preparing = _preparingAgentIds.contains(agent.id);
+    final operation = _packageOperations[agent.id];
+    final changingPackage = operation != null;
     final queued = AgentRuntimeService.queuedAgentIds.contains(agent.id);
-    final busy = agent.id == _busyAgentId || preparing;
+    final busy = agent.id == _busyAgentId || changingPackage;
+    final canUninstall =
+        agent.builtIn &&
+        agent.managedAdapter &&
+        agent.uninstallable &&
+        (agent.installed == true ||
+            agent.packageVersion?.installedVersion != null);
     final testLabel = agent.managedAdapter
         ? agent.packageVersion?.updateAvailable == true
               ? _text('升级', 'Update')
@@ -838,9 +976,13 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
         fallbackColor: palette.accentPrimary,
       ),
       title: agent.name,
-      statusColor: preparing ? const Color(0xFFE3A52B) : statusColor,
-      statusLabel: preparing
-          ? queued
+      statusColor: changingPackage ? const Color(0xFFE3A52B) : statusColor,
+      statusLabel: changingPackage
+          ? operation == AgentPackageOperation.uninstall
+                ? queued
+                      ? _text('等待卸载', 'Queued for uninstall')
+                      : _text('卸载中', 'Uninstalling')
+                : queued
                 ? _text('等待安装 / 升级', 'Queued')
                 : _text('后台安装 / 升级中', 'Installing / updating')
           : !agent.enabled
@@ -857,7 +999,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
           capabilitySubtitle == null && agent.description.isEmpty,
       detailText: _versionSummary(agent),
       detailIsError: agent.packageVersion?.error != null,
-      errorText: hasError && !preparing
+      errorText: hasError && !changingPackage
           ? _actionError(
               agent.lastCheckError,
               installation: agent.installed == false,
@@ -866,19 +1008,25 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
       actionLabel: canTest ? testLabel : null,
       actionKey: Key('agent-check-${agent.id}'),
       onAction: canTest ? () => action(agent) : null,
+      secondaryActionLabel: canUninstall ? _text('卸载', 'Uninstall') : null,
+      secondaryActionKey: Key('agent-uninstall-${agent.id}'),
+      onSecondaryAction: canUninstall ? () => _uninstall(agent) : null,
       navigationLabel: agent.configurationAvailable
           ? _text('配置', 'Configure')
           : null,
       navigationKey: Key('agent-navigation-${agent.id}'),
       busy: busy,
-      onTap: !agent.configurationAvailable || preparing
+      onTap: !agent.configurationAvailable || busy
           ? null
           : () => _openAgentConfig(agent),
     );
   }
 
   String? _versionSummary(AcpAgentProfile agent) {
-    if (!agent.managedAdapter) return null;
+    if (!agent.managedAdapter ||
+        (agent.status == 'missing' && agent.installed == false)) {
+      return null;
+    }
     final version = agent.packageVersion;
     if (version == null) return _text('版本未检测', 'Version not checked');
     final current = version.installedVersion;
@@ -935,7 +1083,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
               onPressed:
                   _checkingUpdates ||
                       _refreshing ||
-                      _preparingAgentIds.isNotEmpty
+                      _packageOperations.isNotEmpty
                   ? null
                   : _checkUpdates,
               icon: _checkingUpdates
@@ -956,7 +1104,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                 key: const Key('agent-upgrade-all'),
                 onPressed:
                     _checkingUpdates ||
-                        _preparingAgentIds.isNotEmpty ||
+                        _packageOperations.isNotEmpty ||
                         _upgradingAll
                     ? null
                     : _upgradeAll,
@@ -1192,6 +1340,9 @@ class _FlatTile extends StatelessWidget {
     this.actionColor,
     this.actionKey,
     this.onAction,
+    this.secondaryActionLabel,
+    this.secondaryActionKey,
+    this.onSecondaryAction,
     this.navigationLabel,
     this.navigationKey,
     this.busy = false,
@@ -1212,6 +1363,9 @@ class _FlatTile extends StatelessWidget {
   final Color? actionColor;
   final Key? actionKey;
   final VoidCallback? onAction;
+  final String? secondaryActionLabel;
+  final Key? secondaryActionKey;
+  final VoidCallback? onSecondaryAction;
   final String? navigationLabel;
   final Key? navigationKey;
   final bool busy;
@@ -1263,14 +1417,18 @@ class _FlatTile extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 5),
-                            Text(
-                              statusLabel!,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: statusColor,
-                                height: 1.55,
-                                fontFamily: 'PingFang SC',
+                            Flexible(
+                              child: Text(
+                                statusLabel!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: statusColor,
+                                  height: 1.55,
+                                  fontFamily: 'PingFang SC',
+                                ),
                               ),
                             ),
                           ],
@@ -1348,35 +1506,35 @@ class _FlatTile extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       )
-                    else if (actionLabel != null && onAction != null)
-                      TextButton(
-                        key: actionKey,
-                        onPressed: onAction,
-                        style: TextButton.styleFrom(
-                          minimumSize: Size.zero,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 3,
-                          ),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 150),
-                          child: Text(
-                            actionLabel!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: actionColor ?? palette.accentPrimary,
-                              fontFamily: 'PingFang SC',
-                            ),
-                          ),
+                    else if (actionLabel != null ||
+                        secondaryActionLabel != null)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 150),
+                        child: Wrap(
+                          alignment: WrapAlignment.end,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 4,
+                          children: [
+                            if (actionLabel != null && onAction != null)
+                              _actionButton(
+                                label: actionLabel!,
+                                key: actionKey,
+                                color: actionColor ?? palette.accentPrimary,
+                                onPressed: onAction,
+                              ),
+                            if (secondaryActionLabel != null)
+                              _actionButton(
+                                label: secondaryActionLabel!,
+                                key: secondaryActionKey,
+                                color: Theme.of(context).colorScheme.error,
+                                onPressed: onSecondaryAction,
+                              ),
+                          ],
                         ),
                       ),
-                    if ((busy || actionLabel != null) &&
+                    if ((busy ||
+                            actionLabel != null ||
+                            secondaryActionLabel != null) &&
                         navigationLabel != null)
                       const SizedBox(height: 3),
                     if (navigationLabel != null)
@@ -1423,6 +1581,33 @@ class _FlatTile extends StatelessWidget {
       ),
     );
   }
+
+  Widget _actionButton({
+    required String label,
+    required Key? key,
+    required Color color,
+    required VoidCallback? onPressed,
+  }) => TextButton(
+    key: key,
+    onPressed: onPressed,
+    style: TextButton.styleFrom(
+      minimumSize: Size.zero,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    ),
+    child: Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: color,
+        fontFamily: 'PingFang SC',
+      ),
+    ),
+  );
 }
 
 List<String> _nonEmptyLines(String source) {

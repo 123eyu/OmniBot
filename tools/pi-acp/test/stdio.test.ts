@@ -9,6 +9,7 @@ import { Readable, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { client, methods, ndJsonStream, type SessionNotification } from "@agentclientprotocol/sdk/unstable";
 import { configFor, httpFixture, stream } from "./fixtures.js";
+import { VERSION } from "../src/config.js";
 
 test("the packaged stdio entrypoint speaks ACP v1 and exits on stdin close", { timeout: 15000 }, async () => {
   const provider = await httpFixture((_body, response) => stream(response, { text: "wire \u2028 and \u2029 preserved" }));
@@ -35,6 +36,7 @@ test("the packaged stdio entrypoint speaks ACP v1 and exits on stdin close", { t
   try {
     const initialized = await connection.agent.request(methods.agent.initialize, { protocolVersion: 1, clientCapabilities: {} });
     assert.equal(initialized.agentInfo?.name, "omnibot-pi-acp");
+    assert.equal(initialized.agentInfo?.version, VERSION);
     const session = await connection.agent.request(methods.agent.session.new, { cwd: root, mcpServers: [] });
     const result = await connection.agent.request(methods.agent.session.prompt, { sessionId: session.sessionId, prompt: [{ type: "text", text: "wire test" }] });
     assert.equal(result.stopReason, "end_turn");
