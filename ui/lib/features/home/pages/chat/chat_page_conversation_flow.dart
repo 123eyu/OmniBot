@@ -731,6 +731,10 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
         }
       }
       if (!_isConversationTargetRequestCurrent(sendTargetId)) return;
+      if (_isActiveAgentRetired) {
+        showToast(_retiredAgentMessage, type: ToastType.error);
+        return;
+      }
       final messageText = submittedText.trim();
       final inputAttachments = submittedAttachments;
       final hasAttachments = inputAttachments.isNotEmpty;
@@ -1233,7 +1237,7 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
         requestId: _buildPromptRequestId(aiMessageId),
         // Pure chat is an ACP turn with tools disabled, not a provider-only
         // transport. It deliberately has no Harness identity: otherwise a
-        // previous DSH/Xiaowan switch leaks into the pure-chat session and
+        // previous Agent/Xiaowan switch leaks into the pure-chat session and
         // the runtime can reconnect the wrong Agent.
         agentId: dispatchConversationMode == ConversationMode.chatOnly
             ? null

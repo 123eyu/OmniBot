@@ -68,6 +68,7 @@ type ConversationSection = typeof SECTION_ORDER[number];
 const SECTION_LABELS: Record<ConversationSection, string> = {
   pinned: "置顶会话",
   codex: "Codex",
+  // Keep retired Agent history identifiable without offering new conversations.
   deepseek: "DeepSeek Harness",
   claude: "Claude Code",
   opencode: "OpenCode",
@@ -93,7 +94,6 @@ const FALLBACK_AGENT_PROFILES: AgentProfile[] = [
   { id: "codex-acp", name: "Codex", enabled: true, builtIn: true },
   { id: "opencode-acp", name: "OpenCode", enabled: true, builtIn: true },
   { id: "pi-acp", name: "Pi", enabled: true, builtIn: true },
-  { id: "deepseek-harness-acp", name: "DeepSeek Harness", enabled: true, builtIn: true },
 ];
 
 function agentIcon(agentId?: string): IconName {

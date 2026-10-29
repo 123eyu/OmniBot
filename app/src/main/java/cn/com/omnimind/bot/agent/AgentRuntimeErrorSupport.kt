@@ -238,8 +238,7 @@ internal object AgentRuntimeErrorSupport {
     private fun isHarnessProfileMissing(error: Throwable): Boolean =
         errorMessages(error).any {
             it.contains("profile \"acp\" does not exist") ||
-                it.contains("profile 'acp' does not exist") ||
-                it.contains("create it with 'dsh plugin --profile acp add")
+                it.contains("profile 'acp' does not exist")
         }
 
     private fun isCertificateValidationFailure(error: Throwable): Boolean {

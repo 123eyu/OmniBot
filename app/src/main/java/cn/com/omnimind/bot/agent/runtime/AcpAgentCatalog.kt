@@ -86,7 +86,6 @@ internal object AcpAgentCatalog {
             managedAdapterPackages = packages.ifEmpty {
                 resolvedManagedPackage?.let(::listOf).orEmpty()
             },
-            requiresNativeBuildTools = get("requiresNativeBuildTools")?.asBoolean ?: false,
             managedAdapterHealthCommand = string("managedAdapterHealthCommand"),
             validateBeforeConfigWrite = get("validateBeforeConfigWrite")?.asBoolean ?: false,
             harnessAdapter = AcpHarnessAdapters.forConfigAdapterId(string("configAdapterId")),

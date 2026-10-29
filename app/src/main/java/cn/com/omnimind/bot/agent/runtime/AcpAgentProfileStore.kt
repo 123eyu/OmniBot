@@ -131,7 +131,6 @@ internal data class AcpOfficialRuntime(
     val managedAdapterPackages: List<String> = managedAdapterPackage
         ?.let { listOf(it) }
         .orEmpty(),
-    val requiresNativeBuildTools: Boolean = false,
     val managedAdapterHealthCommand: String? = null,
     val validateBeforeConfigWrite: Boolean = false,
     val harnessAdapter: AcpHarnessAdapter = AcpHarnessAdapters.standard,
@@ -178,25 +177,53 @@ internal class AcpAgentProfileStore(context: Context) {
         )
     }
 
+    val retiredAgentIds: Set<String> get() = catalog.retiredAgentIds
+
+    fun requireSupportedAgent(vararg agentIds: String?) {
+        val retired = agentIds.firstOrNull { it?.trim() in catalog.retiredAgentIds } ?: return
+        throw IllegalStateException(
+            "agent_retired: ACP agent ${retired.trim()} is no longer supported. " +
+                "History is still available; create a new conversation with another agent.",
+        )
+    }
+
+    /** Retire launch settings, never the durable owners or conversation history. */
+    @Synchronized
+    private fun migrateRetiredProfiles() {
+        val stored = readStoredProfiles()
+        val profiles = stored.filterNot { it.id in catalog.retiredAgentIds }
+        val health = readHealth()
+        val activeHealth = health.filterKeys { it !in catalog.retiredAgentIds }
+        val selectedRetired = preferences.getString(KEY_SELECTED_PROFILE_ID, null) in catalog.retiredAgentIds
+        val obsoleteInventory = preferences.all.keys.filter { key ->
+            key.startsWith("package_version:") && key.substringAfterLast(':') in catalog.retiredAgentIds
+        }
+        if (profiles.size == stored.size && health.size == activeHealth.size &&
+            !selectedRetired && obsoleteInventory.isEmpty()) return
+        val editor = preferences.edit()
+        if (profiles.size != stored.size) editor.putString(KEY_PROFILES, gson.toJson(profiles))
+        if (health.size != activeHealth.size) editor.putString(KEY_HEALTH, gson.toJson(activeHealth))
+        if (selectedRetired) editor.putString(KEY_SELECTED_PROFILE_ID, DEFAULT_AGENT_ID)
+        obsoleteInventory.forEach(editor::remove)
+        check(editor.commit()) { "Unable to retire removed ACP agents." }
+    }
+
     @Synchronized
     fun list(): List<AcpAgentProfile> {
         migrateLegacyXiaowanAliases()
+        migrateRetiredProfiles()
         val stored = readStoredProfiles()
             .mapNotNull(::normalize)
             .filterNot { it.id in catalog.retiredAgentIds }
         val storedById = stored.associateBy { it.id }
         val official = catalog.agents.map { definition ->
             val override = storedById[definition.id] ?: return@map definition
-            val migratedOfficialCommand =
-                definition.id == DEEPSEEK_HARNESS_AGENT_ID &&
-                    override.command == "dsh-acp"
             definition.copy(
-                command = if (migratedOfficialCommand) definition.command else override.command,
-                arguments = if (migratedOfficialCommand) definition.arguments else override.arguments,
+                command = override.command,
+                arguments = override.arguments,
                 environment = override.environment,
                 enabled = override.enabled,
                 officialRuntime = if (
-                    migratedOfficialCommand ||
                     (override.command == definition.command &&
                         override.arguments == definition.arguments)
                 ) {
@@ -234,7 +261,6 @@ internal class AcpAgentProfileStore(context: Context) {
         migrateLegacyXiaowanAliases()
         return sessionBindings()[sessionId.trim()]
             ?.takeIf(String::isNotBlank)
-            ?.takeUnless { it in catalog.retiredAgentIds }
     }
 
     /** Embedded Agent settings share the existing session owner and deletion path. */
@@ -280,9 +306,8 @@ internal class AcpAgentProfileStore(context: Context) {
         val currentAgentId = bindings[key]
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
-            ?.takeUnless { it in catalog.retiredAgentIds }
         // Existing ownership is immutable. Harness switching creates a new
-        // conversation; only retired aliases may be replaced by migration.
+        // conversation. Retirement must preserve the original owner as well.
         if (currentAgentId != null) return
         bindings[key] = normalizedAgentId
         preferences.edit().putString(KEY_CONVERSATION_BINDINGS, gson.toJson(bindings)).apply()
@@ -294,6 +319,7 @@ internal class AcpAgentProfileStore(context: Context) {
         val normalizedAgentId = agentId.trim()
         if (normalizedAgentId.isEmpty()) return
         val bindings = conversationBindings().toMutableMap()
+        requireSupportedAgent(bindings[conversationId.toString()])
         bindings[conversationId.toString()] = normalizedAgentId
         preferences.edit().putString(KEY_CONVERSATION_BINDINGS, gson.toJson(bindings)).apply()
     }
@@ -303,7 +329,6 @@ internal class AcpAgentProfileStore(context: Context) {
         migrateLegacyXiaowanAliases()
         return conversationBindings()[conversationId.toString()]
             ?.takeIf(String::isNotBlank)
-            ?.takeUnless { it in catalog.retiredAgentIds }
     }
 
     fun naOwnerForConversation(conversationId: Long): String? =
@@ -333,6 +358,7 @@ internal class AcpAgentProfileStore(context: Context) {
 
     @Synchronized
     fun select(id: String): AcpAgentProfile {
+        requireSupportedAgent(id)
         val selected = list().firstOrNull { it.id == id.trim() }
             ?: throw IllegalArgumentException("Unknown ACP agent: $id")
         require(selected.enabled) { "ACP agent ${selected.name} is disabled." }
@@ -348,6 +374,7 @@ internal class AcpAgentProfileStore(context: Context) {
             ?: selected().id
         val requestedId = raw.id.trim()
         val targetId = requestedId.ifBlank { UUID.randomUUID().toString() }
+        requireSupportedAgent(targetId)
         val officialDefinition = catalog.definition(targetId)
         val candidate = if (officialDefinition != null) {
             officialDefinition.copy(
@@ -623,7 +650,6 @@ internal class AcpAgentProfileStore(context: Context) {
 
     companion object {
         const val CODEX_AGENT_ID = "codex-acp"
-        const val DEEPSEEK_HARNESS_AGENT_ID = "deepseek-harness-acp"
         const val KIMI_CODE_AGENT_ID = "kimi-code-acp"
         const val XIAOWAN_AGENT_ID = "xiaowan-acp"
         const val DEFAULT_AGENT_ID = XIAOWAN_AGENT_ID
@@ -653,8 +679,6 @@ internal class AcpAgentProfileStore(context: Context) {
         private const val KEY_SESSION_BINDINGS = "session_bindings"
         private const val KEY_CONVERSATION_BINDINGS = "conversation_bindings"
         private const val KEY_HEALTH = "health"
-        private const val DEEPSEEK_HARNESS_CORDIS_PATH =
-            "/root/.dsh/omnibot-acp/cordis.yml"
         private val ENVIRONMENT_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
     }
 }

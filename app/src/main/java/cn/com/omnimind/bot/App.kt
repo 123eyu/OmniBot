@@ -20,6 +20,7 @@ import cn.com.omnimind.bot.agent.WorkspaceMemoryRollupScheduler
 import cn.com.omnimind.bot.agent.WorkspaceScheduledTaskScheduler
 import cn.com.omnimind.bot.activity.StartupThemeResolver
 import cn.com.omnimind.bot.cleanup.LegacyLocalModelDataCleanup
+import cn.com.omnimind.bot.cleanup.RetiredAgentInstallationCleanup
 import cn.com.omnimind.bot.mcp.McpServerManager
 import cn.com.omnimind.bot.plugin.OmniPluginHost
 import cn.com.omnimind.bot.plugin.official.OfficialOmniPluginProviders
@@ -106,6 +107,7 @@ class App : BaseApplication() {
         }
         AgentPromptSettingsStore.initializeAndCleanupLegacyFiles(this)
         LegacyLocalModelDataCleanup.start(this)
+        RetiredAgentInstallationCleanup.start(this)
         setupUncaughtExceptionHandler()
 
         DatabaseHelper.init(this)

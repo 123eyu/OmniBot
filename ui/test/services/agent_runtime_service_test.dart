@@ -456,6 +456,51 @@ void main() {
     });
   });
 
+  test('retired catalog identities cannot become selectable custom agents', () {
+    final catalog = AcpAgentCatalog.fromMap({
+      'selectedAgentId': 'codex-acp',
+      'retiredAgentIds': ['deepseek-harness-acp'],
+      'agents': [
+        {'id': 'deepseek-harness-acp', 'name': 'Old Agent'},
+        {'id': 'codex-acp', 'name': 'Codex'},
+        {'id': 'custom-agent', 'name': 'Custom Agent'},
+      ],
+    });
+    expect(catalog.agents.map((agent) => agent.id), [
+      'codex-acp',
+      'custom-agent',
+    ]);
+    expect(catalog.isRetired('deepseek-harness-acp'), isTrue);
+    expect(catalog.isRetired('custom-agent'), isFalse);
+    expect(catalog.isRetired(null), isFalse);
+    expect(catalog.selectedAgentId, 'codex-acp');
+  });
+
+  test(
+    'retired agent errors preserve history guidance without model retries',
+    () {
+      const message = '此助手已停止支持。历史记录仍可查看，请新建其他助手的对话。';
+      for (final error in [
+        'agent_retired: deepseek-harness-acp',
+        PlatformException(
+          code: 'runtime_error',
+          message: 'agent_retired: old-agent',
+        ),
+        PlatformException(
+          code: 'runtime_error',
+          details: {'failureKind': 'agent_retired'},
+        ),
+      ]) {
+        expect(formatAgentRuntimeErrorForUser(error), message);
+      }
+      expect(formatAgentRuntimeErrorForUser(message), message);
+      expect(
+        formatAgentRuntimeErrorForUser(message, english: true),
+        contains('view its history'),
+      );
+    },
+  );
+
   test('parses the live status bundled with an agent switch response', () {
     final catalog = AcpAgentCatalog.fromMap(<String, dynamic>{
       'selectedAgentId': 'claude-code',
@@ -883,8 +928,6 @@ void main() {
       await AgentRuntimeService.writeAgentConfig(
         'claude-code-acp',
         content: ' {\n  "env": {}\n}\n ',
-        reasoningEffort: 'high',
-        permissionMode: 'workspace-write',
       );
 
       expect(calls.map((call) => call.method), [
@@ -895,8 +938,6 @@ void main() {
       expect(calls.last.arguments, {
         'agentId': 'claude-code-acp',
         'content': ' {\n  "env": {}\n}\n ',
-        'reasoningEffort': 'high',
-        'permissionMode': 'workspace-write',
       });
     },
   );
@@ -965,16 +1006,16 @@ void main() {
       requestId: 'request-1',
       questionId: 'answer',
       answers: <String>['继续'],
-      sessionId: 'dsh-session-1',
-      agentId: 'deepseek-harness-acp',
+      sessionId: 'kimi-session-1',
+      agentId: 'kimi-code-acp',
       conversationId: 42,
     );
 
     expect(capturedCall?.arguments, {
       'requestId': 'request-1',
-      'agentId': 'deepseek-harness-acp',
+      'agentId': 'kimi-code-acp',
       'conversationId': 42,
-      'sessionId': 'dsh-session-1',
+      'sessionId': 'kimi-session-1',
       'response': {
         'answers': {
           'answer': {

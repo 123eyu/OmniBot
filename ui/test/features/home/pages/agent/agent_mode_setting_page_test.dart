@@ -44,9 +44,9 @@ void main() {
                 arguments: const ['acp'],
               ),
               _agent(
-                'deepseek-harness-acp',
-                'DeepSeek Harness',
-                'dsh',
+                'kimi-code-acp',
+                'Kimi Code',
+                'kimi',
                 'unchecked',
                 managedAdapter: true,
                 lastCheckError: 'Harness 未初始化，请点击“安装官方 Harness”准备运行组件。',
@@ -248,10 +248,10 @@ void main() {
           await tester.pumpAndSettle();
           await tester.enterText(
             find.byKey(const Key('agent-contact-search')),
-            'DeepSeek',
+            'Kimi',
           );
           await tester.pumpAndSettle();
-          expect(find.text('DeepSeek Harness'), findsOneWidget);
+          expect(find.text('Kimi Code'), findsOneWidget);
           expect(find.text('Codex'), findsNothing);
           expect(find.byKey(const Key('agent-refresh')), findsNothing);
           expect(find.byKey(const Key('agent-shared-model')), findsNothing);
@@ -492,7 +492,7 @@ void main() {
     },
   );
 
-  testWidgets('shows the managed ACP Agent catalog without Gemini', (
+  testWidgets('shows the managed ACP Agent catalog without retired agents', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1080, 2200);
@@ -514,9 +514,10 @@ void main() {
     expect(find.text('Codex'), findsOneWidget);
     expect(find.text('Claude Code'), findsOneWidget);
     expect(find.text('Gemini CLI'), findsNothing);
+    expect(find.text('DeepSeek Harness'), findsNothing);
     expect(find.text('OpenCode'), findsOneWidget);
-    expect(find.text('DeepSeek Harness'), findsOneWidget);
-    expect(find.textContaining('DeepSeek Harness ACP Agent'), findsNothing);
+    expect(find.text('Kimi Code'), findsOneWidget);
+    expect(find.textContaining('Kimi Code ACP Agent'), findsNothing);
     expect(find.textContaining('ACP initialize'), findsNothing);
     expect(find.text('可用'), findsWidgets);
     expect(find.text('未安装'), findsOneWidget);
@@ -545,14 +546,10 @@ void main() {
       findsNothing,
     ); // No separate Na route tile.
     expect(
-      tester
-          .getTopLeft(find.byKey(const Key('agent-check-deepseek-harness-acp')))
-          .dy,
+      tester.getTopLeft(find.byKey(const Key('agent-check-kimi-code-acp'))).dy,
       greaterThan(
         tester
-            .getTopLeft(
-              find.byKey(const Key('agent-navigation-deepseek-harness-acp')),
-            )
+            .getTopLeft(find.byKey(const Key('agent-navigation-kimi-code-acp')))
             .dy,
       ),
     );
@@ -702,9 +699,9 @@ void main() {
                   'agents': <Map<String, dynamic>>[
                     _agent('codex-acp', 'Codex', 'codex-acp', 'online'),
                     _agent(
-                      'deepseek-harness-acp',
-                      'DeepSeek Harness',
-                      'dsh',
+                      'kimi-code-acp',
+                      'Kimi Code',
+                      'kimi',
                       'missing',
                       managedAdapter: true,
                     ),
@@ -713,7 +710,7 @@ void main() {
               case 'agent/prepare':
                 preparationCalls += 1;
                 expect(call.arguments, <String, Object?>{
-                  'agentId': 'deepseek-harness-acp',
+                  'agentId': 'kimi-code-acp',
                   'force': true,
                 });
                 return preparation.future;
@@ -736,9 +733,7 @@ void main() {
       await tester.pumpWidget(buildPage());
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.byKey(const Key('agent-check-deepseek-harness-acp')),
-      );
+      await tester.tap(find.byKey(const Key('agent-check-kimi-code-acp')));
       await tester.pump();
       // The page-ready gate publishes the preparation stream after the frame.
       await tester.pump();
@@ -755,9 +750,7 @@ void main() {
       await tester.pump();
       expect(find.text('后台安装 / 升级中'), findsOneWidget);
 
-      await tester.tap(
-        find.byKey(const Key('agent-navigation-deepseek-harness-acp')),
-      );
+      await tester.tap(find.byKey(const Key('agent-navigation-kimi-code-acp')));
       await tester.pump();
       expect(preparationCalls, 1);
 

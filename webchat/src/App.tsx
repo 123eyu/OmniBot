@@ -10,7 +10,7 @@ import {
   isPersistedConversation,
 } from "./conversationDraft";
 import { appendConversationNavigation } from "./conversationNavigation";
-import { isNaConversation, withoutNaHistory } from "./conversationVisibility";
+import { isNaConversation, isRetiredAgentConversation, withoutNaHistory } from "./conversationVisibility";
 import { conversationKey } from "./format";
 import { useRealtime } from "./hooks/useRealtime";
 import { reconcileCodexMessages } from "./messageReconciliation";
@@ -49,8 +49,11 @@ function normalizeConversationMode(mode: string | undefined): ConversationMode {
     : "normal";
 }
 
+const RETIRED_AGENT_MESSAGE = "此助手已停止支持。历史记录仍可查看，请新建其他助手的对话。";
+
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error ?? "请求失败");
+  const message = error instanceof Error ? error.message : String(error ?? "请求失败");
+  return message.includes("agent_retired:") ? RETIRED_AGENT_MESSAGE : message;
 }
 
 function initialToken(): string {
@@ -70,6 +73,7 @@ export default function App() {
   const [globalError, setGlobalError] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
+  const [retiredAgentIds, setRetiredAgentIds] = useState<string[]>([]);
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [archivedLoading, setArchivedLoading] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
@@ -262,8 +266,13 @@ export default function App() {
       workspacePathRef.current = rootPath;
       setWorkspacePath(rootPath);
       setBrowserSnapshot(bootstrap?.browser ?? null);
+      const retiredIds = Array.isArray(bootstrap?.retiredAgentIds)
+        ? bootstrap.retiredAgentIds.filter((id): id is string => typeof id === "string")
+        : [];
+      setRetiredAgentIds(retiredIds);
       setAgentProfiles(
-        Array.isArray(bootstrap?.agentProfiles) ? bootstrap.agentProfiles : [],
+        (Array.isArray(bootstrap?.agentProfiles) ? bootstrap.agentProfiles : [])
+          .filter((profile) => !retiredIds.includes(profile.id)),
       );
       setAuthenticated(true);
 
@@ -361,6 +370,9 @@ export default function App() {
   }
 
   async function sendMessage(text: string, attachments: Attachment[]): Promise<boolean> {
+    if (isRetiredAgentConversation(selectedRef.current, retiredAgentIds)) {
+      return false;
+    }
     const visibility = historyVisibilityRevision.current;
     const accountScoped = isNaConversation(selectedRef.current);
     const visibilityChanged = () => accountScoped && visibility !== historyVisibilityRevision.current;
@@ -792,6 +804,9 @@ export default function App() {
         <ChatPanel
           key={chatViewRevision}
           conversation={selectedConversation}
+          unavailableMessage={isRetiredAgentConversation(selectedConversation, retiredAgentIds)
+            ? RETIRED_AGENT_MESSAGE
+            : undefined}
           messages={messages}
           globalError={globalError}
           sending={sending}

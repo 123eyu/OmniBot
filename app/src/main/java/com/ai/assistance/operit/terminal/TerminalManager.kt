@@ -263,12 +263,18 @@ class TerminalManager private constructor(
         timeoutMs: Long?,
         distribution: TerminalDistribution.Spec = TerminalDistribution.selected(),
         onProcessStarted: ((Process) -> Unit)? = null,
+        installIfMissing: Boolean = true,
         onOutputChunk: suspend (String) -> Unit = {}
     ): HiddenExecResult {
         val environmentReady = withTimeoutOrNull(
             HIDDEN_EXEC_ENVIRONMENT_TIMEOUT_MS
         ) {
-            initializeEnvironment(distribution = distribution)
+            if (installIfMissing) {
+                initializeEnvironment(distribution = distribution)
+            } else if (EmbeddedRuntimeInstaller.isDistributionInstalled(context, distribution)) {
+                ensureShellScripts()
+                true
+            } else false
         } ?: false
         if (!environmentReady) {
             return HiddenExecResult(
@@ -281,7 +287,7 @@ class TerminalManager private constructor(
 
         return withContext(Dispatchers.IO) {
             val process = runCatching {
-                buildHiddenExecProcess(executorKey, command, distribution).start()
+                buildHiddenExecProcess(executorKey, command, distribution, installIfMissing).start()
             }.getOrElse { error ->
                 return@withContext HiddenExecResult(
                     output = "",
@@ -424,13 +430,17 @@ class TerminalManager private constructor(
     private fun buildHiddenExecProcess(
         executorKey: String,
         command: String,
-        distribution: TerminalDistribution.Spec
+        distribution: TerminalDistribution.Spec,
+        installIfMissing: Boolean,
     ): ProcessBuilder {
         return buildDistributionProcess(
             executorKey = executorKey,
             command = command,
             redirectErrorStream = true,
-            extraEnvironment = mapOf("OMNIBOT_HEADLESS" to "1"),
+            extraEnvironment = mapOf(
+                "OMNIBOT_HEADLESS" to "1",
+                "OMNIBOT_TERMINAL_NO_INSTALL" to if (installIfMissing) "0" else "1",
+            ),
             distribution = distribution
         )
     }

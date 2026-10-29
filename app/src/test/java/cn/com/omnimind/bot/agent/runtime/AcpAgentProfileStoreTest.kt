@@ -6,6 +6,7 @@ import com.google.gson.JsonParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -13,6 +14,50 @@ import org.junit.rules.TemporaryFolder
 class AcpAgentProfileStoreTest {
     @get:Rule
     val directory = TemporaryFolder()
+
+    @Test
+    fun `retirement removes launch settings but preserves immutable history owners after reopening`() {
+        val context = acpProfileStoreTestContext(directory.root)
+        val retiredId = "deepseek-harness-acp"
+        val retired = AcpAgentProfile(id = retiredId, name = "DeepSeek Harness", command = "dsh-acp")
+        val custom = AcpAgentProfile(id = "user-agent", name = "User Agent", command = "my-acp")
+        val preferences = context.getSharedPreferences("acp_agent_profiles", Context.MODE_PRIVATE)
+        preferences.edit()
+            .putString("profiles", Gson().toJson(listOf(retired, custom)))
+            .putString("selected_profile_id", retiredId)
+            .putString("session_bindings", Gson().toJson(mapOf("old-session" to retiredId)))
+            .putString("conversation_bindings", Gson().toJson(mapOf("42" to retiredId)))
+            .putString("health", Gson().toJson(mapOf(retiredId to AcpAgentHealth(installed = true))))
+            .putString("package_version:alpine:$retiredId", "{\"installedVersion\":\"0.1.1-rc.2\"}")
+            .putString("session_config:old-session", "{\"model\":\"original-model\"}")
+            .commit()
+
+        repeat(2) {
+            val store = AcpAgentProfileStore(acpProfileStoreTestContext(directory.root))
+            assertFalse(store.list().any { it.id == retiredId })
+            assertTrue(store.list().any { it.id == custom.id })
+            assertEquals(AcpAgentProfileStore.DEFAULT_AGENT_ID, store.selected().id)
+            assertEquals(retiredId, store.agentIdForSession("old-session"))
+            assertEquals(retiredId, store.agentIdForConversation(42))
+            store.bindConversation(42, AcpAgentProfileStore.CODEX_AGENT_ID)
+            assertEquals(retiredId, store.agentIdForConversation(42))
+            assertThrows(IllegalStateException::class.java) {
+                store.repairConversationBinding(42, AcpAgentProfileStore.CODEX_AGENT_ID)
+            }
+            assertEquals(mapOf("model" to "original-model"), store.sessionConfiguration("old-session"))
+            assertEquals(null, store.packageVersion("alpine", retiredId))
+            assertThrows(IllegalStateException::class.java) { store.select(retiredId) }
+            assertThrows(IllegalStateException::class.java) { store.save(retired) }
+            val rejection = assertThrows(IllegalStateException::class.java) {
+                store.requireSupportedAgent(null, store.agentIdForSession("old-session"), custom.id)
+            }
+            assertTrue(rejection.message.orEmpty().startsWith("agent_retired:"))
+            store.requireSupportedAgent(custom.id, AcpAgentProfileStore.CODEX_AGENT_ID)
+        }
+        val stored = preferences.getString("profiles", "").orEmpty()
+        assertFalse(stored.contains(retiredId))
+        assertFalse(preferences.getString("health", "").orEmpty().contains(retiredId))
+    }
 
     @Test
     fun `fresh and reset Na remain available before the first cloud check`() {

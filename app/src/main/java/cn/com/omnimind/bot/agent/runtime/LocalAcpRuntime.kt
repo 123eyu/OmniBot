@@ -506,7 +506,7 @@ internal class LocalAcpRuntime(
     private var sessionMcpEnabled = true
     // A connect attempt includes adapter preparation and ACP initialization.
     // Agent switching must be able to cancel that attempt before waiting for
-    // the mutex; otherwise a stalled DSH npm/proot process blocks Xiaowan.
+    // the mutex; otherwise a stalled npm/proot process blocks Xiaowan.
     private val pendingConnectJobs = ConcurrentHashMap.newKeySet<Job>()
     /**
      * Host-side sequence for ACP notification delivery. ACP leaves transport
@@ -584,7 +584,7 @@ internal class LocalAcpRuntime(
 
     /**
      * Environment inherited by ACP-created terminals. Harness tools such as
-     * `dsh plugin`, Claude's shell-backed functions, and MCP helper commands
+     * Claude's shell-backed functions and MCP helper commands
      * must run with the same managed PATH/home/provider settings as the ACP
      * process itself; request-local env values may then override it.
      */
@@ -804,11 +804,9 @@ internal class LocalAcpRuntime(
                             form = ElicitationFormCapabilities(),
                             url = ElicitationUrlCapabilities()
                         ),
-                        // DeepSeek Harness gates its Cordis/plugin plane on
-                        // this negotiated metadata. These are optional ACP
-                        // hints and are ignored by Harnesses that do not use
-                        // them; terminal_output also enables native tool
-                        // output through the standard terminal callbacks.
+                        // Optional client extensions are negotiated through
+                        // the selected adapter; terminal callbacks still own
+                        // native tool output.
                         _meta = AcpHarnessAdapters.forProfile(profile)
                             .clientCapabilityMeta(ACP_CLIENT_CAPABILITY_META)
                     ),
@@ -1174,6 +1172,7 @@ internal class LocalAcpRuntime(
         val selectedId = profileStore.selected().id
         return linkedMapOf<String, Any?>(
             "selectedAgentId" to selectedId,
+            "retiredAgentIds" to profileStore.retiredAgentIds.toList(),
             "agents" to profileStore.list().map {
                 it.toPayload(
                     selected = it.id == selectedId,
@@ -1683,7 +1682,7 @@ internal class LocalAcpRuntime(
                 // A managed Harness check is deliberately read-only and does
                 // not start an ACP process. Return its declared composition
                 // capabilities nevertheless; otherwise the UI displays an
-                // empty result and makes a healthy DSH installation look as
+                // empty result and makes a healthy ACP installation look as
                 // if it has no plugins/tools. A later initialize handshake
                 // replaces these with negotiated ACP values.
                 "capabilities" to profile.toPayload(
@@ -3874,7 +3873,7 @@ internal class LocalAcpRuntime(
         // the only safe attribution boundary while a prompt is active. Keep
         // this mapping for every Harness, not just one provider: requiring a
         // provider-specific turn field would reject valid standard ACP
-        // traffic and make Xiaowan/DSH behave differently from the protocol.
+        // traffic and make local Agents behave differently from the protocol.
         val implicitTurnId = turnOwnership.activeTurnId(threadId)
         val resolvedTurnId = turnId?.takeIf { it.isNotBlank() }
             ?: implicitTurnId
@@ -4782,15 +4781,10 @@ private fun capabilitiesPayload(info: AgentInfo?): Map<String, Any?> {
     )
 }
 
-/** Optional ACP client metadata understood by DeepSeek Harness 0.4.x. */
+/** Optional ACP client metadata negotiated by supported adapters. */
 internal val ACP_CLIENT_CAPABILITY_META: JsonObject = buildJsonObject {
     put("terminal_output", true)
     put("subagent-transcript", true)
-    put("dsh", buildJsonObject {
-        put("cordis", buildJsonObject {
-            put("protocol", 0)
-        })
-    })
 }
 
 private const val MANAGED_NPM_PATH_PREFIX =

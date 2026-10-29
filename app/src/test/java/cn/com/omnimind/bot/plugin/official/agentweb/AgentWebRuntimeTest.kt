@@ -19,13 +19,6 @@ class AgentWebRuntimeTest {
             "kimi web --no-open --host 127.0.0.1",
             AgentWebService.KIMI.command,
         )
-        assertEquals(
-            "node --expose-internals " +
-                "/root/.npm-global/lib/node_modules/@deepseek-ai/dsh/lib/bin.js " +
-                "web --patch $DEEPSEEK_HARNESS_WEB_PATCH_PATH " +
-                "--no-open --host 127.0.0.1 --port 0",
-            AgentWebService.DEEPSEEK_HARNESS.command,
-        )
         assertTrue(AgentWebService.OPENCODE.command.contains("opencode serve --hostname 127.0.0.1 --port 0"))
         assertFalse(AgentWebService.OPENCODE.command.contains("--service"))
         assertEquals(2, AgentWebService.OPENCODE.minimumMajorVersion)
@@ -64,58 +57,6 @@ class AgentWebRuntimeTest {
             AgentWebTranscriptParser.findUrl(
                 AgentWebUrlKind.KIMI,
                 "Local: http://[::1]:58627/#token=$token",
-            ),
-        )
-    }
-
-    @Test
-    fun `DeepSeek parser accepts current bare URL and future process token`() {
-        val token = "dsh_process_token_1234567890abcdef"
-        val authenticated = "http://localhost:3080/?token=$token"
-        assertEquals(
-            "http://127.0.0.1:3080",
-            AgentWebTranscriptParser.findUrl(
-                AgentWebUrlKind.DEEPSEEK_HARNESS,
-                "dsh web: http://127.0.0.1:3080\n",
-            ),
-        )
-        assertEquals(
-            "http://[::1]:3080/",
-            AgentWebTranscriptParser.findUrl(
-                AgentWebUrlKind.DEEPSEEK_HARNESS,
-                "dsh web: http://[::1]:3080/\n",
-            ),
-        )
-        assertEquals(
-            authenticated,
-            AgentWebTranscriptParser.findUrl(
-                AgentWebUrlKind.DEEPSEEK_HARNESS,
-                "dsh web: $authenticated\n",
-            ),
-        )
-        assertNull(
-            AgentWebTranscriptParser.findUrl(
-                AgentWebUrlKind.DEEPSEEK_HARNESS,
-                "dsh web: http://127.0.0.1:3080/?debug=true\n",
-            ),
-        )
-        assertNull(
-            AgentWebTranscriptParser.findUrl(
-                AgentWebUrlKind.DEEPSEEK_HARNESS,
-                "dsh web: http://127.0.0.1:3080/#token=$token\n",
-            ),
-        )
-        assertNull(
-            AgentWebTranscriptParser.findUrl(
-                AgentWebUrlKind.DEEPSEEK_HARNESS,
-                "dsh web: http://192.168.1.2:3080/?token=$token\n",
-            ),
-        )
-        assertEquals(
-            authenticated,
-            AgentWebTranscriptParser.findUrl(
-                AgentWebUrlKind.DEEPSEEK_HARNESS,
-                "dsh web: $authenticated\nMCP: http://127.0.0.1:9999\n",
             ),
         )
     }
@@ -175,113 +116,6 @@ class AgentWebRuntimeTest {
     }
 
     @Test
-    fun `DeepSeek Web uses the current Cordis provider and default-model surfaces`() {
-        val configuration = buildAgentWebLaunchConfiguration(
-            service = AgentWebService.DEEPSEEK_HARNESS,
-            provider = provider(
-                baseUrl = "https://gateway.example.com/v1",
-                customHeaders = mapOf("X-Route" to "mobile"),
-            ),
-            model = "glm-5",
-            reasoningEffort = "high",
-        )
-        val patch = configuration.managedFiles.getValue(DEEPSEEK_HARNESS_WEB_PATCH_PATH)
-
-        assertEquals("secret", configuration.environment["OMNIBOT_DSH_API_KEY"])
-        assertEquals(DEEPSEEK_HARNESS_WEB_HOME, configuration.environment["DSH_HOME"])
-        assertFalse(configuration.environment.containsKey("DSH_MODEL"))
-        assertFalse(configuration.environment.containsKey("DSH_PROVIDER"))
-        assertTrue(patch.contains("- id: llm-pi-ai"))
-        assertTrue(patch.contains("- id: agent-default-model"))
-        assertTrue(patch.contains("\"omnibot-dispatch\""))
-        assertTrue(patch.contains("\"api\":\"openai-completions\""))
-        assertTrue(patch.contains("\"model\":\"glm-5\""))
-        assertTrue(patch.contains("\"input\":[\"text\",\"image\"]"))
-        assertTrue(patch.contains("\"reasoningEfforts\""))
-        assertTrue(patch.contains("\"off\":\"none\""))
-        assertTrue(patch.contains("\"minimal\":\"minimal\""))
-        assertTrue(patch.contains("\"X-Route\":\"mobile\""))
-        assertTrue(patch.contains("\"reasoning\":\"high\""))
-        assertFalse(patch.contains("secret"))
-    }
-
-    @Test
-    fun `DSH ACP off is explicit on generic OpenAI routes and keeps native provider dialects`() {
-        val gateway = buildDeepSeekProviderPatch(
-            provider(baseUrl = "https://gateway.example.com/v1"),
-            "gateway-reasoner", "off", acp = true,
-        )
-        assertTrue(gateway.contains("\"off\":\"none\""))
-        assertTrue(gateway.contains("\"reasoning\":\"off\""))
-        assertTrue(gateway.contains("- id: acp"))
-        for (protocol in listOf("deepseek", "anthropic")) {
-            val native = buildDeepSeekProviderPatch(
-                provider(baseUrl = "https://api.$protocol.com", protocolType = protocol),
-                "native-model", "off", acp = true,
-            )
-            assertTrue(native.contains("\"off\":null"))
-            assertFalse(native.contains("\"off\":\"none\""))
-        }
-    }
-
-    @Test
-    fun `DeepSeek Web keeps an explicitly text-only model text-only`() {
-        val configuration = buildAgentWebLaunchConfiguration(
-            service = AgentWebService.DEEPSEEK_HARNESS,
-            provider = provider(
-                baseUrl = "https://api.deepseek.com",
-                protocolType = "deepseek",
-            ),
-            model = "deepseek-v4-flash",
-        )
-        val patch = configuration.managedFiles.getValue(DEEPSEEK_HARNESS_WEB_PATCH_PATH)
-
-        assertTrue(patch.contains("\"input\":[\"text\"]"))
-        assertFalse(patch.contains("\"input\":[\"text\",\"image\"]"))
-    }
-
-    @Test
-    fun `DeepSeek Web maps Responses and Anthropic wires explicitly`() {
-        val responses = buildAgentWebLaunchConfiguration(
-            service = AgentWebService.DEEPSEEK_HARNESS,
-            provider = provider(wireApi = "responses"),
-            model = "gpt-5",
-        ).managedFiles.getValue(DEEPSEEK_HARNESS_WEB_PATCH_PATH)
-        val anthropic = buildAgentWebLaunchConfiguration(
-            service = AgentWebService.DEEPSEEK_HARNESS,
-            provider = provider(protocolType = "anthropic"),
-            model = "claude-sonnet",
-        ).managedFiles.getValue(DEEPSEEK_HARNESS_WEB_PATCH_PATH)
-
-        assertTrue(responses.contains("\"api\":\"openai-responses\""))
-        assertTrue(anthropic.contains("\"api\":\"anthropic-messages\""))
-    }
-
-    @Test
-    fun `DeepSeek Web normalizes OpenAI roots without rewriting Anthropic roots`() {
-        val openAi = buildAgentWebLaunchConfiguration(
-            service = AgentWebService.DEEPSEEK_HARNESS,
-            provider = provider(baseUrl = "https://gateway.example.com"),
-            model = "glm-5",
-        ).managedFiles.getValue(DEEPSEEK_HARNESS_WEB_PATCH_PATH)
-        val anthropic = buildAgentWebLaunchConfiguration(
-            service = AgentWebService.DEEPSEEK_HARNESS,
-            provider = provider(
-                baseUrl = "https://gateway.example.com/anthropic",
-                protocolType = "anthropic",
-            ),
-            model = "claude-sonnet",
-        ).managedFiles.getValue(DEEPSEEK_HARNESS_WEB_PATCH_PATH)
-
-        assertTrue(openAi.contains("\"baseURL\":\"https://gateway.example.com/v1\""))
-        assertTrue(
-            anthropic.contains(
-                "\"baseURL\":\"https://gateway.example.com/anthropic\"",
-            ),
-        )
-    }
-
-    @Test
     fun `Kimi Responses uses official config instead of unsupported environment wire`() {
         val configuration = buildAgentWebLaunchConfiguration(
             service = AgentWebService.KIMI,
@@ -299,7 +133,7 @@ class AgentWebRuntimeTest {
     @Test(expected = IllegalArgumentException::class)
     fun `Agent Web rejects Provider URL fragments`() {
         buildAgentWebLaunchConfiguration(
-            service = AgentWebService.DEEPSEEK_HARNESS,
+            service = AgentWebService.KIMI,
             provider = provider(baseUrl = "https://gateway.example.com/v1#"),
             model = "glm-5",
         )
@@ -308,7 +142,7 @@ class AgentWebRuntimeTest {
     @Test(expected = IllegalArgumentException::class)
     fun `Agent Web rejects Provider URL query parameters`() {
         buildAgentWebLaunchConfiguration(
-            service = AgentWebService.DEEPSEEK_HARNESS,
+            service = AgentWebService.KIMI,
             provider = provider(baseUrl = "https://gateway.example.com/v1?api-version=1"),
             model = "glm-5",
         )
@@ -317,7 +151,7 @@ class AgentWebRuntimeTest {
     @Test(expected = IllegalArgumentException::class)
     fun `Agent Web rejects control characters in model ids`() {
         buildAgentWebLaunchConfiguration(
-            service = AgentWebService.DEEPSEEK_HARNESS,
+            service = AgentWebService.KIMI,
             provider = provider(),
             model = "glm-5\nnext",
         )
@@ -529,33 +363,12 @@ class AgentWebRuntimeTest {
             configurationProvider = FakeConfigurationProvider(),
         )
 
-        val result = manager.open(AgentWebService.DEEPSEEK_HARNESS)
+        val result = manager.open(AgentWebService.KIMI)
 
         assertEquals(AgentWebResultCode.RUNTIME_MISSING, result.code)
-        assertEquals("deepseek_harness", result.toJson()["packageId"].toString().trim('"'))
+        assertEquals("kimi", result.toJson()["packageId"].toString().trim('"'))
         assertEquals(0, gateway.launchCount)
     }
-
-    @Test
-    fun `manager writes managed DSH config without putting credentials in the command`() =
-        runBlocking {
-            val gateway = FakeGateway()
-            val manager = AgentWebRuntimeManager(
-                gateway = gateway,
-                configurationProvider = FakeConfigurationProvider(),
-                pollIntervalMs = 60_000L,
-                wait = {},
-            )
-
-            val result = manager.open(AgentWebService.DEEPSEEK_HARNESS)
-
-            assertEquals(AgentWebResultCode.OPENED, result.code)
-            assertTrue(gateway.lastLaunchCommand.contains("base64 -d"))
-            assertTrue(gateway.lastLaunchCommand.contains(DEEPSEEK_HARNESS_WEB_PATCH_PATH))
-            assertTrue(gateway.lastLaunchCommand.contains(AgentWebService.DEEPSEEK_HARNESS.command))
-            assertFalse(gateway.lastLaunchCommand.contains("secret"))
-            assertEquals("secret", gateway.lastLaunchEnvironment["OMNIBOT_DSH_API_KEY"])
-        }
 
     private class FakeConfigurationProvider : AgentWebConfigurationProvider {
         var provider = provider()
@@ -621,7 +434,7 @@ class AgentWebRuntimeTest {
                         } else if (sessionId.contains("opencode")) {
                             "server listening on http://127.0.0.1:4088\nserver password ${"p".repeat(43)}"
                         } else {
-                            "dsh web: http://127.0.0.1:3080/?token=${"d".repeat(32)}"
+                            error("Unexpected Agent Web session: $sessionId")
                         },
                     )
                 }

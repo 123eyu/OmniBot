@@ -431,6 +431,15 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   // Pure chat remains an ACP session with tool capabilities disabled.
   String? get _activeAcpAgentId => _committedAcpAgentId;
 
+  bool get _isActiveAgentRetired =>
+      _activeMode == ChatPageMode.agent &&
+      _agentCatalog?.isRetired(_activeAcpAgentId) == true;
+
+  String get _retiredAgentMessage => formatAgentRuntimeErrorForUser(
+    'agent_retired:',
+    english: Localizations.localeOf(context).languageCode == 'en',
+  );
+
   // The visible conversation's target and binding own its Agent identity.
   String? get _committedAcpAgentId {
     if (_activeMode == ChatPageMode.normal &&

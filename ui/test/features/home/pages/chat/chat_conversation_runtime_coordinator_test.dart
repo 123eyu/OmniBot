@@ -2080,23 +2080,23 @@ void main() {
     );
   });
 
-  test('keeps DSH ACP reasoning interleaved around tool activity', () {
+  test('keeps ACP reasoning interleaved around tool activity', () {
     const conversationId = 2103;
-    const turnId = 'dsh-turn';
+    const turnId = 'kimi-turn';
     applyAcp(
       conversationId,
       'item/reasoning/delta',
       turnId: turnId,
-      agentId: 'deepseek-harness-acp',
-      agentName: 'DeepSeek Harness',
+      agentId: 'kimi-code-acp',
+      agentName: 'Kimi Code',
       params: <String, dynamic>{'itemId': 'thought-1', 'delta': '第一阶段：分析工作区。'},
     );
     applyAcp(
       conversationId,
       'item/started',
       turnId: turnId,
-      agentId: 'deepseek-harness-acp',
-      agentName: 'DeepSeek Harness',
+      agentId: 'kimi-code-acp',
+      agentName: 'Kimi Code',
       params: <String, dynamic>{
         'item': <String, dynamic>{
           'id': 'tool-1',
@@ -2110,8 +2110,8 @@ void main() {
       conversationId,
       'item/reasoning/delta',
       turnId: turnId,
-      agentId: 'deepseek-harness-acp',
-      agentName: 'DeepSeek Harness',
+      agentId: 'kimi-code-acp',
+      agentName: 'Kimi Code',
       params: <String, dynamic>{'itemId': 'thought-2', 'delta': '第二阶段：根据结果判断。'},
     );
 

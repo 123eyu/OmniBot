@@ -192,7 +192,7 @@ class AgentRuntimeErrorSupportTest {
     @Test
     fun `harness preparation does not turn another switch into a wait`() {
         val error = IllegalStateException(
-            "Harness preparation is already running for deepseek-harness-acp. " +
+            "Harness preparation is already running for kimi-code-acp. " +
                 "Wait for that installation to finish before starting another unprepared Harness."
         )
 
@@ -210,7 +210,7 @@ class AgentRuntimeErrorSupportTest {
     @Test
     fun `missing official harness profile points to preparation instead of raw stderr`() {
         val error = IllegalStateException(
-            "dsh: profile \"acp\" does not exist; create it with 'dsh plugin --profile acp add <package>'"
+            "agent: profile \"acp\" does not exist"
         )
 
         assertEquals(

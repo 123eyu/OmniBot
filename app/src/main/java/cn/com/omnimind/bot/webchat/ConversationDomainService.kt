@@ -91,6 +91,8 @@ class ConversationDomainService(
         )
     }
 
+    fun retiredAgentIds(): List<String> = acpAgentProfileStore.retiredAgentIds.toList()
+
     fun listWebAgentProfiles(): List<Map<String, Any?>> {
         return acpAgentProfileStore.list().map { profile ->
             linkedMapOf(

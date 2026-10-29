@@ -46,7 +46,7 @@ scripts/test-agent-runtime.sh --live-harnesses /path/to/disposable-harness-insta
 ```
 
 `verify-live-harness-conversations.mjs` 默认逐一测试 Codex、Claude Code、Kimi、
-OpenCode、DeepSeek Harness。它复用原生生成的配置及透明本地转发器，模型回答
+OpenCode。它复用原生生成的配置及透明本地转发器，模型回答
 来自所配置的真实 API。每个 Harness 使用独立临时目录和会话，结束后清理本次
 临时凭据与测试文件；不会更改手机配置或用户工作区。
 

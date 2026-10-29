@@ -541,7 +541,6 @@ internal object AgentWebTranscriptParser {
 
     private fun isReadyLine(kind: AgentWebUrlKind, line: String): Boolean = when (kind) {
         AgentWebUrlKind.KIMI -> line.startsWith("Local:") || line.startsWith("Kimi server:")
-        AgentWebUrlKind.DEEPSEEK_HARNESS -> line.startsWith("dsh web:")
         AgentWebUrlKind.OPENCODE -> line.startsWith("server listening on ")
     }
 
@@ -556,11 +555,6 @@ internal object AgentWebTranscriptParser {
             AgentWebUrlKind.KIMI -> {
                 val fragment = uri.rawFragment
                 uri.rawQuery == null && fragment?.matches(tokenFragmentRegex) == true
-            }
-            AgentWebUrlKind.DEEPSEEK_HARNESS -> {
-                val query = uri.rawQuery
-                uri.rawFragment == null &&
-                    (query == null || query.matches(tokenFragmentRegex))
             }
             AgentWebUrlKind.OPENCODE -> isOpenCodeLoopbackServerUrl(candidate)
         }

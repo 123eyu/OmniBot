@@ -335,9 +335,9 @@ class ManagedAgentUninstallTest {
     }
 
     @Test
-    fun `only the six catalog managed agents are uninstallable and customized launchers opt out`() = runBlocking {
+    fun `only the five catalog managed agents are uninstallable and customized launchers opt out`() = runBlocking {
         val store = AcpAgentProfileStore(acpProfileStoreTestContext(temporaryFolder.root))
-        val expected = setOf("claude-code-acp", "codex-acp", "opencode-acp", "deepseek-harness-acp", "pi-acp", "kimi-code-acp")
+        val expected = setOf("claude-code-acp", "codex-acp", "opencode-acp", "pi-acp", "kimi-code-acp")
         assertEquals(expected, store.list().filter { it.toPayload()["uninstallable"] == true }.map { it.id }.toSet())
         assertEquals(false, AcpAgentProfile("custom", "Custom", command = "custom").toPayload()["uninstallable"])
         assertEquals(false, profile().copy(officialRuntime = AcpOfficialRuntime("pi")).toPayload()["uninstallable"])

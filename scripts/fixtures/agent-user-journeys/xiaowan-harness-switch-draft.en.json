@@ -1,5 +1,5 @@
 {
-  "name": "Preserve draft across DSH and Xiaowan selection, then send once",
+  "name": "Preserve draft across Kimi Code and Xiaowan selection, then send once",
   "requireClockSync": true,
   "steps": [
     {
@@ -14,13 +14,13 @@
     },
     {
       "action": "tap",
-      "label": "DeepSeek Harness"
+      "label": "Kimi Code"
     },
     {
       "action": "assert-draft",
       "marker": "OOB_LIVE_SWITCH_DRAFT",
       "scenario": "xiaowan-switch-reply.json",
-      "agentId": "deepseek-harness-acp"
+      "agentId": "kimi-code-acp"
     },
     {
       "action": "tap",

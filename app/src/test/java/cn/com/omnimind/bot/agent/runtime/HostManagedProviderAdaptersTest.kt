@@ -23,7 +23,7 @@ class HostManagedProviderAdaptersTest {
     @Test
     fun `host Responses support follows registered adapter capability rather than agent name`() {
         val supported = listOf(AcpHarnessAdapters.codex, AcpHarnessAdapters.openCode,
-            AcpHarnessAdapters.kimiCode, AcpHarnessAdapters.deepSeekHarness)
+            AcpHarnessAdapters.kimiCode, AcpHarnessAdapters.pi)
         supported.forEach { adapter ->
             assertTrue(AgentConfigAdapterRegistry.supportsHostManagedResponses(adapter))
             AgentConfigAdapterRegistry.map(input(adapter).copy(agentId = "renamed-user-profile"))
@@ -160,18 +160,6 @@ class HostManagedProviderAdaptersTest {
     }
 
     @Test
-    fun `DSH sends Responses through official provider patch with environment only grant`() {
-        val input = input(AcpHarnessAdapters.deepSeekHarness)
-        val mapping = AgentConfigAdapterRegistry.map(input)
-        val config = AgentConfigAdapterRegistry.launchConfigWrites(input, mapping, models, "").single().content
-        assertEquals(provider.apiKey, mapping.environment["OMNIBOT_DSH_API_KEY"])
-        assertTrue(config.contains("\"api\":\"openai-responses\""))
-        assertTrue(config.contains("\"apiKeyEnv\":\"OMNIBOT_DSH_API_KEY\""))
-        assertTrue(config.contains(provider.baseUrl))
-        assertFalse(config.contains(provider.apiKey))
-    }
-
-    @Test
     fun `offline Codex settings need only provider metadata and never write an inference route`() = runBlocking {
         val selected = ModelProviderProfile(id = "chatgpt", name = "ChatGPT",
             baseUrl = "https://api.openai.com/v1", sourceType = "chatgpt_oauth", wireApi = "responses")
@@ -197,22 +185,6 @@ class HostManagedProviderAdaptersTest {
         val onlineWrites = AgentConfigAdapterRegistry.directConfigWrites(online, emptyMap(), models)
         assertTrue(onlineWrites.single { it.path == CODEX_CONFIG_TOML_PATH }.content.contains(provider.baseUrl))
         assertTrue(onlineWrites.none { it.content.contains(provider.apiKey) })
-    }
-
-    @Test
-    fun `DSH preference editing neither requires credentials nor persists an active grant`() {
-        val current = DeepSeekHarnessConfig(reasoningEffort = "high", permissionMode = "read-only")
-        listOf<AgentProviderCredentials?>(null, provider).forEach { credentials ->
-            val updated = deepSeekHarnessConfigFromArgs(
-                args = mapOf("permissionMode" to "workspace-write"), current = current,
-                sharedProvider = credentials, sharedModel = models.single().id,
-            )
-            assertEquals("workspace-write", updated.permissionMode)
-            assertEquals("high", updated.reasoningEffort)
-            assertEquals("", updated.apiKey)
-            assertEquals("", updated.baseUrl)
-            assertFalse(buildDeepSeekHarnessConfigJson(updated).contains(provider.apiKey))
-        }
     }
 
     private fun input(adapter: AcpHarnessAdapter) = AgentProviderMappingInput(

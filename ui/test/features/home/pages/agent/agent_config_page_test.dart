@@ -629,60 +629,6 @@ void main() {
     expect(saved?['content'], updated);
     expect(find.textContaining('claude-opus'), findsOneWidget);
   });
-
-  testWidgets('DeepSeek Harness config keeps file permission in composer', (
-    tester,
-  ) async {
-    Map<String, dynamic>? saved;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
-          if (call.method == 'agent/list') {
-            return _catalog(_agent('deepseek-harness-acp', 'DeepSeek Harness'));
-          }
-          if (call.method == 'agent/config/read') {
-            return <String, dynamic>{
-              'agentId': 'deepseek-harness-acp',
-              'kind': 'deepseek-harness',
-              'configPath': '~/.dsh/omnibot-acp/config.json',
-              'baseUrl': 'https://api.deepseek.com',
-              'model': 'deepseek-v4-pro',
-              'apiKey': 'sk-old',
-              'reasoningEffort': 'high',
-              'permissionMode': 'read-only',
-            };
-          }
-          if (call.method == 'agent/config/write') {
-            saved = Map<String, dynamic>.from(call.arguments as Map);
-            return <String, dynamic>{
-              'agentId': 'deepseek-harness-acp',
-              'kind': 'deepseek-harness',
-              'configPath': '~/.dsh/omnibot-acp/config.json',
-              ...saved!,
-            };
-          }
-          return null;
-        });
-
-    await _pumpPage(tester, 'deepseek-harness-acp');
-
-    expect(
-      find.byKey(const ValueKey('deepseek-harness-permission-read-only')),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('~/.dsh/omnibot-acp/config.json'),
-      findsOneWidget,
-    );
-    await tester.tap(find.byKey(const Key('agent-config-save')));
-    await tester.pumpAndSettle();
-
-    expect(saved?['agentId'], 'deepseek-harness-acp');
-    expect(saved?['reasoningEffort'], 'high');
-    expect(saved?['permissionMode'], 'read-only');
-    expect(saved?.containsKey('baseUrl'), isFalse);
-    expect(saved?.containsKey('model'), isFalse);
-    expect(saved?.containsKey('apiKey'), isFalse);
-  });
 }
 
 Future<void> _pumpPage(WidgetTester tester, String agentId) async {
@@ -713,7 +659,6 @@ Map<String, dynamic> _catalog(Map<String, dynamic> agent) {
 Map<String, dynamic> _agent(String id, String name) {
   final command = switch (id) {
     'codex-acp' => 'codex-acp',
-    'deepseek-harness-acp' => 'dsh',
     _ => 'claude-agent-acp',
   };
   return <String, dynamic>{

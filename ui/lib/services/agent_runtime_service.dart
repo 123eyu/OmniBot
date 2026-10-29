@@ -116,6 +116,10 @@ bool isAgentCancellationSuccessful(Map<String, dynamic> response) {
 /// instead of exposing adapter stack traces or waiting for a raw error string
 /// to render in the chat.
 const _agentUserErrors = <String, ({String zh, String en})>{
+  'agentRetired': (
+    zh: '此助手已停止支持。历史记录仍可查看，请新建其他助手的对话。',
+    en: 'This assistant is no longer supported. You can view its history or start a new conversation with another assistant.',
+  ),
   'modelRequired': (
     zh: '请先在模型设置中选择一个可用模型，再启动助手。',
     en: 'Choose an available model in model settings, then start the assistant.',
@@ -228,6 +232,10 @@ String formatAgentRuntimeErrorForUser(
   String text(String key) {
     final message = _agentUserErrors[key]!;
     return english ? message.en : message.zh;
+  }
+
+  if (failureKind == 'agent_retired' || raw.contains('agent_retired:')) {
+    return text('agentRetired');
   }
 
   // Package maintenance errors belong to the host, not a model request. Use
@@ -743,11 +751,15 @@ class AcpAgentCatalog {
     required this.agents,
     this.runtimeStatus,
     this.distributionId,
+    this.retiredAgentIds = const <String>{},
   });
 
   final String selectedAgentId;
   final List<AcpAgentProfile> agents;
   final String? distributionId;
+  final Set<String> retiredAgentIds;
+
+  bool isRetired(String? agentId) => retiredAgentIds.contains(agentId?.trim());
 
   /// A switch response may carry the status snapshot captured immediately
   /// after ACP initialization. Keeping it with the catalog avoids a second
@@ -764,12 +776,17 @@ class AcpAgentCatalog {
   factory AcpAgentCatalog.fromMap(Map<dynamic, dynamic>? map) {
     final source = map ?? const <dynamic, dynamic>{};
     final rawAgents = source['agents'];
+    final retiredAgentIds = (source['retiredAgentIds'] as List? ?? const [])
+        .whereType<String>()
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
     final agents = <AcpAgentProfile>[];
     final seenIdentities = <String>{};
     if (rawAgents is List) {
       for (final rawAgent in rawAgents.whereType<Map>()) {
         final agent = AcpAgentProfile.fromMap(rawAgent);
-        if (agent.id.isEmpty) continue;
+        if (agent.id.isEmpty || retiredAgentIds.contains(agent.id)) continue;
         if (seenIdentities.add(_agentCatalogIdentity(agent))) {
           agents.add(agent);
         }
@@ -780,6 +797,7 @@ class AcpAgentCatalog {
           _stringOrNull(source['selectedAgentId']) ??
           (agents.isEmpty ? '' : agents.first.id),
       agents: agents,
+      retiredAgentIds: retiredAgentIds,
       distributionId: _stringOrNull(source['distributionId']),
       runtimeStatus:
           source.containsKey('connected') || source.containsKey('ready')
@@ -1300,8 +1318,6 @@ class AgentRuntimeService {
     String? baseUrl,
     String? model,
     String? apiKey,
-    String? reasoningEffort,
-    String? permissionMode,
     String? content,
     int? expectedRevision,
   }) {
@@ -1311,8 +1327,6 @@ class AgentRuntimeService {
       if (baseUrl != null) 'baseUrl': baseUrl,
       if (model != null) 'model': model,
       if (apiKey != null) 'apiKey': apiKey,
-      if (reasoningEffort != null) 'reasoningEffort': reasoningEffort,
-      if (permissionMode != null) 'permissionMode': permissionMode,
       if (content != null) 'content': content,
       if (expectedRevision != null) 'expectedRevision': expectedRevision,
     });

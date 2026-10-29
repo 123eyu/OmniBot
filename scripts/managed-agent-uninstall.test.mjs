@@ -14,7 +14,11 @@ const definitions = {
   'claude-code': [['@anthropic-ai/claude-code', 'claude'], ['@agentclientprotocol/claude-agent-acp', 'claude-agent-acp']],
   codex: [['@openai/codex', 'codex'], ['@agentclientprotocol/codex-acp', 'codex-acp']],
   opencode: [['@opencode/cli', 'opencode'], ['opencode-ai', 'opencode2']],
-  'deepseek-harness': [['@deepseek-ai/dsh', 'dsh']],
+  'deepseek-harness': [
+    ['@deepseek-ai/dsh', 'dsh'],
+    ['@openma/deepseek-harness-acp', 'dsh-acp'],
+    ['@deepseek-ai/dsh-acp-demo', 'dsh-acp-demo'],
+  ],
   pi: [],
   'kimi-code': [['@moonshot-ai/kimi-code', 'kimi']],
 };
@@ -36,10 +40,12 @@ function fixture(t, distribution = 'alpine') {
     'root/.config/opencode/opencode.json', 'root/.config/opencode/opencode.json.pre-v2.bak',
     'root/.local/share/opencode/storage/session.json',
     'root/.dsh/omnibot-acp/profiles/acp/package.json', 'root/.dsh/omnibot-acp/profiles/acp/node_modules/user-plugin/index.js',
+    'root/.dsh/omnibot-acp/profiles/acp/node_modules/@openma/deepseek-harness-acp/package.json',
+    'root/.dsh/omnibot-acp/omnibot-acp-headless.patch.yml', 'root/.dsh/settings.json', 'root/.dsh/sessions/history.jsonl',
     'root/.dsh/omnibot-acp/sessions/session.json', 'root/.pi/omnibot-acp/models.json',
     'root/.pi/omnibot-acp/sessions/session.jsonl', 'root/.kimi-code/omnibot/config.toml',
     'root/.kimi-code/sessions/session.jsonl', 'workspace/.omnibot/history.jsonl',
-    'usr/bin/node', 'usr/bin/npm', 'usr/bin/bash', 'usr/bin/rg',
+    'usr/bin/node', 'usr/bin/npm', 'usr/bin/python3', 'usr/bin/bash', 'usr/bin/rg',
     'other-distribution/root/.npm-global/lib/node_modules/@openai/codex/package.json',
   ].map((file) => join(root, file));
   for (const file of retained) write(file, `preserve:${file}`);
@@ -139,17 +145,122 @@ for (const distribution of ['alpine', 'ubuntu']) {
   }
 }
 
-test('offline npm uninstall removes actual global package fixtures without scripts or unrelated packages', (t) => {
-  const f = fixture(t);
-  f.install('codex');
-  const result = uninstallAgent('codex', {
-    ...f.options,
-    runNpm: (args) => spawnSync('npm', args, {
-      encoding: 'utf8', timeout: 20000,
-      env: { ...process.env, npm_config_registry: 'http://127.0.0.1:1', npm_config_cache: join(f.root, 'npm-cache') },
-    }),
+for (const strategy of ['codex', 'deepseek-harness']) {
+  test(`offline npm removes actual ${strategy} global packages without scripts or unrelated data`, (t) => {
+    const f = fixture(t);
+    f.install(strategy);
+    if (strategy === 'deepseek-harness') {
+      f.write(join(f.layout.bin, 'dsh-acp-android'), legacyDeepSeekWrapper(f.layout), true);
+      symlinkSync(join(f.layout.bin, 'dsh-acp-android'), join(f.layout.systemBin, 'dsh-acp-android'));
+    }
+    const result = uninstallAgent(strategy, {
+      ...f.options,
+      runNpm: (args) => spawnSync('npm', args, {
+        encoding: 'utf8', timeout: 20000,
+        env: { ...process.env, npm_config_registry: 'http://127.0.0.1:1', npm_config_cache: join(f.root, 'npm-cache') },
+      }),
+    });
+    assert.equal(result.ok, true, result.error);
+    for (const [name] of definitions[strategy]) assert.equal(existsSync(join(f.layout.modules, name)), false);
+    f.assertRetained();
   });
+}
+
+function legacyDeepSeekWrapper(layout) {
+  const entry = join(layout.modules, '@deepseek-ai/dsh/lib/bin.js');
+  const patch = join(layout.root, 'root/.dsh/omnibot-acp/omnibot-acp-headless.patch.yml');
+  return `#!/bin/sh\nexec node --expose-internals ${entry} --patch "${patch}" "$@"\n`;
+}
+
+for (const installed of [true, false]) {
+  test(`retired DeepSeek headless wrapper is cleaned with packages ${installed ? 'present' : 'already absent'}`, (t) => {
+    const f = fixture(t);
+    if (installed) f.install('deepseek-harness');
+    const wrapper = join(f.layout.bin, 'dsh-acp-android');
+    const alias = join(f.layout.systemBin, 'dsh-acp-android');
+    const source = legacyDeepSeekWrapper(f.layout);
+    assert.equal(Buffer.byteLength(source.replaceAll(f.root, '')), 171, 'match the shipped legacy wrapper');
+    f.write(wrapper, source, true);
+    symlinkSync(wrapper, alias);
+    const original = tree(f.root);
+    const before = uninstallAgent('deepseek-harness', { ...f.options, probe: true });
+    assert.equal(before.managedFilesRemain, true);
+    assert.deepEqual(before.externalCommands, []);
+    assert.deepEqual(tree(f.root), original);
+    const result = uninstallAgent('deepseek-harness', f.options);
+    assert.equal(result.ok, true, result.error);
+    assert.equal(existsSync(wrapper), false);
+    assert.throws(() => lstatSync(alias), { code: 'ENOENT' });
+    assert.equal(f.npmCalls.length, installed ? 1 : 0);
+    if (installed) assert.deepEqual(f.npmCalls[0].slice(8), definitions['deepseek-harness'].map(([name]) => name));
+    assert.equal(uninstallAgent('deepseek-harness', f.options).ok, true);
+    assert.equal(f.npmCalls.length, installed ? 1 : 0);
+    f.assertRetained();
+  });
+}
+
+test('retired DeepSeek plain wrapper is cleaned without requiring the removed runtime', (t) => {
+  const f = fixture(t);
+  const wrapper = join(f.layout.bin, 'dsh-acp-android');
+  f.write(wrapper, `#!/bin/sh\nexec node --expose-internals ${join(f.layout.modules, '@deepseek-ai/dsh/lib/bin.js')} "$@"\n`, true);
+  const result = uninstallAgent('deepseek-harness', f.options);
   assert.equal(result.ok, true, result.error);
+  assert.equal(existsSync(wrapper), false);
+  assert.deepEqual(f.npmCalls, []);
+  f.assertRetained();
+});
+
+test('retired DeepSeek dangling npm links and setup aliases are removed without npm', (t) => {
+  const f = fixture(t);
+  const entries = [];
+  for (const [name, command] of definitions['deepseek-harness']) {
+    const bin = join(f.layout.bin, command);
+    const alias = join(f.layout.systemBin, command);
+    symlinkSync(relative(f.layout.bin, join(f.layout.modules, name, 'bin/cli.js')), bin);
+    symlinkSync(bin, alias);
+    entries.push(bin, alias);
+  }
+  const result = uninstallAgent('deepseek-harness', f.options);
+  assert.equal(result.ok, true, result.error);
+  for (const file of entries) assert.throws(() => lstatSync(file), { code: 'ENOENT' });
+  assert.deepEqual(f.npmCalls, []);
+  f.assertRetained();
+});
+
+for (const change of ['external entry', 'different patch', 'appended command']) {
+  test(`retired DeepSeek cleanup preserves an unknown wrapper with ${change}`, (t) => {
+    const f = fixture(t);
+    f.install('deepseek-harness');
+    const wrapper = join(f.layout.bin, 'dsh-acp-android');
+    let source = legacyDeepSeekWrapper(f.layout);
+    if (change === 'external entry') source = source.replace(join(f.layout.modules, '@deepseek-ai/dsh/lib/bin.js'), '/custom/dsh/lib/bin.js');
+    if (change === 'different patch') source = source.replace('omnibot-acp-headless.patch.yml', 'user.patch.yml');
+    if (change === 'appended command') source += 'echo user customization\n';
+    f.write(wrapper, source, true);
+    const alias = join(f.layout.systemBin, 'dsh-acp-android');
+    symlinkSync(wrapper, alias);
+    const result = uninstallAgent('deepseek-harness', f.options);
+    assert.equal(result.ok, false);
+    assert.equal(result.managedFilesRemain, false);
+    assert.equal(result.commandPresent, true);
+    assert.ok(result.externalCommands.includes(wrapper));
+    assert.ok(result.externalCommands.includes(alias));
+    assert.equal(readFileSync(wrapper, 'utf8'), source);
+    assert.equal(readlinkSync(alias), wrapper);
+    f.assertRetained();
+  });
+}
+
+test('retired DeepSeek cleanup preserves external legacy adapter installations', (t) => {
+  const f = fixture(t);
+  f.install('deepseek-harness');
+  const external = join(f.external, 'dsh-acp');
+  f.write(external, '#!/bin/sh\nexit 0\n', true);
+  const result = uninstallAgent('deepseek-harness', f.options);
+  assert.equal(result.ok, false);
+  assert.equal(result.managedFilesRemain, false);
+  assert.deepEqual(result.externalCommands, [external]);
+  assert.equal(readFileSync(external, 'utf8'), '#!/bin/sh\nexit 0\n');
   f.assertRetained();
 });
 

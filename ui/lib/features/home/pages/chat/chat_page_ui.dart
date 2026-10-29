@@ -1391,6 +1391,9 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                   child: Container(
                     key: _inputAreaKey,
                     child: ChatInputWrapper(
+                      unavailableMessage: _isActiveAgentRetired
+                          ? _retiredAgentMessage
+                          : null,
                       inputAreaKey: _chatInputAreaKey,
                       controller: _messageController,
                       focusNode: _inputFocusNode,

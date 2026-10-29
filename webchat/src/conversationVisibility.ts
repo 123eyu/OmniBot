@@ -9,3 +9,12 @@ export function isNaConversation(conversation: Conversation | null | undefined):
 export function withoutNaHistory(conversations: Conversation[]): Conversation[] {
   return conversations.filter((conversation) => !isNaConversation(conversation));
 }
+
+/** Retirement is declared by the native catalog; historical ownership remains unchanged. */
+export function isRetiredAgentConversation(
+  conversation: Conversation | null | undefined,
+  retiredAgentIds: readonly string[],
+): boolean {
+  const agentId = conversation?.agentId?.trim();
+  return conversation?.mode === "codex" && Boolean(agentId && retiredAgentIds.includes(agentId));
+}

@@ -5,7 +5,6 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.ai.assistance.operit.terminal.TerminalManager
-import com.ai.assistance.operit.terminal.setup.buildAlpinePackageInstallCommand
 import cn.com.omnimind.baselib.database.DatabaseHelper
 import cn.com.omnimind.baselib.llm.ModelProviderProfile
 import cn.com.omnimind.baselib.llm.ModelProviderConfigStore
@@ -210,7 +209,7 @@ class AgentRuntimeManager private constructor(
     // Preparing an official npm ACP adapter is an installation boundary, not
     // a normal switch operation.  Serialize it so rapid agent switches cannot
     // start multiple npm/native builds against the same terminal directory.
-    private val managedAcpPreparationGate = ManagedAcpPreparationGate()
+    private val managedAcpPreparationGate = ManagedAcpPreparationGate.shared
     private val mainHandler = Handler(Looper.getMainLooper())
     private val bindingRepository = AgentSessionBindingRepository(appContext)
     // ACP deltas arrive much faster than durable bindings can change. Cache
@@ -769,6 +768,20 @@ class AgentRuntimeManager private constructor(
         args: Map<String, Any?>,
     ): Any? {
         val canonicalArgs = AcpSessionCompatibility.canonicalize(method, args)
+        // Admission precedes every local/cloud/bridge route. A retired owner
+        // must never disappear and turn a historical prompt into a new Agent turn.
+        val conversationId = canonicalArgs.longValue("conversationId")
+        val sessionId = canonicalArgs.stringValue("sessionId") ?: canonicalArgs.stringValue("threadId")
+        val persistedSessionId = conversationId?.let {
+            bindingRepository.getBindingByConversationId(it)?.threadId
+        }
+        acpAgentProfileStore.requireSupportedAgent(
+            canonicalArgs.stringValue("agentId"),
+            canonicalArgs.mapValue("agent").stringValue("id"),
+            conversationId?.let(acpAgentProfileStore::agentIdForConversation),
+            sessionId?.let(acpAgentProfileStore::agentIdForSession),
+            persistedSessionId?.let(acpAgentProfileStore::agentIdForSession),
+        )
         if (naRuntime.owns(method, canonicalArgs, remoteConfigStore.read().enabled)) return naRuntime.handle(method, canonicalArgs)
         if (method == "initialize") {
             return initializeAcp(canonicalArgs)
@@ -797,6 +810,7 @@ class AgentRuntimeManager private constructor(
         if (method == "agent/select" && canonicalArgs["agentId"] == NA_AGENT_ID) {
             acpAgentProfileStore.select(NA_AGENT_ID)
             return naRuntime.status() + mapOf("selectedAgentId" to NA_AGENT_ID,
+                "retiredAgentIds" to acpAgentProfileStore.retiredAgentIds.toList(),
                 "agents" to acpAgentProfileStore.list().map { it.toPayload(selected = it.id == NA_AGENT_ID, health = acpAgentProfileStore.health(it.id)) })
         }
         if (method.startsWith("agent/")) {
@@ -966,7 +980,10 @@ class AgentRuntimeManager private constructor(
     private fun withAgentPackageVersions(payload: Any?, distributionId: String): Any? {
         if (payload !is Map<*, *>) return payload
         val result = payload.entries.associate { it.key.toString() to it.value }.toMutableMap()
-        if (result.containsKey("agents")) result["distributionId"] = distributionId
+        if (result.containsKey("agents")) {
+            result["distributionId"] = distributionId
+            result["retiredAgentIds"] = acpAgentProfileStore.retiredAgentIds.toList()
+        }
         fun enrich(value: Any?): Any? {
             if (value !is Map<*, *>) return value
             val id = value["id"] as? String ?: return value
@@ -1605,22 +1622,6 @@ class AgentRuntimeManager private constructor(
         val profile = acpAgentProfileStore.list().firstOrNull { it.id == agentId }
             ?: throw IllegalArgumentException("Unknown ACP agent: $agentId")
         val harnessAdapter = AcpHarnessAdapters.forProfile(profile)
-        val harnessConfigPath = harnessAdapter.launchConfigPath
-        if (harnessConfigPath != null) {
-            val payload = harnessAdapter.readConfigPayload(
-                profileId = profile.id,
-                rawConfig = readTerminalTextFile(
-                    path = harnessConfigPath,
-                    executorKey = harnessAdapter.launchConfigExecutorKey
-                        ?: "harness-config-read-${profile.id}"
-                ),
-                provider = currentAgentProviderCredentials(),
-                model = currentAgentBoundModel(),
-            ) ?: throw UnsupportedOperationException(
-                "Harness does not expose a readable configuration surface."
-            )
-            return withAgentConfigMetadata(profile.id, payload)
-        }
         val adapterConfig = AgentConfigAdapterRegistry.readConfig(
             input = AgentProviderMappingInput(
                 agentId = profile.id,
@@ -1663,32 +1664,6 @@ class AgentRuntimeManager private constructor(
         providerAccess: AgentProviderAccess?,
     ): Map<String, Any?> {
         val harnessAdapter = AcpHarnessAdapters.forProfile(profile)
-        val harnessConfigPath = harnessAdapter.launchConfigPath
-        if (harnessConfigPath != null) {
-            val content = harnessAdapter.writeConfigPayload(
-                args = args,
-                rawConfig = readTerminalTextFile(
-                    path = harnessConfigPath,
-                    executorKey = harnessAdapter.launchConfigExecutorKey
-                        ?: "harness-config-read-${profile.id}"
-                ),
-                provider = currentAgentProviderCredentials(),
-                model = currentAgentBoundModel(),
-            ) ?: throw UnsupportedOperationException(
-                "Harness does not expose a writable configuration surface."
-            )
-            writeTerminalTextFile(
-                path = harnessConfigPath,
-                content = content,
-                executorKey = "harness-config-write-${profile.id}"
-            )
-            recordAgentConfigRevision(
-                agentId = profile.id,
-                operation = "write",
-                paths = listOf(harnessConfigPath),
-            )
-            return readAgentConfig(mapOf("agentId" to profile.id))
-        }
         val providerProfile = currentAgentProviderProfile()
         val configuredProvider = if (ChatGptOAuthProvider.isOAuth(providerProfile?.sourceType)) {
             providerAccess?.takeIf { it.profile.id == providerProfile?.id }?.credentials
@@ -2189,23 +2164,15 @@ class AgentRuntimeManager private constructor(
             providerModels
         }
         val harnessAdapter = AcpHarnessAdapters.forProfile(profile)
-        // Re-read editable files at process launch; the running process keeps its snapshot.
-        val existingHarnessConfig = harnessAdapter.launchConfigPath?.let { path ->
-            readTerminalTextFile(
-                path = path,
-                executorKey = harnessAdapter.launchConfigExecutorKey
-                    ?: "harness-launch-config-read"
-            )
-        }.orEmpty()
         val mapping = AgentConfigAdapterRegistry.map(
             AgentProviderMappingInput(
                 agentId = profile.id,
                 provider = sharedProvider,
                 model = resolvedModel,
                 harnessAdapter = harnessAdapter,
-                rawHarnessConfig = existingHarnessConfig,
             )
         )
+        // Re-read editable files at process launch; the running process keeps its snapshot.
         val existingAdapterConfig = mapping.launchConfigPath?.let { path ->
             readTerminalTextFile(
                 path = path,
@@ -2213,11 +2180,6 @@ class AgentRuntimeManager private constructor(
                     ?: "harness-launch-config-read"
             )
         }.orEmpty()
-        val harnessEnvironment = harnessAdapter.launchEnvironment(
-            provider = sharedProvider,
-            model = resolvedModel,
-            rawConfig = existingHarnessConfig,
-        ) ?: mapping.environment
         // Official ACP persistence uses hard-link publication. Android's app
         // sandbox rejects hard links, so install one narrow Node compatibility
         // preload while keeping upstream ACP packages untouched.
@@ -2247,7 +2209,6 @@ class AgentRuntimeManager private constructor(
             // the target already contains that exact config.
             val existingContent = when (write.path) {
                 mapping.launchConfigPath -> existingAdapterConfig
-                harnessAdapter.launchConfigPath -> existingHarnessConfig
                 else -> null
             }
             if (existingContent != null && existingContent == write.content) {
@@ -2259,9 +2220,7 @@ class AgentRuntimeManager private constructor(
                 executorKey = write.executorKey,
             )
         }
-        val launchEnvironment =
-            if (launchConfigWrites.isNotEmpty()) mapping.environment else harnessEnvironment
-        return launchEnvironment
+        return mapping.environment
     }
 
     /**
@@ -2362,7 +2321,7 @@ class AgentRuntimeManager private constructor(
 
         // A previous successful ACP connection is the fast path.  In
         // particular, do not make an already-healthy Harness wait for an
-        // unrelated Harness (for example DeepSeek) to finish installing.
+        // unrelated Harness to finish installing.
         val previousHealth = acpAgentProfileStore.health(profile.id)
         if (!force && shouldReuseManagedAcpPreparation(
                 healthStatus = previousHealth.status,
@@ -2402,17 +2361,11 @@ class AgentRuntimeManager private constructor(
         val managedPackages = runtime.managedAdapterPackages
             .ifEmpty { listOf(packageName) }
         val installTargets = managedPackages.joinToString(" ") { shellQuote(it) }
-        val nativeBuildPrerequisites = if (runtime.requiresNativeBuildTools) {
-            MANAGED_NATIVE_BUILD_PREREQUISITES_COMMAND
-        } else {
-            ":"
-        }
         val adapterHealthCheck = runtime.managedAdapterHealthCommand ?: ":"
         val adapterInstallCommand = runtime.managedInstallCommand
             ?: "npm install -g --prefix /root/.npm-global --no-audit --no-fund $installTargets"
         val installScript = """
             set -eu
-            $nativeBuildPrerequisites
             mkdir -p /root/.npm-global/bin
             export PATH="/root/.npm-global/bin:${'$'}PATH"
             $adapterInstallCommand
@@ -2436,7 +2389,7 @@ class AgentRuntimeManager private constructor(
             timeoutMs = MANAGED_ACP_PROBE_TIMEOUT_MS,
             distribution = distribution,
         )
-        // Some official Harnesses (DeepSeek ACP profile in particular) keep
+        // Some official Harnesses keep
         // the adapter inside a vendor-owned profile directory rather than
         // installing it globally. Their health command is the authoritative
         // package-graph check; probing `/root/.npm-global` would incorrectly
@@ -3823,6 +3776,11 @@ internal class ManagedAcpPreparationInProgressException(
  * without starting a terminal or an ACP process.
  */
 internal class ManagedAcpPreparationGate {
+    companion object {
+        /** Foreground installs and upgrade cleanup share one npm-prefix owner. */
+        val shared = ManagedAcpPreparationGate()
+    }
+
     private val mutex = Mutex()
 
     @Volatile
@@ -3860,7 +3818,7 @@ internal fun shouldPrepareManagedAcpAdapter(
 ): Boolean {
     // Keep the agent id in the decision signature because preparation is
     // agent-specific, but reuse the same readiness contract for all managed
-    // adapters. Updating DSH is not part of every foreground switch.
+    // adapters. Package updates are not part of every foreground switch.
     val revisionCurrent = requiredRevision == null ||
         preparationRevision == requiredRevision
     return !(commandAvailable && allPackagesReady && adapterHealthy && revisionCurrent)
@@ -3899,25 +3857,6 @@ internal fun shouldProbeManagedAcpLaunchCommand(
 
 private const val MANAGED_NPM_PATH_PREFIX =
     "PATH=\"/root/.npm-global/bin:\$PATH\"; export PATH;"
-internal val MANAGED_NATIVE_BUILD_PREREQUISITES_COMMAND = """
-    ensure_native_build_tools() {
-      if command -v make >/dev/null 2>&1 &&
-         command -v c++ >/dev/null 2>&1 &&
-         command -v python3 >/dev/null 2>&1; then
-        return 0
-      fi
-      if command -v apk >/dev/null 2>&1; then
-        ${buildAlpinePackageInstallCommand(listOf("build-base", "python3"))}
-      elif command -v apt-get >/dev/null 2>&1; then
-        apt-get update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential python3
-      else
-        echo "This Harness requires make, a C++ compiler, and Python 3 for its native dependencies." >&2
-        return 1
-      fi
-    }
-    ensure_native_build_tools
-""".trimIndent()
 internal const val OPENCODE_CONFIG_PATH = "/root/.config/opencode/opencode.json"
 private val LOCAL_ACP_METHODS = setOf(
     "initialize",
