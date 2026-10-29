@@ -136,7 +136,7 @@ void main() {
         .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
           agentMethods.add(call.method);
           if (call.method == 'agent/list') {
-            return {'selectedAgentId': 'codex-acp', 'agents': nativeAgents};
+            return {'agents': nativeAgents};
           }
           return null;
         });
@@ -2843,25 +2843,6 @@ void main() {
                 },
               },
               <String, Object?>{
-                'id': 'open_deepseek_harness_web',
-                'pluginId': 'com.omnimind.agent-web',
-                'displayName': 'DeepSeek Harness Web',
-                'description': 'Open DSH Web',
-                'presentation': <String, Object?>{
-                  'placements': <String>['home_drawer_quick_launch'],
-                  'agentId': 'deepseek-harness-acp',
-                  'quickLaunchOrder': 1,
-                  'label': <String, String>{
-                    'zh': 'DeepSeek Harness Web',
-                    'en': 'DeepSeek Harness Web',
-                  },
-                  'shortLabel': <String, String>{
-                    'zh': 'DSH Web',
-                    'en': 'DSH Web',
-                  },
-                },
-              },
-              <String, Object?>{
                 'id': 'open_kimi_web',
                 'pluginId': 'com.omnimind.agent-web',
                 'displayName': 'Kimi Code Web',
@@ -2914,19 +2895,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final kimi = find.byKey(const ValueKey('home-drawer-web-kimi-code-acp'));
-    final deepSeek = find.byKey(
-      const ValueKey('home-drawer-web-deepseek-harness-acp'),
-    );
     expect(kimi, findsOneWidget);
-    expect(deepSeek, findsOneWidget);
-    expect(tester.getCenter(kimi).dy, lessThan(tester.getCenter(deepSeek).dy));
 
     final openCode = find.byKey(const ValueKey('home-drawer-web-opencode-acp'));
     expect(openCode, findsOneWidget);
-    expect(
-      tester.getCenter(deepSeek).dy,
-      lessThan(tester.getCenter(openCode).dy),
-    );
+    expect(tester.getCenter(kimi).dy, lessThan(tester.getCenter(openCode).dy));
     await tester.tap(openCode);
     await tester.pumpAndSettle();
 

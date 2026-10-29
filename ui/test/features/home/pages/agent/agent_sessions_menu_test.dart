@@ -46,7 +46,7 @@ void main() {
           locale: const Locale('en'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: const AgentSessionsPage(),
+          home: const AgentSessionsPage(agentId: 'codex-remote'),
         ),
       );
       await tester.pumpAndSettle();
@@ -61,7 +61,7 @@ void main() {
       expect(writes, isEmpty);
       await tester.pumpAndSettle();
       expect(writes, hasLength(1));
-      expect(writes.single.arguments, {'sessionId': 'chosen-session'});
+      expect(writes.single.arguments, {'sessionId': 'chosen-session', 'agentId': 'codex-remote'});
       expect(find.byType(OmniMenuSurface), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());

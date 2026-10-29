@@ -2798,12 +2798,6 @@ abstract class AppLocalizations {
   /// **'OpenCode CLI（内置 ACP 支持）'**
   String get alpineOpenCode;
 
-  /// No description provided for @alpineDeepSeekHarness.
-  ///
-  /// In zh, this message translates to:
-  /// **'DeepSeek Harness（dsh）官方 ACP 运行组件'**
-  String get alpineDeepSeekHarness;
-
   /// No description provided for @alpineKimiCode.
   ///
   /// In zh, this message translates to:

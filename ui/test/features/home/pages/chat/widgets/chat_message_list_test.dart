@@ -2160,7 +2160,7 @@ void main() {
   );
 
   testWidgets(
-    'DSH completion folds the tool between separate step messages instead of leaving it at the bottom',
+    'legacy DSH history folds the tool between separate step messages instead of leaving it at the bottom',
     (tester) async {
       final controller = ScrollController();
       var messages = _buildDshMultiStepAgentRunMessages(

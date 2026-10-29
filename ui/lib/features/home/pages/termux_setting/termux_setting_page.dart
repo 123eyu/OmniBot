@@ -103,12 +103,6 @@ const List<_EnvironmentDefinition> _environmentDefinitions =
         groupKey: 'alpineAiAgent',
       ),
       _EnvironmentDefinition(
-        id: 'deepseek_harness',
-        title: 'DeepSeek Harness',
-        descriptionKey: 'alpineDeepSeekHarness',
-        groupKey: 'alpineAiAgent',
-      ),
-      _EnvironmentDefinition(
         id: 'pi',
         title: 'Pi',
         descriptionKey: 'alpinePi',
@@ -267,8 +261,6 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
         return l10n.alpineClaudeCode;
       case 'alpineOpenCode':
         return l10n.alpineOpenCode;
-      case 'alpineDeepSeekHarness':
-        return l10n.alpineDeepSeekHarness;
       case 'alpineKimiCode':
         return l10n.alpineKimiCode;
       case 'alpinePi':

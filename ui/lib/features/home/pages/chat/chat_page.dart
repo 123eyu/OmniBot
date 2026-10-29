@@ -299,7 +299,8 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   String? _normalAcpTurnId;
   Future<Map<String, dynamic>>? _configurationSessionCreation;
   int? _configurationSessionCreationTarget;
-  final Map<ChatPageMode, String> _unboundConfigurationSessions = {};
+  final Map<ChatPageMode, ({String sessionId, String agentId})>
+  _unboundConfigurationSessions = {};
   String? _activeAgentModelId;
   String? _activeAgentReasoningEffort;
   String? _agentReasoningEffortConfigId;
@@ -418,45 +419,58 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     if (rememberedAgentId.isNotEmpty) {
       return rememberedAgentId;
     }
-    final runtimeMessages = resolveVisibleChatMessages(
-      runtimeMessages: _runtimeForMode(ChatPageMode.agent)?.messages,
-      fallbackMessages: _modeState(ChatPageMode.agent).messages,
-      preserveFallbackDuringHandoff: _modeState(ChatPageMode.agent)
-          .isAiResponding,
-    );
-    for (final message in runtimeMessages.reversed) {
-      final messageAgentId = message.agentId?.trim() ?? '';
-      if (messageAgentId.isNotEmpty) {
-        return messageAgentId;
-      }
-    }
     return null;
   }
 
   // Pure chat remains an ACP session with tool capabilities disabled.
   String? get _activeAcpAgentId => _committedAcpAgentId;
 
-  // The visible conversation's target and binding own its Agent identity.
+  bool get _activeAgentTargetIsRemote =>
+      _activeAcpAgentId == _kRemoteCodexModeAgentId;
+
+  String get _activeAgentModelSourceKey => _activeAgentTargetIsRemote
+      ? 'remote'
+      : 'local-${_activeAcpAgentId ?? 'agent'}';
+
+  bool get _isActiveAgentRetired =>
+      _activeMode == ChatPageMode.agent &&
+      _agentCatalog?.isRetired(_activeAcpAgentId) == true;
+
+  String get _retiredAgentMessage => formatAgentRuntimeErrorForUser(
+    'agent_retired:',
+    english: Localizations.localeOf(context).languageCode == 'en',
+  );
+
+  // Only the visible Conversation target and its persisted binding own identity.
   String? get _committedAcpAgentId {
-    if (_activeMode == ChatPageMode.normal &&
-        activeConversationModeValue == ConversationMode.normal) {
+    final target = _resolvedThreadTarget ?? widget.threadTarget;
+    final mode = target?.mode ?? _currentConversation?.mode;
+    if (mode == ConversationMode.normal || mode == ConversationMode.chatOnly) {
       return _kXiaowanAcpAgentId;
     }
-    final targetAgentId = _resolvedThreadTarget?.agentId?.trim() ?? '';
-    if (targetAgentId.isNotEmpty) {
-      return targetAgentId;
-    }
-    final boundAgentId = _conversationBoundAcpAgentId;
-    if (boundAgentId != null) {
-      return boundAgentId;
-    }
-    if (_agentRuntimeStatus.runtime == 'remote' ||
-        _agentRuntimeStatus.remoteEnabled) {
+    if (target?.isRemoteCodexSessionTarget == true ||
+        target?.agentRuntime == 'remote') {
       return _kRemoteCodexModeAgentId;
     }
-    final activeId =
-        _agentRuntimeStatus.activeAgentId ?? _agentCatalog?.selectedAgentId;
-    return activeId?.trim().isNotEmpty == true ? activeId!.trim() : null;
+    final targetAgentId = target?.agentId?.trim() ?? '';
+    if (targetAgentId.isNotEmpty) return targetAgentId;
+    return _currentConversation?.agentId?.trim().isNotEmpty == true
+        ? _currentConversation!.agentId!.trim()
+        : _conversationBoundAcpAgentId;
+  }
+
+  String? get _activeAgentUnavailableMessage {
+    if (_isActiveAgentRetired) return _retiredAgentMessage;
+    if (_activeMode != ChatPageMode.openclaw &&
+        !_isConversationHistoryLoading &&
+        _resolvedThreadTarget != null &&
+        (_activeAcpAgentId?.trim().isEmpty ?? true)) {
+      return formatAgentRuntimeErrorForUser(
+        'agent_identity_required:',
+        english: Localizations.localeOf(context).languageCode == 'en',
+      );
+    }
+    return null;
   }
 
   String get _activeAcpAgentDisplayName {
@@ -778,8 +792,9 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     }
     if (conversationId == null) {
       final resolvedTarget = _resolvedThreadTarget;
+      // History hydration can temporarily have no projected conversation id.
+      // Preserve the requested existing target instead of creating a draft.
       if (resolvedTarget != null &&
-          resolvedTarget.isNewConversation &&
           _pageModeForConversationMode(resolvedTarget.mode) == _activeMode) {
         return resolvedTarget.copyWith(mode: conversationMode);
       }
@@ -1342,9 +1357,9 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       _conversationModeForPageMode(_activeMode);
   @override
   String? get agentIdForNewConversation =>
-      activeConversationModeValue == ConversationMode.agent
-      ? _activeAcpAgentId
-      : null;
+      activeConversationModeValue == ConversationMode.openclaw
+      ? null
+      : _activeAcpAgentId;
   @override
   bool get hasMoreMessages => _modeState(_activeMode).hasMoreMessages;
   @override
@@ -1880,8 +1895,6 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   });
 
   Future<void> _interruptAgentTurn();
-
-  Future<AgentRuntimeStatus> _refreshConnectedAgentRuntimeStatus();
 
   Future<void> _loadOpenClawConfig();
 

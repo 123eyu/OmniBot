@@ -3,43 +3,6 @@ package cn.com.omnimind.bot.agent.runtime
 import cn.com.omnimind.baselib.llm.ProviderModelOption
 import cn.com.omnimind.baselib.llm.OpenAiWireApi
 import com.google.gson.JsonParser
-import cn.com.omnimind.bot.plugin.official.agentweb.DEEPSEEK_HARNESS_API_KEY_ENV
-import cn.com.omnimind.bot.plugin.official.agentweb.buildDeepSeekProviderPatch
-
-internal object DeepSeekHarnessConfigAdapter : AgentConfigAdapter {
-    override fun map(input: AgentProviderMappingInput): AgentProviderMapping {
-        val config = syncAgentProviderCredentials(
-            config = input.rawHarnessConfig?.let(::parseDeepSeekHarnessConfig)
-                ?: input.deepSeekConfig,
-            sharedProvider = input.provider,
-            sharedModel = input.model
-        )
-        return AgentProviderMapping(
-            environment = config.toEnvironment() + mapOf(DEEPSEEK_HARNESS_API_KEY_ENV to config.apiKey),
-            deepSeekConfig = config
-        )
-    }
-
-    override fun launchConfigWrites(
-        input: AgentProviderMappingInput,
-        mapping: AgentProviderMapping,
-        providerModels: List<ProviderModelOption>,
-        existingConfig: String,
-    ): List<AgentConfigWrite> {
-        val model = input.model?.trim()?.takeIf { it.isNotEmpty() } ?: return emptyList()
-        val provider = input.provider ?: return emptyList()
-        return listOf(
-            AgentConfigWrite(
-                path = DEEPSEEK_HARNESS_SETTINGS_PATH,
-                content = buildDeepSeekProviderPatch(
-                    provider, model, mapping.deepSeekConfig?.reasoningEffort, acp = true,
-                    providerModelIds = providerModels.map { it.id },
-                ),
-                executorKey = "deepseek-agent-settings-write",
-            )
-        )
-    }
-}
 
 internal object CodexConfigAdapter : AgentConfigAdapter {
     override suspend fun readConfig(
@@ -162,7 +125,7 @@ internal object CodexConfigAdapter : AgentConfigAdapter {
             // Current Codex ACP (1.1.x) removed the legacy Chat Completions
             // wire and rejects `wire_api = "chat"` during every request.
             // The shared Provider may still use Chat Completions for the app
-            // and DSH, but Codex must receive its own official Responses
+            // and other agents, but Codex must receive its official Responses
             // transport setting.
             codexWireApi = provider?.let { OpenAiWireApi.RESPONSES },
             codexBaseUrl = provider?.baseUrl?.let(::normalizeCodexBaseUrl),

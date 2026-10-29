@@ -11,7 +11,7 @@ class AgentWebPluginTest {
         val definitions = AgentWebTools.definitions()
 
         assertEquals(AgentWebTools.names, definitions.mapTo(linkedSetOf()) { it.name })
-        assertEquals(9, definitions.size)
+        assertEquals(6, definitions.size)
         assertTrue(
             definitions
                 .first { it.name == AgentWebTools.OPEN_KIMI }
@@ -26,11 +26,11 @@ class AgentWebPluginTest {
 
         assertEquals(AgentWebActions.ids, actions.mapTo(linkedSetOf()) { it.id })
         val openActions = actions.filter {
-            it.id in setOf(AgentWebActions.OPEN_KIMI, AgentWebActions.OPEN_DEEPSEEK, AgentWebActions.OPEN_OPENCODE)
+            it.id in setOf(AgentWebActions.OPEN_KIMI, AgentWebActions.OPEN_OPENCODE)
         }
         val lifecycleActions = actions - openActions.toSet()
-        assertEquals(3, openActions.size)
-        assertEquals(6, lifecycleActions.size)
+        assertEquals(2, openActions.size)
+        assertEquals(4, lifecycleActions.size)
         assertTrue(openActions.all { it.presentation["placement"].toString() == "\"agent_settings\"" })
         assertTrue(
             openActions.all {

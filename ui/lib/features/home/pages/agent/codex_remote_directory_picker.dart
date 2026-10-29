@@ -69,6 +69,7 @@ class _CodexRemoteDirectoryPickerSheetState
     });
     try {
       final listing = await AgentRuntimeService.listRemoteDirectories(
+        agentId: 'codex-remote',
         remoteBridgeUrl: widget.remoteBridgeUrl,
         remoteBridgeToken: widget.remoteBridgeToken,
         remoteCwd: widget.initialPath,

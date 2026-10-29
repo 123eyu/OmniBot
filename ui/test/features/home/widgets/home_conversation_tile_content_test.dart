@@ -233,7 +233,7 @@ void main() {
     'kimi-code-acp',
     'claude-code-acp',
     'opencode-acp',
-    'deepseek-harness-acp',
+    'deepseek-harness-acp', // Retired Agent history keeps its brand.
     'na-cloud',
     'pi-acp',
     'unknown-custom-agent',

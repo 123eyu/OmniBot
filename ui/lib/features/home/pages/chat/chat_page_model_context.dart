@@ -609,9 +609,6 @@ mixin _ChatPageModelContextMixin on _ChatPageStateBase {
       if (selectionMode == ChatPageMode.agent) {
         _activeAgentModelId = modelId;
       }
-      if (selectionMode == ChatPageMode.agent && !updateExistingSession) {
-        await AgentRuntimeService.disconnect();
-      }
       await _loadNormalChatModelContext();
       if (_activeMode == ChatPageMode.agent) {
         await _loadAgentModelOptions(force: true);

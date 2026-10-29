@@ -84,9 +84,12 @@ void main() {
   late Set<int> failedHistoryPages;
   var allowConversationCreation = false;
   var failAgentStatus = false;
+  var failDefaultConnect = false;
+  var failSessionLoad = false;
+  var reportedStatusAgentId = 'xiaowan-acp';
+  var reportGlobalRemote = false;
   var nextSessionNumber = 0;
   late Map<String, Map<String, Object>> sessionConfig;
-  List<Map<String, dynamic>>? messagesBeforeStatusFailure;
 
   Map<String, Object?> sessionResponse(String sessionId) => {
     'sessionId': sessionId,
@@ -159,7 +162,10 @@ void main() {
     failedHistoryPages = {};
     allowConversationCreation = false;
     failAgentStatus = false;
-    messagesBeforeStatusFailure = null;
+    failDefaultConnect = false;
+    failSessionLoad = false;
+    reportedStatusAgentId = 'xiaowan-acp';
+    reportGlobalRemote = false;
     nextSessionNumber = 0;
     sessionConfig = {};
     assistCalls = [];
@@ -239,14 +245,9 @@ void main() {
       agentCalls.add(call);
       switch (call.method) {
         case 'agent/list':
-          return {'selectedAgentId': 'xiaowan-acp', 'agents': agents};
+          return {'agents': agents};
         case 'status':
           if (failAgentStatus) {
-            messagesBeforeStatusFailure = assistCalls
-                .where((call) => call.method == 'replaceConversationMessages')
-                .expand((call) => (call.arguments as Map)['messages'] as List)
-                .map((message) => Map<String, dynamic>.from(message as Map))
-                .toList();
             throw PlatformException(
               code: 'STATUS_UNAVAILABLE',
               message: 'Agent status unavailable',
@@ -255,12 +256,21 @@ void main() {
           return {
             'ready': false,
             'connected': useRemoteRuntime,
-            if (useRemoteRuntime) 'runtime': 'remote',
-            'remoteEnabled': useRemoteRuntime,
-            'activeAgentId': useRemoteRuntime ? 'codex-acp' : 'xiaowan-acp',
+            if (useRemoteRuntime || reportGlobalRemote) 'runtime': 'remote',
+            'remoteEnabled': useRemoteRuntime || reportGlobalRemote,
+            'activeAgentId': useRemoteRuntime || reportGlobalRemote
+                ? 'codex-acp'
+                : reportedStatusAgentId,
             'activeAgentName': '小万',
           };
         case 'connect':
+          if (failDefaultConnect) {
+            throw PlatformException(
+              code: 'runtime_error',
+              message: 'OpenCode runtime needs an upgrade',
+              details: {'failureKind': 'harness_upgrade_required'},
+            );
+          }
           if (useRemoteRuntime) {
             return {
               'ready': false,
@@ -284,6 +294,12 @@ void main() {
           return sessionResponse(sessionId);
         case 'session/load':
           final arguments = call.arguments as Map;
+          if (failSessionLoad) {
+            throw PlatformException(
+              code: 'SESSION_UNAVAILABLE',
+              message: 'Session load failed',
+            );
+          }
           if (useRemoteRuntime &&
               arguments['sessionId'] == 'remote-history-session') {
             if (arguments['includeHistory'] == true) {
@@ -1306,6 +1322,7 @@ void main() {
         const ConversationThreadTarget.existing(
           conversationId: 77,
           mode: ConversationMode.chatOnly,
+          agentId: 'opencode-acp',
         ),
       );
       final config = tester.widget<AcpConfigButton>(
@@ -1318,6 +1335,7 @@ void main() {
         (call) => call.method == 'session/load',
       );
       expect((load.arguments as Map)['conversationId'], 77);
+      expect((load.arguments as Map)['agentId'], 'xiaowan-acp');
       expect(agentCalls.where((call) => call.method == 'session/new'), isEmpty);
       await disposeChat(tester);
       expect(
@@ -1447,6 +1465,41 @@ void main() {
     },
   );
 
+  for (final owner in ['xiaowan-acp', 'codex-remote']) {
+    for (final leave in ['dispose', 'switch-agent', 'switch-mode']) {
+      testWidgets('unused config session closes with its creation owner: $owner/$leave', (tester) async {
+        useRemoteRuntime = owner == 'codex-remote';
+        await pumpChat(
+          tester,
+          ConversationThreadTarget.newConversation(
+            agentId: owner,
+            agentRuntime: owner == 'codex-remote' ? 'remote' : 'local',
+          ),
+        );
+        await tester.tap(find.byKey(const ValueKey('chat-acp-config-button')));
+        await tester.pumpAndSettle();
+        final created = agentCalls.singleWhere((call) => call.method == 'session/new');
+        expect((created.arguments as Map)['agentId'], owner);
+        await dismissConfigPanel(tester);
+        if (leave == 'switch-agent') {
+          await chooseMode(tester, owner == 'xiaowan-acp' ? 'codex-acp' : 'xiaowan-acp');
+        } else if (leave == 'switch-mode') {
+          await chooseMode(tester, kNewConversationPureChatModeId);
+        }
+        await disposeChat(tester);
+
+        final closes = agentCalls.where((call) => call.method == 'session/close');
+        expect(closes, hasLength(1));
+        expect(closes.single.arguments, {
+          'sessionId': 'new-draft-session',
+          'agentId': owner,
+        });
+        expect(agentCalls.where((call) => call.method == 'session/prompt'), isEmpty);
+        expect(conversations, isEmpty);
+      });
+    }
+  }
+
   testWidgets(
     'late config session from a previous draft cannot replace the new target session',
     (tester) async {
@@ -1570,8 +1623,112 @@ void main() {
     },
   );
 
+  testWidgets('unowned Agent history stays readable without selecting a default runtime', (tester) async {
+    conversations = [historyConversation(811, ConversationMode.agent)..remove('agentId')];
+    historyPages[811] = historyMessage(811);
+    await pumpChat(tester, const ConversationThreadTarget.existing(conversationId: 811));
+    expect(find.text('已加载历史消息 811'), findsOneWidget);
+    expect(find.byKey(const Key('chat-agent-unavailable')), findsOneWidget);
+    expect(find.byType(ChatInputArea), findsNothing);
+    expect(conversations.single['agentId'], isNull);
+    expect(agentCalls.where((call) => call.method == 'session/new' || call.method == 'session/prompt'), isEmpty);
+    expect(agentCalls.where((call) => call.method == 'status'), isEmpty);
+    await disposeChat(tester);
+  });
+
+  for (final globalRemote in [false, true]) {
+    for (final configureFirst in [false, true]) {
+      testWidgets(
+        'Xiaowan owns first send with unavailable default Agent: remote=$globalRemote configured=$configureFirst',
+        (tester) async {
+          allowConversationCreation = true;
+          reportedStatusAgentId = 'opencode-acp';
+          reportGlobalRemote = globalRemote;
+          failDefaultConnect = true;
+          await pumpChat(
+            tester,
+            const ConversationThreadTarget.newConversation(
+              agentId: 'xiaowan-acp',
+            ),
+          );
+          if (configureFirst) {
+            await tester.tap(
+              find.byKey(const ValueKey('chat-acp-config-button')),
+            );
+            await tester.pumpAndSettle();
+            await dismissConfigPanel(tester);
+          }
+          composer(tester).controller.text = '你好';
+          composer(tester).onSendMessage();
+          composer(tester).onSendMessage();
+          await tester.pumpAndSettle();
+
+          expect(agentCalls.where((call) => call.method == 'connect'), isEmpty);
+          final sessions = agentCalls.where(
+            (call) => call.method == 'session/new',
+          );
+          expect(sessions, hasLength(1));
+          expect((sessions.single.arguments as Map)['agentId'], 'xiaowan-acp');
+          final prompts = agentCalls.where(
+            (call) => call.method == 'session/prompt',
+          );
+          expect(prompts, hasLength(1));
+          expect((prompts.single.arguments as Map)['agentId'], 'xiaowan-acp');
+          expect((prompts.single.arguments as Map)['conversationId'], 901);
+          expect(
+            (prompts.single.arguments as Map)['sessionId'],
+            'new-draft-session',
+          );
+          expect((prompts.single.arguments as Map)['text'], '你好');
+          for (final load in agentCalls.where(
+            (call) => call.method == 'session/load',
+          )) {
+            expect((load.arguments as Map)['agentId'], 'xiaowan-acp');
+          }
+          expect(conversations.single['agentId'], 'xiaowan-acp');
+          await disposeChat(tester);
+        },
+      );
+    }
+  }
+
   testWidgets(
-    'first send persists its submitted user message before an Agent status failure',
+    'failed configured session load never opens a replacement or replays the prompt',
+    (tester) async {
+      allowConversationCreation = true;
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.newConversation(agentId: 'xiaowan-acp'),
+      );
+      await tester.tap(find.byKey(const ValueKey('chat-acp-config-button')));
+      await tester.pumpAndSettle();
+      await dismissConfigPanel(tester);
+      failSessionLoad = true;
+      composer(tester).controller.text = '保持原会话';
+      composer(tester).onSendMessage();
+      await tester.pumpAndSettle();
+
+      expect(
+        agentCalls.where((call) => call.method == 'session/new'),
+        hasLength(1),
+      );
+      expect(
+        agentCalls.where((call) => call.method == 'session/prompt'),
+        isEmpty,
+      );
+      expect(agentCalls.where((call) => call.method == 'connect'), isEmpty);
+      final loads = agentCalls.where((call) => call.method == 'session/load');
+      expect(loads, hasLength(1));
+      expect((loads.single.arguments as Map)['sessionId'], 'new-draft-session');
+      expect((loads.single.arguments as Map)['agentId'], 'xiaowan-acp');
+      expect(conversations, hasLength(1));
+      expect(conversations.single['agentId'], 'xiaowan-acp');
+      await disposeChat(tester);
+    },
+  );
+
+  testWidgets(
+    'local send uses its prepared session even when global status is unavailable',
     (tester) async {
       allowConversationCreation = true;
       await pumpChat(
@@ -1583,6 +1740,7 @@ void main() {
       expectNoPersistedDraft();
       await dismissConfigPanel(tester);
       failAgentStatus = true;
+      final callsBeforeSend = agentCalls.length;
       composer(tester).controller.text = '连接失败也要保留已经提交的消息';
       composer(tester).onSendMessage();
       await tester.pumpAndSettle();
@@ -1592,9 +1750,12 @@ void main() {
         hasLength(1),
       );
       expect(conversations, hasLength(1));
-      expect(messagesBeforeStatusFailure, isNotNull);
+      final persistedMessages = assistCalls
+          .where((call) => call.method == 'replaceConversationMessages')
+          .expand((call) => (call.arguments as Map)['messages'] as List)
+          .map((message) => Map<String, dynamic>.from(message as Map));
       final persistedUsers = {
-        for (final message in messagesBeforeStatusFailure!)
+        for (final message in persistedMessages)
           if (message['user'] == 1) message['id']: message,
       }.values.toList();
       expect(persistedUsers, hasLength(1));
@@ -1604,11 +1765,19 @@ void main() {
       );
       expect(
         agentCalls.where((call) => call.method == 'session/prompt'),
-        isEmpty,
+        hasLength(1),
       );
       expect(
         agentCalls.where((call) => call.method == 'session/new'),
         hasLength(1),
+      );
+      expect(
+        agentCalls
+            .skip(callsBeforeSend)
+            .where(
+              (call) => call.method == 'status' || call.method == 'connect',
+            ),
+        isEmpty,
       );
       await disposeChat(tester);
       expect(conversations, hasLength(1));

@@ -12,40 +12,10 @@ import org.junit.Test
 
 class AgentConfigAdaptersTest {
     @Test
-    fun deepSeekLaunchRereadsSavedPermissionsAndReasoningWithProviderPatch() {
-        for (mode in listOf("danger-full-access", "read-only", "workspace-write")) {
-            val input = AgentProviderMappingInput(
-                agentId = "deepseek-harness-acp",
-                provider = AgentProviderCredentials("https://gateway.example/v1", "current-key"),
-                model = "current-model",
-                harnessAdapter = AcpHarnessAdapters.deepSeekHarness,
-                rawHarnessConfig = buildDeepSeekHarnessConfigJson(
-                    DeepSeekHarnessConfig(
-                        apiKey = "old-key", model = "old-model",
-                        permissionMode = mode, reasoningEffort = "high",
-                    ),
-                ),
-            )
-            val mapping = AgentConfigAdapterRegistry.map(input)
-            val writes = AgentConfigAdapterRegistry.launchConfigWrites(input, mapping, emptyList(), "")
-            assertEquals(mode, mapping.environment["DSH_PERMISSION_MODE"])
-            assertEquals("high", mapping.environment["DSH_REASONING_EFFORT"])
-            assertEquals("current-key", mapping.environment["OMNIBOT_DSH_API_KEY"])
-            assertTrue(writes.single().content.contains("\"reasoning\":\"high\""))
-            assertFalse(writes.single().content.contains("old-key"))
-            assertFalse(writes.single().content.contains("old-model"))
-        }
-    }
-
-    @Test
     fun harnessModelSelectionUsesAdvertisedValuesWithoutLosingModelNamespace() {
         assertEquals("omnibot/org/model", AcpHarnessAdapters.openCode.resolveModelValue(
             "org/model", listOf("omnibot/org/model")))
         assertEquals(null, AcpHarnessAdapters.openCode.resolveModelValue("model", listOf("other/model")))
-        assertEquals("[\"provider\",\"org/model\"]", AcpHarnessAdapters.deepSeekHarness.resolveModelValue(
-            "org/model", listOf("[\"provider\",\"org/model\"]")))
-        assertEquals(null, AcpHarnessAdapters.deepSeekHarness.resolveModelValue(
-            "model", listOf("[\"a\",\"model\"]", "[\"b\",\"model\"]")))
         assertEquals(null, AcpHarnessAdapters.claudeCode.resolveModelValue("model", listOf("other")))
         assertEquals("model", AcpHarnessAdapters.codex.resolveModelValue("model", listOf("model")))
     }
@@ -243,25 +213,6 @@ class AgentConfigAdaptersTest {
     }
 
     @Test
-    fun deepSeekAcpUsesOfficialProviderPatchWithoutPersistingCredentials() {
-        val input = AgentProviderMappingInput(
-            agentId = "deepseek-harness-acp",
-            provider = AgentProviderCredentials("https://gateway.example/v1", "secret-key",
-                customHeaders = mapOf("X-Route" to "mobile")),
-            model = "model-b", harnessAdapter = AcpHarnessAdapters.deepSeekHarness,
-        )
-        val mapping = AgentConfigAdapterRegistry.map(input)
-        val patch = AgentConfigAdapterRegistry.launchConfigWrites(
-            input, mapping, emptyList(), "",
-        ).single().content
-        assertTrue(patch.contains("- id: llm-pi-ai"))
-        assertTrue(patch.contains("- id: acp"))
-        assertTrue(patch.contains("\"model\":\"model-b\""))
-        assertTrue(patch.contains("\"X-Route\":\"mobile\""))
-        assertFalse(patch.contains("secret-key"))
-        assertEquals("secret-key", mapping.environment["OMNIBOT_DSH_API_KEY"])
-    }
-    @Test
     fun openCodeMappingPreservesExplicitProviderSelection() {
         val config = JsonParser.parseString(buildOpenCodeConfigJson(
             model = "omnibot/model-a", baseUrl = "https://example.test/v1",
@@ -340,18 +291,6 @@ class AgentConfigAdaptersTest {
     @Test
     fun sharedProviderMapsToOfficialRuntimeSurfaces() {
         val model = "GLM-5.1"
-
-        val dsh = AgentConfigAdapterRegistry.map(
-            AgentProviderMappingInput(
-                agentId = AcpAgentProfileStore.DEEPSEEK_HARNESS_AGENT_ID,
-                provider = provider,
-                model = model,
-                harnessAdapter = AcpHarnessAdapters.deepSeekHarness,
-            ),
-        )
-        assertEquals("https://llmapi.paratera.com/v1", dsh.environment["DEEPSEEK_BASE_URL"])
-        assertEquals("secret", dsh.environment["DEEPSEEK_API_KEY"])
-        assertEquals(model, dsh.environment["DSH_MODEL"])
 
         val codex = AgentConfigAdapterRegistry.map(
             AgentProviderMappingInput(
@@ -753,7 +692,6 @@ class AgentConfigAdaptersTest {
     @Test
     fun adaptersDoNotUseOldModelOverrides() {
         listOf(
-            AcpAgentProfileStore.DEEPSEEK_HARNESS_AGENT_ID,
             AcpAgentProfileStore.CODEX_AGENT_ID,
             CLAUDE_CODE_AGENT_ID,
             "opencode-acp",
@@ -763,14 +701,10 @@ class AgentConfigAdaptersTest {
                     agentId = agentId,
                     provider = provider,
                     model = null,
-                    harnessAdapter = if (
-                        agentId == AcpAgentProfileStore.DEEPSEEK_HARNESS_AGENT_ID
-                    ) AcpHarnessAdapters.deepSeekHarness else AcpHarnessAdapters.standard,
+                    harnessAdapter = AcpHarnessAdapters.standard,
                 ),
             )
             when (agentId) {
-                AcpAgentProfileStore.DEEPSEEK_HARNESS_AGENT_ID ->
-                    assertEquals("", mapping.deepSeekConfig?.model)
                 AcpAgentProfileStore.CODEX_AGENT_ID ->
                     assertEquals(null, mapping.codexModel)
                 CLAUDE_CODE_AGENT_ID ->

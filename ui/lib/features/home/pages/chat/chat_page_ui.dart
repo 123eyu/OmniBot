@@ -68,7 +68,11 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         return AgentRuntimeService.setSessionConfigOption(
           sessionId: sessionId,
           conversationId:
-              _unboundConfigurationSessions.values.contains(sessionId)
+              _unboundConfigurationSessions.values.any(
+                (session) =>
+                    session.sessionId == sessionId &&
+                    session.agentId == agentId,
+              )
               ? null
               : targetConversationId,
           agentId: agentId,
@@ -1129,10 +1133,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     if (_activeMode != ChatPageMode.agent) {
       return false;
     }
-    final runtime = _agentRuntimeStatus.runtime?.trim();
-    return _activeAcpAgentId == 'na-cloud' ||
-        runtime == 'remote' ||
-        _agentRuntimeStatus.remoteEnabled;
+    return _activeAcpAgentId == 'na-cloud' || _activeAgentTargetIsRemote;
   }
 
   Widget _buildRemoteCodexWorkspaceBrowser({
@@ -1149,7 +1150,9 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       return _buildRemoteCodexWorkspaceUnavailable();
     }
     return CodexRemoteWorkspaceBrowser(
-      agentId: _activeAcpAgentId == 'na-cloud' ? 'na-cloud' : null,
+      agentId: _activeAcpAgentId == 'na-cloud'
+          ? 'na-cloud'
+          : _kRemoteCodexModeAgentId,
       allowFileMutations: true,
       key: key,
       workspacePath: workspacePath,
@@ -1368,8 +1371,12 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               },
               isPetOpening: _isPetOverlayOpening,
               isPetShowing: _isPetOverlayShowing,
-              onPrimaryModeTap: _activeMode == ChatPageMode.agent
-                  ? () => GoRouterManager.push('/home/agent_sessions')
+              onPrimaryModeTap:
+                  _activeMode == ChatPageMode.agent && _activeAcpAgentId != null
+                  ? () => GoRouterManager.push(
+                      '/home/agent_sessions',
+                      extra: _activeAcpAgentId,
+                    )
                   : null,
               activeMode: appBarMode,
               onModeChanged: (value) {
@@ -1436,6 +1443,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                   child: Container(
                     key: _inputAreaKey,
                     child: ChatInputWrapper(
+                      unavailableMessage: _activeAgentUnavailableMessage,
                       inputAreaKey: _chatInputAreaKey,
                       controller: _messageController,
                       focusNode: _inputFocusNode,
@@ -1512,8 +1520,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                           : null,
                       agentPermissionModes:
                           _activeMode == ChatPageMode.agent &&
-                              _agentRuntimeStatus.runtime != 'remote' &&
-                              !_agentRuntimeStatus.remoteEnabled
+                              !_activeAgentTargetIsRemote
                           ? const <AgentPermissionMode>[
                               AgentPermissionMode.readOnly,
                               AgentPermissionMode.defaultMode,

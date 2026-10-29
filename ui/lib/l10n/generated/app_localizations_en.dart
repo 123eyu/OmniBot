@@ -1561,10 +1561,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alpineOpenCode => 'OpenCode CLI with built-in ACP support';
 
   @override
-  String get alpineDeepSeekHarness =>
-      'DeepSeek Harness (dsh) official ACP runtime';
-
-  @override
   String get alpineKimiCode => 'Kimi Code official CLI and local Web UI';
 
   @override

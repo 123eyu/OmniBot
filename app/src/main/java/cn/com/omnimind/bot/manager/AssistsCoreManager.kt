@@ -3345,7 +3345,8 @@ class AssistsCoreManager(private val context: Context) {
      */
     fun createConversation(call: MethodCall, result: MethodChannel.Result) {
         val title = call.argument<String>("title") ?: "新对话"
-        val mode = normalizeConversationMode(call.argument<String>("mode"))
+        // Preserve explicit product modes until the domain claims their Agent owner.
+        val mode = call.argument<String>("mode")?.trim()?.takeIf(String::isNotEmpty) ?: "agent"
         val summary = call.argument<String>("summary")
         val parentConversationId = call.argument<Number>("parentConversationId")
             ?.toLong()

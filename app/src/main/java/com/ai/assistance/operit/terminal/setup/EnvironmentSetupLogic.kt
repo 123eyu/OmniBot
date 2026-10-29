@@ -16,19 +16,6 @@ object EnvironmentSetupLogic {
         val categoryId: String
     )
 
-    private val DEEPSEEK_HARNESS_PACKAGE_FILES =
-        "test -f \"${'$'}DSH_HOME/profiles/acp/package.json\" && " +
-            "test -f \"${'$'}DSH_HOME/profiles/acp/cordis.patch.yml\" && " +
-            "node -e \"const fs=require('fs'); const profile=JSON.parse(fs.readFileSync(process.env.DSH_HOME + '/profiles/acp/package.json','utf8')); const bundles=profile?.dsh?.profile?.bundles; if (!Array.isArray(bundles) || !bundles.includes('@deepseek-ai/dsh-acp-app')) process.exit(1)\" >/dev/null 2>&1 && " +
-            "test -f '/root/.npm-global/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-acp-app/cordis.patch.yml'"
-    private val DEEPSEEK_HARNESS_CHECK_COMMAND =
-            "DSH_HOME=\"/root/.dsh/omnibot-acp\"; export DSH_HOME; " +
-            "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; " +
-            "command -v dsh >/dev/null 2>&1 && " +
-            DEEPSEEK_HARNESS_PACKAGE_FILES + " && " +
-            "command -v dsh-acp-android >/dev/null 2>&1"
-    private const val DEEPSEEK_HARNESS_VERSION_COMMAND =
-        "node -p \"require('/root/.npm-global/lib/node_modules/@deepseek-ai/dsh/package.json').version\""
     private const val KIMI_CODE_VERSION_COMMAND = "kimi --version"
 
     val packageDefinitions: List<PackageDefinition> = listOf(
@@ -45,7 +32,6 @@ object EnvironmentSetupLogic {
         // of the installed executable is the safe readiness check.
         PackageDefinition("claude_code", "command -v claude-agent-acp", "ai"),
         PackageDefinition("opencode", "opencode --version", "ai"),
-        PackageDefinition("deepseek_harness", DEEPSEEK_HARNESS_CHECK_COMMAND, "ai"),
         PackageDefinition("kimi", KIMI_CODE_NATIVE_HEALTH_COMMAND, "ai"),
         PackageDefinition("pi", PI_RUNTIME_HEALTH_COMMAND, "ai"),
         PackageDefinition("ssh_client", "ssh -V 2>&1", "ssh"),
@@ -75,18 +61,6 @@ object EnvironmentSetupLogic {
         "codex" to listOf("nodejs", "npm", "git", "bash", "curl", "ripgrep"),
         "claude_code" to listOf("nodejs", "npm", "git", "bash", "curl", "ripgrep"),
         "opencode" to listOf("nodejs", "npm", "git", "bash", "curl", "ripgrep"),
-        "deepseek_harness" to listOf(
-            "nodejs",
-            "npm",
-            "git",
-            "bash",
-            "curl",
-            "ripgrep",
-            "build-base",
-            "python3",
-            "linux-headers",
-            "util-linux-dev"
-        ),
         "kimi" to listOf("nodejs", "npm", "git", "bash", "curl", "ripgrep"),
         "pi" to listOf("nodejs", "npm", "git", "bash", "curl", "ripgrep"),
         "python" to listOf("python3"),
@@ -109,15 +83,6 @@ object EnvironmentSetupLogic {
         "codex" to listOf("nodejs", "git", "bash", "curl", "ripgrep"),
         "claude_code" to listOf("nodejs", "git", "bash", "curl", "ripgrep"),
         "opencode" to listOf("nodejs", "git", "bash", "curl", "ripgrep"),
-        "deepseek_harness" to listOf(
-            "nodejs",
-            "git",
-            "bash",
-            "curl",
-            "ripgrep",
-            "build-essential",
-            "python3"
-        ),
         "kimi" to listOf("nodejs", "git", "bash", "curl", "ripgrep"),
         "pi" to listOf("nodejs", "git", "bash", "curl", "ripgrep"),
         "python" to listOf("python3"),
@@ -215,13 +180,6 @@ object EnvironmentSetupLogic {
             commands += "ln -sf /root/.npm-global/bin/opencode /usr/local/bin/opencode || true"
         }
 
-        if ("deepseek_harness" in requested) {
-            commands += harnessInstallCommands["deepseek_harness"]
-                ?: throw IllegalStateException(
-                    "The ACP Harness catalog is required to install DeepSeek Harness."
-                )
-            commands += "ln -sf /root/.npm-global/bin/dsh /usr/local/bin/dsh || true"
-        }
         if ("kimi" in requested) {
             commands += KIMI_CODE_NPM_INSTALL_COMMAND
             commands += "ln -sf /root/.npm-global/bin/kimi /usr/local/bin/kimi || true"
@@ -361,11 +319,6 @@ object EnvironmentSetupLogic {
                     commandCheck = "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v opencode >/dev/null 2>&1 && opencode --version >/dev/null 2>&1",
                     versionCommand = "opencode --version"
                 )
-                "deepseek_harness" -> buildProbeSnippet(
-                    packageId = packageId,
-                    commandCheck = DEEPSEEK_HARNESS_CHECK_COMMAND,
-                    versionCommand = DEEPSEEK_HARNESS_VERSION_COMMAND
-                )
                 "pi" -> buildProbeSnippet(
                     packageId = packageId,
                     commandCheck = PI_RUNTIME_HEALTH_COMMAND,
@@ -435,7 +388,6 @@ object EnvironmentSetupLogic {
             "codex" -> "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v codex && codex --version"
             "claude_code" -> "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v claude-agent-acp"
             "opencode" -> "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v opencode && opencode --version"
-            "deepseek_harness" -> DEEPSEEK_HARNESS_CHECK_COMMAND
             "kimi" -> KIMI_CODE_NATIVE_HEALTH_COMMAND
             "pi" -> PI_RUNTIME_HEALTH_COMMAND
             "ripgrep" -> "command -v rg"
@@ -463,7 +415,6 @@ object EnvironmentSetupLogic {
             "openssh_client" -> "ssh_client"
             "ssh_server" -> "openssh_server"
             "claude", "claude-code" -> "claude_code"
-            "dsh", "deepseek-harness", "deepseek_harness_acp" -> "deepseek_harness"
             "kimi-code", "kimi_code" -> "kimi"
             "pi-acp", "omnibot-pi-acp" -> "pi"
             else -> packageId.trim()
@@ -534,9 +485,6 @@ object EnvironmentSetupLogic {
                 "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; opencode --version >/dev/null 2>&1"
             )
         }
-        if ("deepseek_harness" in requested) {
-            add("DeepSeek Harness", DEEPSEEK_HARNESS_CHECK_COMMAND)
-        }
         if ("kimi" in requested) {
             add("Kimi Code", KIMI_CODE_NATIVE_HEALTH_COMMAND)
         }
@@ -594,7 +542,6 @@ object EnvironmentSetupLogic {
         "codex",
         "claude_code",
         "opencode",
-        "deepseek_harness",
         "kimi",
         "pi",
     )

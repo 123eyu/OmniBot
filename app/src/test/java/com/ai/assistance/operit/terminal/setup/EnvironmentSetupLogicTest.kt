@@ -82,22 +82,6 @@ class EnvironmentSetupLogicTest {
     }
 
     @Test
-    fun deepSeekHealthProbe_executesPathExpansionInShell() {
-        // Make the installed-package branch reachable without installing tools.
-        val command = "dsh() { :; }; test() { return 0; }; " +
-            EnvironmentSetupLogic.packageDefinitions.single { it.id == "deepseek_harness" }.command +
-            "\nprintf 'probe-finished\n'"
-        val shell = if (File("/bin/dash").canExecute()) "/bin/dash" else "/bin/sh"
-        val process = ProcessBuilder(shell, "-c", command)
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().use { it.readText() }
-        assertEquals(output, 0, process.waitFor())
-        assertTrue(output, output.contains("probe-finished"))
-    }
-
-
-    @Test
     fun buildInstallCommands_usesAlpinePackagesAndUvBootstrap() {
         val commands = EnvironmentSetupLogic.buildInstallCommands(
             selectedPackageIds = listOf("python", "pip", "uv", "nodejs", "ssh_client"),
@@ -237,51 +221,6 @@ class EnvironmentSetupLogicTest {
     }
 
     @Test
-    fun buildInstallCommands_installsOfficialDeepSeekAcpWithoutResettingProfiles() {
-        val commands = EnvironmentSetupLogic.buildInstallCommands(
-            selectedPackageIds = listOf("deepseek_harness"),
-            repositorySetupCommand = "",
-            harnessInstallCommands = mapOf(
-                "deepseek_harness" to File("src/main/assets/acp/install/deepseek-harness.sh").readText(),
-            ),
-        )
-        val install = commands.first { it.contains("@deepseek-ai/dsh@0.1.5-rc.1") }
-        assertTrue(install.contains("@deepseek-ai/dsh-acp-app/cordis.patch.yml"))
-        assertTrue(install.contains("dsh-acp-android --profile acp --help"))
-        assertTrue(install.contains("profiles/acp/package.json"))
-        assertTrue(install.contains("profiles/acp/cordis.patch.yml"))
-        assertTrue(install.contains("--expose-internals"))
-        assertTrue(install.contains("dsh-acp-android"))
-        assertTrue(install.contains("node-pty"))
-        assertTrue(install.contains("npm rebuild --prefix"))
-        assertTrue(install.contains("command -v apk"))
-        assertTrue(install.contains("command -v apt-get"))
-        assertTrue(install.contains("registry.npmmirror.com"))
-        assertTrue(install.contains("registry.npmjs.org"))
-        assertTrue(!install.contains("@openma/"))
-        assertTrue(!install.contains("dsh plugin"))
-        assertTrue(!install.contains("headless.patch"))
-        assertTrue(!install.contains("PROFILE_LAYOUT_MARKER"))
-        assertTrue(!install.contains("rm -rf"))
-        assertTrue(!install.contains("pnpm install"))
-        assertTrue(!install.contains("npm cache clean"))
-    }
-
-    @Test
-    fun buildInventoryProbeCommand_detectsCompleteDeepSeekHarnessRuntime() {
-        val command = EnvironmentSetupLogic.buildInventoryProbeCommand(
-            listOf("deepseek_harness")
-        )
-
-        assertTrue(command.contains("command -v dsh"))
-        assertTrue(command.contains("command -v dsh-acp-android"))
-        assertTrue(command.contains("profiles/acp/package.json"))
-        assertTrue(command.contains("@deepseek-ai/dsh-acp-app"))
-        assertTrue(!command.contains("await import('@openma/deepseek-harness-acp/plugin')"))
-        assertTrue(!command.contains("await import('@openma/deepseek-harness-acp/stdio')"))
-    }
-
-    @Test
     fun buildInstallCommands_installsOfficialKimiCodeRuntime() {
         val commands = EnvironmentSetupLogic.buildInstallCommands(
             selectedPackageIds = listOf("kimi"),
@@ -368,23 +307,6 @@ class EnvironmentSetupLogicTest {
     }
 
     @Test
-    fun buildInstallCommands_installsUbuntuDeepSeekHarnessNativeBuildTools() {
-        val commands = EnvironmentSetupLogic.buildInstallCommands(
-            selectedPackageIds = listOf("deepseek_harness"),
-            repositorySetupCommand = "",
-            workingMode = WorkingMode.UBUNTU,
-            harnessInstallCommands = mapOf(
-                "deepseek_harness" to
-                    File("src/main/assets/acp/install/deepseek-harness.sh").readText(),
-            ),
-        )
-
-        val aptInstall = commands.last { it.startsWith("apt-get update") }
-        assertTrue(aptInstall.contains("build-essential"))
-        assertTrue(aptInstall.contains("python3"))
-    }
-
-    @Test
     fun buildInventoryProbeCommand_validatesRuntimeCwdForNodeAndPython() {
         val command = EnvironmentSetupLogic.buildInventoryProbeCommand(listOf("nodejs", "python", "pip"))
 
@@ -455,7 +377,6 @@ class EnvironmentSetupLogicTest {
                         repositorySetupCommand = repositorySetupCommand,
                         workingMode = workingMode,
                         harnessInstallCommands = mapOf(
-                            "deepseek_harness" to File("src/main/assets/acp/install/deepseek-harness.sh").readText(),
                             "opencode" to File("src/main/assets/acp/install/opencode.sh").readText(),
                             "pi" to File("src/main/assets/acp/install/pi.sh").readText(),
                         ),
