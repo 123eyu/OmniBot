@@ -901,10 +901,14 @@ class _OmnibotArtifactPreviewSheetFrameState
           mediaQuery.viewInsets.bottom,
     );
     final heightFactor = _resolveHeightFactor(mediaQuery);
-    final sheetHeight = availableHeight * heightFactor;
+    // Extend the same pane beneath the gesture bar while keeping the existing
+    // readable content height. The safe inset belongs inside the glass.
+    final sheetHeight =
+        availableHeight * heightFactor + mediaQuery.padding.bottom;
     const borderRadius = BorderRadius.vertical(top: Radius.circular(24));
     return SafeArea(
       top: false,
+      bottom: false,
       child: AnimatedPadding(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
@@ -920,47 +924,52 @@ class _OmnibotArtifactPreviewSheetFrameState
               borderRadius: borderRadius,
               child: Material(
                 color: Colors.transparent,
-                child: Column(
-                  children: [
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onVerticalDragUpdate: (details) =>
-                          _handleDragUpdate(details, availableHeight),
-                      onVerticalDragEnd: (_) => _persistHeightFactor(),
-                      child: SizedBox(
-                        height: 22,
-                        width: double.infinity,
-                        child: Center(
-                          child: Container(
-                            width: 42,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: palette.textSecondary.withValues(
-                                alpha: 0.34,
+                child: SafeArea(
+                  top: false,
+                  left: false,
+                  right: false,
+                  child: Column(
+                    children: [
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onVerticalDragUpdate: (details) =>
+                            _handleDragUpdate(details, availableHeight),
+                        onVerticalDragEnd: (_) => _persistHeightFactor(),
+                        child: SizedBox(
+                          height: 22,
+                          width: double.infinity,
+                          child: Center(
+                            child: Container(
+                              width: 42,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: palette.textSecondary.withValues(
+                                  alpha: 0.34,
+                                ),
+                                borderRadius: BorderRadius.circular(999),
                               ),
-                              borderRadius: BorderRadius.circular(999),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    Expanded(
-                      child: OmnibotArtifactPreviewPage(
-                        path: widget.metadata.path,
-                        uri: widget.metadata.uri,
-                        title: widget.metadata.title,
-                        previewKind: widget.metadata.previewKind,
-                        mimeType: widget.metadata.mimeType,
-                        shellPath: widget.metadata.shellPath,
-                        exists: widget.metadata.exists,
-                        showPathBar: false,
-                        appBarPrimary: false,
-                        showLeading: false,
-                        glassSurface: true,
-                        onEditingChanged: _handleEditingChanged,
+                      Expanded(
+                        child: OmnibotArtifactPreviewPage(
+                          path: widget.metadata.path,
+                          uri: widget.metadata.uri,
+                          title: widget.metadata.title,
+                          previewKind: widget.metadata.previewKind,
+                          mimeType: widget.metadata.mimeType,
+                          shellPath: widget.metadata.shellPath,
+                          exists: widget.metadata.exists,
+                          showPathBar: false,
+                          appBarPrimary: false,
+                          showLeading: false,
+                          glassSurface: true,
+                          onEditingChanged: _handleEditingChanged,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );

@@ -68,6 +68,9 @@ class ChatAppBar extends StatelessWidget {
   final bool isPureChatSelected;
   final bool showWorkspacePaneButton;
   final VoidCallback? onWorkspacePaneTap;
+  final VoidCallback? onConversationPaneTap;
+  final bool conversationPaneVisible;
+  final bool workspacePaneVisible;
   final Key? tutorialMenuAnchorKey;
   final Key? tutorialModeAnchorKey;
 
@@ -104,6 +107,9 @@ class ChatAppBar extends StatelessWidget {
     this.isPureChatSelected = false,
     this.showWorkspacePaneButton = false,
     this.onWorkspacePaneTap,
+    this.onConversationPaneTap,
+    this.conversationPaneVisible = false,
+    this.workspacePaneVisible = false,
     this.tutorialMenuAnchorKey,
     this.tutorialModeAnchorKey,
   });
@@ -250,6 +256,29 @@ class ChatAppBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
               ],
+              if (onConversationPaneTap != null) ...[
+                Semantics(
+                  toggled: conversationPaneVisible,
+                  child: OmniCircleButton(
+                    key: const ValueKey('chat-app-bar-sidebar-button'),
+                    icon: LucideIcons.panelLeft,
+                    size: _navigationButtonSize,
+                    tapTargetSize: MaterialTapTargetSize.padded,
+                    tooltip: conversationPaneVisible
+                        ? (english
+                              ? 'Hide conversations (Ctrl+B)'
+                              : '收起会话侧栏 (Ctrl+B)')
+                        : (english
+                              ? 'Show conversations (Ctrl+B)'
+                              : '展开会话侧栏 (Ctrl+B)'),
+                    foregroundColor: conversationPaneVisible
+                        ? palette.accentPrimary
+                        : palette.textPrimary,
+                    onPressed: onConversationPaneTap,
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
               Expanded(
                 child: KeyedSubtree(
                   key: tutorialModeAnchorKey,
@@ -302,6 +331,29 @@ class ChatAppBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              if (showWorkspacePaneButton && onWorkspacePaneTap != null) ...[
+                Semantics(
+                  toggled: workspacePaneVisible,
+                  child: OmniCircleButton(
+                    key: const ValueKey('chat-app-bar-workspace-button'),
+                    icon: LucideIcons.panelRight,
+                    size: _navigationButtonSize,
+                    tapTargetSize: MaterialTapTargetSize.padded,
+                    tooltip: workspacePaneVisible
+                        ? (english
+                              ? 'Hide workspace (Ctrl+E)'
+                              : '收起工作区 (Ctrl+E)')
+                        : (english
+                              ? 'Show workspace (Ctrl+E)'
+                              : '展开工作区 (Ctrl+E)'),
+                    foregroundColor: workspacePaneVisible
+                        ? palette.accentPrimary
+                        : palette.textPrimary,
+                    onPressed: onWorkspacePaneTap,
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
               KeyedSubtree(
                 key: tutorialActionsAnchorKey,
                 child: OmniCircleButton.popup(

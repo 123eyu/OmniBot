@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:ui/models/conversation_model.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
+import 'package:ui/features/home/widgets/home_conversation_avatar_colors.dart';
 
 /// Content for a home conversation row.
 /// Gesture, selection, editing and runtime ownership remain with the caller.
@@ -17,6 +18,7 @@ class HomeConversationTileContent extends StatelessWidget {
     this.leading,
     this.badge,
     this.isExecuting = false,
+    this.avatarColorIndex,
   });
 
   final ConversationModel conversation;
@@ -26,6 +28,7 @@ class HomeConversationTileContent extends StatelessWidget {
   final Widget? leading;
   final Widget? badge;
   final bool isExecuting;
+  final int? avatarColorIndex;
 
   static final _whitespace = RegExp(r'\s+');
 
@@ -54,36 +57,49 @@ class HomeConversationTileContent extends StatelessWidget {
         : DateFormat.MMMd(locale.toLanguageTag()).format(updated);
   }
 
-  Widget _avatar(BuildContext context) {
+  Widget _avatar(Color backgroundColor) {
+    const ink = Color(0xFF20242A);
     final agentId = conversation.agentId?.trim() ?? '';
     if (agentId.isNotEmpty && agentId.toLowerCase() != 'openclaw') {
-      return AgentBrandIcon(agentId: agentId, size: 40);
+      return AgentBrandIcon(
+        agentId: agentId,
+        size: 28,
+        tint: ink,
+        avatarBackgroundColor: backgroundColor,
+      );
     }
     if (agentId.toLowerCase() == 'openclaw' ||
         conversation.mode == ConversationMode.openclaw) {
       return SvgPicture.asset(
         'assets/home/openclaw.svg',
-        width: 40,
-        height: 40,
+        width: 28,
+        height: 28,
+        colorFilter: const ColorFilter.mode(ink, BlendMode.srcIn),
       );
     }
     if (conversation.mode == ConversationMode.chatOnly) {
       return SvgPicture.asset(
         'assets/home/chat/pure_chat.svg',
-        width: 30,
-        height: 30,
-        colorFilter: ColorFilter.mode(
-          context.omniPalette.textPrimary,
-          BlendMode.srcIn,
-        ),
+        width: 26,
+        height: 26,
+        colorFilter: const ColorFilter.mode(ink, BlendMode.srcIn),
       );
     }
-    return const AgentBrandIcon(agentId: 'xiaowan-acp', size: 40);
+    return AgentBrandIcon(
+      agentId: 'xiaowan-acp',
+      size: 28,
+      avatarBackgroundColor: backgroundColor,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
+    final avatarColor = HomeConversationAvatarColors.colorAt(
+      avatarColorIndex ??
+          HomeConversationAvatarColors.indexFor(conversation.threadKey),
+      Theme.of(context).brightness,
+    );
     final locale = Localizations.localeOf(context);
     final english = locale.languageCode == 'en';
     final titleStyle = TextStyle(
@@ -105,7 +121,19 @@ class HomeConversationTileContent extends StatelessWidget {
                   Stack(
                     alignment: Alignment.center,
                     children: [
-                      _avatar(context),
+                      Container(
+                        key: ValueKey(
+                          'home-conversation-avatar-${conversation.threadKey}',
+                        ),
+                        width: 42,
+                        height: 42,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: avatarColor,
+                          shape: BoxShape.circle,
+                        ),
+                        child: _avatar(avatarColor),
+                      ),
                       if (isExecuting)
                         PositionedDirectional(
                           end: 1,

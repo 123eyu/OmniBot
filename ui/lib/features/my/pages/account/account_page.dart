@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/omni_segmented_slider.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -1000,7 +1001,7 @@ class _AccountPageState extends State<AccountPage> {
         title: _text('账号与 AI 服务', 'Account & AI service'),
         primary: true,
       ),
-      body: content,
+      body: OmniContentWidth(child: content),
     );
   }
 

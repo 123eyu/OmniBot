@@ -37,8 +37,10 @@ Future<BuildContext> _pumpHost(WidgetTester tester, Size size) async {
 
 void _expectBottomPane(WidgetTester tester, double bottom) {
   expect(find.byType(Dialog), findsNothing);
-  expect(find.byType(LiquidGlass), findsOneWidget);
+  // The sheet is one surface; its copy/close controls can use glass too.
+  expect(find.byType(OmniGlassPanel), findsOneWidget);
   final pane = tester.getRect(find.byType(OmniGlassPanel));
+  expect(tester.getRect(find.byType(LiquidGlass).first), pane);
   expect(pane.bottom, closeTo(bottom, 1));
   expect(pane.height, greaterThanOrEqualTo(bottom * 0.5));
   expect(tester.takeException(), isNull);
@@ -206,9 +208,12 @@ void main() {
     await tester.pumpAndSettle();
 
     _expectBottomPane(tester, 844);
-    expect(find.byType(SelectableText), findsOneWidget);
-    final output = tester.widget<SelectableText>(find.byType(SelectableText));
-    expect(output.textSpan!.toPlainText(), contains('line-59'));
+    final blocks = tester.widgetList<SelectableText>(
+      find.byType(SelectableText),
+    );
+    expect(blocks, hasLength(2));
+    expect(blocks.first.data, contains('terminal_execute'));
+    expect(blocks.last.data, contains('line-59'));
     await tester.tapAt(const Offset(8, 8));
     await tester.pumpAndSettle();
     await result;

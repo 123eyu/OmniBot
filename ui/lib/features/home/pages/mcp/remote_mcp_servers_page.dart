@@ -1,3 +1,4 @@
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:ui/widgets/omni_glass.dart';
@@ -266,31 +267,34 @@ class _RemoteMcpServersPageState extends State<RemoteMcpServersPage>
           child: const Icon(LucideIcons.plus),
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _servers.isEmpty
-          ? _buildEmpty()
-          : RefreshIndicator(
-              onRefresh: _loadServers,
-              child: ListView(
-                padding: edgeToEdgeScrollPadding(
-                  context,
-                  const EdgeInsets.fromLTRB(22, 12, 22, 32),
-                ),
-                children: [
-                  SettingsSectionTitle(
-                    label: Localizations.localeOf(context).languageCode == 'en'
-                        ? 'Remote Services'
-                        : '远端服务',
+      body: OmniContentWidth(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _servers.isEmpty
+            ? _buildEmpty()
+            : RefreshIndicator(
+                onRefresh: _loadServers,
+                child: ListView(
+                  padding: edgeToEdgeScrollPadding(
+                    context,
+                    const EdgeInsets.fromLTRB(22, 12, 22, 32),
                   ),
-                  for (int index = 0; index < _servers.length; index++) ...[
-                    _buildServerCard(_servers[index]),
-                    if (index != _servers.length - 1)
-                      const SizedBox(height: 12),
+                  children: [
+                    SettingsSectionTitle(
+                      label:
+                          Localizations.localeOf(context).languageCode == 'en'
+                          ? 'Remote Services'
+                          : '远端服务',
+                    ),
+                    for (int index = 0; index < _servers.length; index++) ...[
+                      _buildServerCard(_servers[index]),
+                      if (index != _servers.length - 1)
+                        const SizedBox(height: 12),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
+      ),
     );
   }
 

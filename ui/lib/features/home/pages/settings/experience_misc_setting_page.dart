@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/features/home/state/habitual_hand_controller.dart';
 import 'package:ui/features/home/state/predictive_back_controller.dart';
@@ -399,19 +400,21 @@ class _ExperienceMiscSettingPageState
     return Scaffold(
       backgroundColor: palette.pageBackground,
       appBar: CommonAppBar(title: context.trLegacy('杂项'), primary: true),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: ListView.separated(
-          padding: edgeToEdgeScrollPadding(
-            context,
-            const EdgeInsets.fromLTRB(22, 12, 22, 32),
+      body: OmniContentWidth(
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: ListView.separated(
+            padding: edgeToEdgeScrollPadding(
+              context,
+              const EdgeInsets.fromLTRB(22, 12, 22, 32),
+            ),
+            itemCount: sections.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 22),
+            itemBuilder: (context, index) {
+              return _buildSettingsSection(sections[index]);
+            },
           ),
-          itemCount: sections.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 22),
-          itemBuilder: (context, index) {
-            return _buildSettingsSection(sections[index]);
-          },
         ),
       ),
     );

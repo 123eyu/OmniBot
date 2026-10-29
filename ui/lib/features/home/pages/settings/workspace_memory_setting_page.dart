@@ -1,3 +1,4 @@
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -210,94 +211,97 @@ class _WorkspaceMemorySettingPageState extends State<WorkspaceMemorySettingPage>
         title: context.l10n.workspaceMemoryTitle,
         primary: true,
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: edgeToEdgeScrollPadding(
-                context,
-                const EdgeInsets.fromLTRB(22, 12, 22, 32),
-              ),
-              children: [
-                SettingsSectionTitle(
-                  label: context.l10n.workspaceMemoryCapability,
+      body: OmniContentWidth(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: edgeToEdgeScrollPadding(
+                  context,
+                  const EdgeInsets.fromLTRB(22, 12, 22, 32),
                 ),
-                OmniSettingsGroup(
-                  dividerIndent: 16,
-                  children: [
-                    _buildSwitchCard(
-                      icon: LucideIcons.sparkles,
-                      title: context.l10n.workspaceEmbeddingRetrieval,
-                      subtitle: _embeddingConfig?.configured == true
-                          ? context.l10n.workspaceEmbeddingReady
-                          : context.l10n.workspaceEmbeddingNotReady,
-                      value: _embeddingEnabled,
-                      onChanged: _toggleEmbedding,
-                      footer: _embeddingConfig?.usesPlatform == true
-                          ? null
-                          : TextButton(
-                              style: TextButton.styleFrom(
-                                foregroundColor: palette.accentPrimary,
-                                padding: EdgeInsets.zero,
-                                minimumSize: const Size(0, 30),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                children: [
+                  SettingsSectionTitle(
+                    label: context.l10n.workspaceMemoryCapability,
+                  ),
+                  OmniSettingsGroup(
+                    dividerIndent: 16,
+                    children: [
+                      _buildSwitchCard(
+                        icon: LucideIcons.sparkles,
+                        title: context.l10n.workspaceEmbeddingRetrieval,
+                        subtitle: _embeddingConfig?.configured == true
+                            ? context.l10n.workspaceEmbeddingReady
+                            : context.l10n.workspaceEmbeddingNotReady,
+                        value: _embeddingEnabled,
+                        onChanged: _toggleEmbedding,
+                        footer: _embeddingConfig?.usesPlatform == true
+                            ? null
+                            : TextButton(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: palette.accentPrimary,
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(0, 30),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: () {
+                                  GoRouterManager.push(
+                                    '/home/scene_model_setting',
+                                  );
+                                },
+                                child: Text(context.l10n.workspaceGoToConfig),
                               ),
-                              onPressed: () {
-                                GoRouterManager.push(
-                                  '/home/scene_model_setting',
-                                );
-                              },
-                              child: Text(context.l10n.workspaceGoToConfig),
+                      ),
+                      _buildSwitchCard(
+                        icon: LucideIcons.moonStar,
+                        title: context.l10n.workspaceNightlyRollup,
+                        subtitle:
+                            '${context.l10n.workspaceLastRun(_formatTime(_rollupStatus?.lastRunAtMillis))}\n${context.l10n.workspaceNextRun(_formatTime(_rollupStatus?.nextRunAtMillis))}',
+                        value: _rollupEnabled,
+                        onChanged: _toggleRollup,
+                        footer: Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            style: TextButton.styleFrom(
+                              foregroundColor: palette.accentPrimary,
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(0, 30),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                    ),
-                    _buildSwitchCard(
-                      icon: LucideIcons.moonStar,
-                      title: context.l10n.workspaceNightlyRollup,
-                      subtitle:
-                          '${context.l10n.workspaceLastRun(_formatTime(_rollupStatus?.lastRunAtMillis))}\n${context.l10n.workspaceNextRun(_formatTime(_rollupStatus?.nextRunAtMillis))}',
-                      value: _rollupEnabled,
-                      onChanged: _toggleRollup,
-                      footer: Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton(
-                          style: TextButton.styleFrom(
-                            foregroundColor: palette.accentPrimary,
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(0, 30),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            onPressed: _runRollupNow,
+                            child: Text(context.l10n.workspaceRollupNow),
                           ),
-                          onPressed: _runRollupNow,
-                          child: Text(context.l10n.workspaceRollupNow),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                SettingsSectionTitle(
-                  label: context.l10n.workspaceSettingsAndMemory,
-                ),
-                _buildEditorCard(
-                  title: context.l10n.agentSoulSetting,
-                  controller: _soulController,
-                  saving: _savingSoul,
-                  onSave: _saveSoul,
-                ),
-                const SizedBox(height: 14),
-                _buildEditorCard(
-                  title: context.l10n.chatPromptSetting,
-                  controller: _chatController,
-                  saving: _savingChat,
-                  onSave: _saveChatPrompt,
-                ),
-                const SizedBox(height: 14),
-                _buildEditorCard(
-                  title: context.l10n.workspaceMemoryMd,
-                  controller: _memoryController,
-                  saving: _savingMemory,
-                  onSave: _saveMemory,
-                ),
-              ],
-            ),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
+                  SettingsSectionTitle(
+                    label: context.l10n.workspaceSettingsAndMemory,
+                  ),
+                  _buildEditorCard(
+                    title: context.l10n.agentSoulSetting,
+                    controller: _soulController,
+                    saving: _savingSoul,
+                    onSave: _saveSoul,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildEditorCard(
+                    title: context.l10n.chatPromptSetting,
+                    controller: _chatController,
+                    saving: _savingChat,
+                    onSave: _saveChatPrompt,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildEditorCard(
+                    title: context.l10n.workspaceMemoryMd,
+                    controller: _memoryController,
+                    saving: _savingMemory,
+                    onSave: _saveMemory,
+                  ),
+                ],
+              ),
+      ),
     );
   }
 

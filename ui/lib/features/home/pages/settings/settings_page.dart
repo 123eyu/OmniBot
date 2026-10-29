@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/services/mcp_server_service.dart';
@@ -285,19 +286,21 @@ class _SettingsPageState extends State<SettingsPage> with FlClashPageLoadMixin {
         primary: true,
         showBackButton: !widget.embedded,
       ),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: ListView.separated(
-          padding: edgeToEdgeScrollPadding(
-            context,
-            const EdgeInsets.fromLTRB(22, 10, 22, 32),
+      body: OmniContentWidth(
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: ListView.separated(
+            padding: edgeToEdgeScrollPadding(
+              context,
+              const EdgeInsets.fromLTRB(22, 10, 22, 32),
+            ),
+            itemCount: sections.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 26),
+            itemBuilder: (context, index) {
+              return _buildSettingsSection(sections[index]);
+            },
           ),
-          itemCount: sections.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 26),
-          itemBuilder: (context, index) {
-            return _buildSettingsSection(sections[index]);
-          },
         ),
       ),
     );

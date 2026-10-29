@@ -1,3 +1,4 @@
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -97,30 +98,32 @@ class _PluginMarketPageState extends State<PluginMarketPage>
         title: context.l10n.pluginMarketTitle,
         primary: true,
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              top: false,
-              bottom: false,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                    child: OmniSettingsSearchField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      hintText: context.l10n.pluginSearchHint,
+      body: OmniContentWidth(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : SafeArea(
+                top: false,
+                bottom: false,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                      child: OmniSettingsSearchField(
+                        controller: _searchController,
+                        focusNode: _searchFocusNode,
+                        hintText: context.l10n.pluginSearchHint,
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: _loadPlugins,
-                      child: _buildContent(_visiblePlugins),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _loadPlugins,
+                        child: _buildContent(_visiblePlugins),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 

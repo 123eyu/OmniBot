@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/omni_segmented_slider.dart';
 import 'package:ui/widgets/omni_glass.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
@@ -919,24 +920,26 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
         title: context.l10n.settingsAlpineTitle,
         primary: true,
       ),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: RefreshIndicator(
-          onRefresh: () async {
-            if (_isDistributionSwitching || _isDistributionLoading) return;
-            await _refreshInventory();
-            await _refreshAutoStartTasks();
-          },
-          child: ListView.separated(
-            scrollCacheExtent: const ScrollCacheExtent.pixels(0),
-            padding: edgeToEdgeScrollPadding(
-              context,
-              const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      body: OmniContentWidth(
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: RefreshIndicator(
+            onRefresh: () async {
+              if (_isDistributionSwitching || _isDistributionLoading) return;
+              await _refreshInventory();
+              await _refreshAutoStartTasks();
+            },
+            child: ListView.separated(
+              scrollCacheExtent: const ScrollCacheExtent.pixels(0),
+              padding: edgeToEdgeScrollPadding(
+                context,
+                const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              ),
+              itemCount: sections.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 28),
+              itemBuilder: (context, index) => sections[index](),
             ),
-            itemCount: sections.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 28),
-            itemBuilder: (context, index) => sections[index](),
           ),
         ),
       ),

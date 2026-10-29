@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show setEquals, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:ui/widgets/omni_glass.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,7 @@ import 'package:ui/features/home/widgets/conversation_context_menu.dart';
 import 'package:ui/features/home/widgets/conversation_slidable.dart';
 import 'package:ui/features/home/widgets/home_drawer_search_field.dart';
 import 'package:ui/features/home/widgets/home_conversation_tile_content.dart';
+import 'package:ui/features/home/widgets/home_conversation_avatar_colors.dart';
 import 'package:ui/features/home/widgets/home_search_header.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
@@ -127,6 +129,8 @@ class HomeDrawer extends ConsumerStatefulWidget {
     this.searchFieldKey,
     this.deferInitialLoad = false,
     this.homePage = false,
+    this.conversationSidebar = false,
+    this.selectedThreadTarget,
     this.active = true,
   });
 
@@ -147,6 +151,15 @@ class HomeDrawer extends ConsumerStatefulWidget {
   /// Presents the existing conversation owner as the app's full-screen home.
   /// Search, history mutations and running-session status remain shared.
   final bool homePage;
+
+  /// Reuses the modern home surface inside a narrow conversation pane.
+  /// It starts with all Agents so opening a Codex/Na conversation does not
+  /// hide it behind the standalone home's remembered default category.
+  final bool conversationSidebar;
+
+  /// Presentation selection supplied by the conversation host; never owns
+  /// or changes the current ACP session.
+  final ConversationThreadTarget? selectedThreadTarget;
 
   /// Kept-alive home tabs refresh their catalog when selected again.
   final bool active;
@@ -186,6 +199,7 @@ class HomeDrawerState extends ConsumerState<HomeDrawer>
   final Map<String, Set<String>> _conversationImagePreviewFailures =
       <String, Set<String>>{};
   final Map<String, bool> _expandedConversationSections = <String, bool>{};
+  Map<String, int> _homeAvatarColorIndices = const {};
   final Set<String> _busyConversationKeys = <String>{};
   final Set<String> _selectedConversationKeys = <String>{};
   bool _isSelectingConversations = false;
@@ -236,6 +250,7 @@ class HomeDrawerState extends ConsumerState<HomeDrawer>
   @override
   void initState() {
     super.initState();
+    if (widget.conversationSidebar) _homeFilter = _HomeConversationFilter.all;
     if (widget.homePage) {
       unawaited(AppUpdateService.initialize());
       _homeAppLifecycleListener = AppLifecycleListener(
@@ -517,6 +532,21 @@ class HomeDrawerState extends ConsumerState<HomeDrawer>
     _searchFocusNode.unfocus();
   }
 
+  /// The chat host resolves sidebar dismissal before workspace navigation,
+  /// so two PopScopes never consume the same back action independently.
+  bool handleBackIfNeeded() {
+    if (!widget.active) return false;
+    if (_isSelectingConversations) {
+      _exitConversationSelection();
+      return true;
+    }
+    if (_homeSearchVisible) {
+      _closeHomeSearch();
+      return true;
+    }
+    return false;
+  }
+
   /// Rebuilds of this drawer, for the frame-budget tests.
   @visibleForTesting
   static int debugBuildCount = 0;
@@ -528,7 +558,10 @@ class HomeDrawerState extends ConsumerState<HomeDrawer>
       return true;
     }());
     if (widget.homePage) {
-      return _buildHomePage();
+      return OmniContentWidth(
+        key: const ValueKey('home-content-column'),
+        child: _buildHomePage(),
+      );
     }
     final backgroundColor = _drawerBackgroundColor;
     final content = ColoredBox(

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/features/home/pages/chat/chat_page.dart';
+import 'package:ui/features/home/widgets/home_drawer.dart';
 import 'package:ui/features/home/pages/chat/services/chat_conversation_runtime_coordinator.dart';
 import 'package:ui/features/home/pages/chat/widgets/acp_config_button.dart';
 import 'package:ui/features/home/pages/chat/widgets/chat_empty_greeting.dart';
@@ -18,6 +19,7 @@ import 'package:ui/features/home/pages/command_overlay/widgets/chat_input_area.d
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/models/conversation_model.dart';
+import 'package:ui/models/chat_message_model.dart';
 import 'package:ui/models/conversation_thread_target.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme.dart';
@@ -360,9 +362,10 @@ void main() {
     ConversationThreadTarget? target, {
     bool tour = false,
     bool settle = true,
+    Size size = const Size(390, 844),
     GlobalKey<NavigatorState>? navigatorKey,
   }) async {
-    tester.view.physicalSize = const Size(390, 844);
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -503,6 +506,284 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   }
+
+  testWidgets(
+    'Pad resizing and pane controls preserve the draft without admitting a turn',
+    (tester) async {
+      addTearDown(tester.view.resetViewInsets);
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.newConversation(
+          mode: ConversationMode.agent,
+          requestKey: 'pad-resize-draft',
+          agentId: 'xiaowan-acp',
+        ),
+        size: const Size(768, 1024),
+      );
+      final controller = composer(tester).controller;
+      controller.text = '旋转平板后仍保留的草稿';
+      final focusNode = composer(tester).focusNode;
+      final sidebar = find.byKey(const ValueKey('chat-app-bar-sidebar-button'));
+      final workspace = find.byKey(
+        const ValueKey('chat-app-bar-workspace-button'),
+      );
+      expect(sidebar, findsOneWidget);
+      expect(
+        tester
+            .widget<ChatAppBar>(find.byType(ChatAppBar))
+            .conversationPaneVisible,
+        isTrue,
+      );
+      expect(
+        tester.widget<ChatAppBar>(find.byType(ChatAppBar)).workspacePaneVisible,
+        isFalse,
+      );
+      await tester.tap(sidebar);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<ChatAppBar>(find.byType(ChatAppBar))
+            .conversationPaneVisible,
+        isFalse,
+      );
+      expect(
+        tester.widget<ChatAppBar>(find.byType(ChatAppBar)).workspacePaneVisible,
+        isFalse,
+      );
+      focusNode.requestFocus();
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<ChatAppBar>(find.byType(ChatAppBar))
+            .conversationPaneVisible,
+        isTrue,
+      );
+      await tester.tap(workspace);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<ChatAppBar>(find.byType(ChatAppBar)).workspacePaneVisible,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<ChatAppBar>(find.byType(ChatAppBar))
+            .conversationPaneVisible,
+        isFalse,
+      );
+      await tester.tap(sidebar);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<ChatAppBar>(find.byType(ChatAppBar))
+            .conversationPaneVisible,
+        isTrue,
+      );
+      expect(
+        tester.widget<ChatAppBar>(find.byType(ChatAppBar)).workspacePaneVisible,
+        isFalse,
+      );
+      for (final size in [
+        const Size(1366, 1024),
+        const Size(960, 480),
+        const Size(844, 390),
+        const Size(600, 960),
+        const Size(768, 1024),
+      ]) {
+        tester.view.physicalSize = size;
+        await tester.pumpAndSettle();
+        expect(composer(tester).controller, same(controller));
+        expect(composer(tester).focusNode, same(focusNode));
+        expect(controller.text, '旋转平板后仍保留的草稿');
+        if (size.height < 500) {
+          focusNode.requestFocus();
+          await tester.pump();
+          tester.view.viewInsets = const FakeViewPadding(bottom: 160);
+          await tester.pumpAndSettle();
+          expect(
+            tester.getRect(find.byType(ChatInputArea)).bottom,
+            lessThanOrEqualTo(size.height - 160),
+          );
+          expect(sidebar, findsOneWidget);
+          tester.view.viewInsets = FakeViewPadding.zero;
+          await tester.pumpAndSettle();
+        }
+        expect(tester.takeException(), isNull);
+      }
+      focusNode.requestFocus();
+      await tester.pump();
+      tester.view.viewInsets = const FakeViewPadding(bottom: 340);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(find.byType(ChatInputArea)).bottom,
+        lessThanOrEqualTo(684),
+      );
+      expect(sidebar, findsOneWidget);
+      expectNoSessionAdmission();
+      expectNoPersistedDraft();
+      await disposeChat(tester);
+    },
+  );
+
+  testWidgets(
+    'Pad history keeps transcript and tool details readable across columns',
+    (tester) async {
+      const conversationId = 806;
+      conversations = [
+        historyConversation(
+          conversationId,
+          ConversationMode.agent,
+          messageCount: 3,
+        ),
+        historyConversation(807, ConversationMode.agent),
+      ];
+      historyPages[807] = historyMessage(807);
+      historyPages[conversationId] = [
+        ChatMessageModel(
+          id: 'pad-answer',
+          type: 1,
+          user: 2,
+          content: const {'text': '检查完成，当前工作区没有待提交改动。'},
+          streamMeta: const {
+            'parentTaskId': 'pad-turn',
+            'kind': 'text_snapshot',
+            'seq': 3,
+            'isFinal': true,
+          },
+        ).toJson(),
+        ChatMessageModel.cardMessage(
+          const {
+            'type': 'agent_tool_summary',
+            'uiStyle': 'agent_tool',
+            'toolType': 'terminal',
+            'status': 'success',
+            'toolTitle': '运行 git status',
+            'summary': '命令执行完成',
+            'terminalOutput':
+                'On branch main\nnothing to commit, working tree clean',
+          },
+          id: 'pad-tool',
+          streamMeta: const {
+            'parentTaskId': 'pad-turn',
+            'kind': 'tool_completed',
+            'seq': 2,
+            'isFinal': false,
+          },
+        ).toJson(),
+        ...historyMessage(conversationId),
+      ];
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.existing(
+          conversationId: conversationId,
+          mode: ConversationMode.agent,
+        ),
+        size: const Size(1366, 1024),
+      );
+      expect(composer(tester).focusNode.hasFocus, isFalse);
+      expect(tester.testTextInput.isVisible, isFalse);
+      Future<void> shortcut(LogicalKeyboardKey key) async {
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyEvent(key);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        await tester.pumpAndSettle();
+      }
+
+      await shortcut(LogicalKeyboardKey.keyB);
+      expect(
+        tester
+            .widget<ChatAppBar>(find.byType(ChatAppBar))
+            .conversationPaneVisible,
+        isFalse,
+      );
+      await shortcut(LogicalKeyboardKey.keyB);
+      expect(
+        tester
+            .widget<ChatAppBar>(find.byType(ChatAppBar))
+            .conversationPaneVisible,
+        isTrue,
+      );
+      await shortcut(LogicalKeyboardKey.keyE);
+      expect(
+        tester.widget<ChatAppBar>(find.byType(ChatAppBar)).workspacePaneVisible,
+        isFalse,
+      );
+      await shortcut(LogicalKeyboardKey.keyE);
+      expect(
+        tester.widget<ChatAppBar>(find.byType(ChatAppBar)).workspacePaneVisible,
+        isTrue,
+      );
+      await shortcut(LogicalKeyboardKey.keyL);
+      expect(composer(tester).focusNode.hasFocus, isTrue);
+      composer(tester).focusNode.unfocus();
+      await tester.pumpAndSettle();
+      for (final size in [
+        const Size(1366, 1024),
+        const Size(768, 1024),
+        const Size(960, 480),
+      ]) {
+        tester.view.physicalSize = size;
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('检查完成，当前工作区没有待提交改动。', findRichText: true),
+          findsOneWidget,
+        );
+        expect(
+          tester.getSize(find.byType(ChatMessageList)).width,
+          lessThanOrEqualTo(840),
+        );
+        final header = find.byKey(const ValueKey('agent-run-summary-pad-turn'));
+        await tester.ensureVisible(header);
+        await tester.tap(header);
+        await tester.pumpAndSettle();
+        expect(find.text('执行命令'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(
+        find.descendant(
+          of: find.byType(HomeDrawer),
+          matching: find.text('历史对话 807'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatPage), findsOneWidget);
+      expect(find.text('已加载历史消息 807'), findsOneWidget);
+      expect(
+        tester
+            .widget<Semantics>(
+              find.byKey(const ValueKey('home-current-thread-agent:807')),
+            )
+            .properties
+            .selected,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<Semantics>(
+              find.byKey(const ValueKey('home-current-thread-agent:806')),
+            )
+            .properties
+            .selected,
+        isFalse,
+      );
+      await tester.tap(find.byKey(const ValueKey('home-search-button')));
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('home-close-search')), findsNothing);
+      expect(find.byType(ChatPage), findsOneWidget);
+      expect(
+        agentCalls.where((call) => call.method == 'session/prompt'),
+        isEmpty,
+      );
+      await disposeChat(tester);
+    },
+  );
 
   for (final existing in [false, true]) {
     testWidgets('chat keeps its editor and messages above the keyboard without rebuilding page content '

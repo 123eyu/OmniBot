@@ -117,7 +117,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
             onSelected: (_) => this._handleContextUsageRingLongPress(),
           ),
       ],
-      if (isHdPadLandscapeViewport(MediaQuery.sizeOf(context)))
+      if (isChatWorkspaceViewport(MediaQuery.sizeOf(context)))
         ChatAppBarAction(
           label: english ? 'Conversation sidebar' : '会话侧栏',
           icon: LucideIcons.panelLeft,
@@ -1249,7 +1249,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
             ? Border.all(
                 color: translucent
                     ? visualProfile.islandBorderColor
-                    : const Color(0xFFD9E6FB),
+                    : palette.borderSubtle,
               )
             : null,
         boxShadow: showShadow
@@ -1278,6 +1278,48 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     required bool showSurfaceSwitcher,
     VoidCallback? onWorkspacePaneTap,
     bool showWorkspacePaneButton = false,
+    VoidCallback? onConversationPaneTap,
+    bool conversationPaneVisible = false,
+    bool workspacePaneVisible = false,
+  }) {
+    return OmniContentWidth(
+      maxWidth: 840,
+      child: LayoutBuilder(
+        builder: (context, contentConstraints) => _buildChatPaneContent(
+          layoutContext: context,
+          constraints: contentConstraints,
+          backgroundConfig: backgroundConfig,
+          visualProfile: visualProfile,
+          backgroundActive: backgroundActive,
+          conversationBody: conversationBody,
+          hideWorkspaceOverlays: hideWorkspaceOverlays,
+          showMenuButton: showMenuButton,
+          showSurfaceSwitcher: showSurfaceSwitcher,
+          onWorkspacePaneTap: onWorkspacePaneTap,
+          showWorkspacePaneButton: showWorkspacePaneButton,
+          onConversationPaneTap: onConversationPaneTap,
+          conversationPaneVisible: conversationPaneVisible,
+          workspacePaneVisible: workspacePaneVisible,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatPaneContent({
+    required BuildContext layoutContext,
+    required BoxConstraints constraints,
+    required AppBackgroundConfig backgroundConfig,
+    required AppBackgroundVisualProfile visualProfile,
+    required bool backgroundActive,
+    required Widget conversationBody,
+    required bool hideWorkspaceOverlays,
+    required bool showMenuButton,
+    required bool showSurfaceSwitcher,
+    VoidCallback? onWorkspacePaneTap,
+    bool showWorkspacePaneButton = false,
+    VoidCallback? onConversationPaneTap,
+    bool conversationPaneVisible = false,
+    bool workspacePaneVisible = false,
   }) {
     final slashCommandCards =
         _showSlashCommandPanel &&
@@ -1365,6 +1407,9 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               showTerminalActions: _showLocalTerminalActions,
               showWorkspacePaneButton: showWorkspacePaneButton,
               onWorkspacePaneTap: onWorkspacePaneTap,
+              onConversationPaneTap: onConversationPaneTap,
+              conversationPaneVisible: conversationPaneVisible,
+              workspacePaneVisible: workspacePaneVisible,
               tutorialMenuAnchorKey: _firstUseTourMenuAnchorKey,
               tutorialActionsAnchorKey: _firstUseTourActionsAnchorKey,
               tutorialModeAnchorKey: _firstUseTourModeAnchorKey,
@@ -1667,7 +1712,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     );
   }
 
-  Widget _buildHdPadLandscapeShell({
+  Widget _buildAdaptiveWorkspaceShell({
     required AppBackgroundConfig backgroundConfig,
     required AppBackgroundVisualProfile visualProfile,
     required bool backgroundActive,
@@ -1678,10 +1723,15 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         final availableWidth = math
             .max(0, constraints.maxWidth - shellPadding.horizontal)
             .toDouble();
-        final expandedLayout = _hdPadPaneLayoutResolver.resolve(
+        final expandedLeft = _hdPadPaneLayoutResolver.resolve(
           availableWidth,
           preferredLeftWidth: _hdPadLeftPaneWidth,
+          collapseRightPane: true,
+        );
+        final expandedRight = _hdPadPaneLayoutResolver.resolve(
+          availableWidth,
           preferredRightWidth: _hdPadRightPaneWidth,
+          collapseLeftPane: true,
         );
         final layout = _hdPadPaneLayoutResolver.resolve(
           availableWidth,
@@ -1690,6 +1740,16 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
           collapseLeftPane: _hdPadLeftPaneCollapsed,
           collapseRightPane: _hdPadRightPaneCollapsed,
         );
+        final leftHidden = layout.leftWidth == 0;
+        final rightHidden = layout.rightWidth == 0;
+        final leftContentWidth = leftHidden
+            ? expandedLeft.leftWidth
+            : layout.leftWidth;
+        final rightContentWidth = rightHidden
+            ? expandedRight.rightWidth
+            : layout.rightWidth;
+        final resized = _hdPadLastLayoutWidth != availableWidth;
+        _hdPadLastLayoutWidth = availableWidth;
         final leftCollapseThreshold = _resolveHdPadPaneCollapseThreshold(
           availableWidth: availableWidth,
           minPaneWidth: HdPadPaneLayoutResolver.minLeftWidth,
@@ -1698,7 +1758,10 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
           availableWidth: availableWidth,
           minPaneWidth: HdPadPaneLayoutResolver.minRightWidth,
         );
-        final paneDuration = _isHdPadPaneDragging
+        final paneDuration =
+            _isHdPadPaneDragging ||
+                resized ||
+                MediaQuery.disableAnimationsOf(context)
             ? Duration.zero
             : const Duration(milliseconds: 280);
         const paneCurve = Curves.easeInOutCubic;
@@ -1713,16 +1776,16 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                 child: ClipRect(
                   child: OverflowBox(
                     alignment: Alignment.centerLeft,
-                    minWidth: expandedLayout.leftWidth,
-                    maxWidth: expandedLayout.leftWidth,
+                    minWidth: leftContentWidth,
+                    maxWidth: leftContentWidth,
                     child: SizedBox(
-                      width: expandedLayout.leftWidth,
-                      child: IgnorePointer(
-                        ignoring: _hdPadLeftPaneCollapsed,
+                      width: leftContentWidth,
+                      child: _ChatPaneVisibility(
+                        hidden: leftHidden,
                         child: AnimatedSlide(
-                          duration: const Duration(milliseconds: 280),
+                          duration: paneDuration,
                           curve: Curves.easeInOutCubic,
-                          offset: _hdPadLeftPaneCollapsed
+                          offset: leftHidden
                               ? const Offset(-0.08, 0)
                               : Offset.zero,
                           child: _buildPaneSurface(
@@ -1730,6 +1793,20 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                             visualProfile: visualProfile,
                             child: HomeDrawer(
                               key: _embeddedDrawerKey,
+                              homePage: true,
+                              conversationSidebar: true,
+                              selectedThreadTarget:
+                                  _currentConversationId == null
+                                  ? null
+                                  : ConversationThreadTarget.existing(
+                                      conversationId: _currentConversationId,
+                                      mode:
+                                          _currentConversation?.mode ??
+                                          _conversationModeForPageMode(
+                                            _activeMode,
+                                          ),
+                                    ),
+                              active: !leftHidden,
                               embedded: true,
                               closeOnNavigate: false,
                               onSearchFocusChanged:
@@ -1751,10 +1828,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               AnimatedContainer(
                 duration: paneDuration,
                 curve: paneCurve,
-                width: _hdPadLeftPaneCollapsed
-                    ? 0
-                    : HdPadPaneLayoutResolver.dividerHitWidth,
-                child: _hdPadLeftPaneCollapsed
+                width: leftHidden ? 0 : HdPadPaneLayoutResolver.dividerHitWidth,
+                child: leftHidden
                     ? const SizedBox.shrink()
                     : _PaneResizeHandle(
                         onDragStart: () {
@@ -1813,7 +1888,10 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                         hideWorkspaceOverlays: false,
                         showMenuButton: true,
                         showSurfaceSwitcher: false,
-                        showWorkspacePaneButton: _hdPadRightPaneCollapsed,
+                        showWorkspacePaneButton: true,
+                        onConversationPaneTap: _toggleHdPadLeftPaneCollapsed,
+                        conversationPaneVisible: !leftHidden,
+                        workspacePaneVisible: !rightHidden,
                         onWorkspacePaneTap: _toggleHdPadRightPaneCollapsed,
                       );
                     },
@@ -1823,10 +1901,10 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               AnimatedContainer(
                 duration: paneDuration,
                 curve: paneCurve,
-                width: _hdPadRightPaneCollapsed
+                width: rightHidden
                     ? 0
                     : HdPadPaneLayoutResolver.dividerHitWidth,
-                child: _hdPadRightPaneCollapsed
+                child: rightHidden
                     ? const SizedBox.shrink()
                     : _PaneResizeHandle(
                         onDragStart: () {
@@ -1869,16 +1947,16 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                 child: ClipRect(
                   child: OverflowBox(
                     alignment: Alignment.centerRight,
-                    minWidth: expandedLayout.rightWidth,
-                    maxWidth: expandedLayout.rightWidth,
+                    minWidth: rightContentWidth,
+                    maxWidth: rightContentWidth,
                     child: SizedBox(
-                      width: expandedLayout.rightWidth,
-                      child: IgnorePointer(
-                        ignoring: _hdPadRightPaneCollapsed,
+                      width: rightContentWidth,
+                      child: _ChatPaneVisibility(
+                        hidden: rightHidden,
                         child: AnimatedSlide(
-                          duration: const Duration(milliseconds: 280),
+                          duration: paneDuration,
                           curve: Curves.easeInOutCubic,
-                          offset: _hdPadRightPaneCollapsed
+                          offset: rightHidden
                               ? const Offset(0.08, 0)
                               : Offset.zero,
                           child: _buildPaneSurface(
@@ -1948,9 +2026,29 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
 
   @override
   Widget build(BuildContext context) {
-    final isHdPadLandscape = isHdPadLandscapeViewport(
-      MediaQuery.sizeOf(context),
+    return LayoutBuilder(
+      builder: (context, constraints) => _buildAdaptiveChatPage(
+        context,
+        isChatWorkspace: isChatWorkspaceViewport(
+          Size(
+            constraints.maxWidth - MediaQuery.viewPaddingOf(context).horizontal,
+            constraints.maxHeight,
+          ),
+        ),
+        availableWidth:
+            constraints.maxWidth - MediaQuery.viewPaddingOf(context).horizontal,
+      ),
     );
+  }
+
+  Widget _buildAdaptiveChatPage(
+    BuildContext context, {
+    required bool isChatWorkspace,
+    required double availableWidth,
+  }) {
+    final workspaceVisible =
+        isChatWorkspace &&
+        _currentPadLayout(availableWidth: availableWidth - 16).rightWidth > 0;
     final chatPage = ChatKeyboardLayout(
       changes: _chatKeyboardLayoutChanges,
       resolve: _resolveKeyboardLayout,
@@ -1964,9 +2062,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               final handlesBackLocally =
                   _isFirstUseTourActive ||
                   _conversationModelSelectorHandle != null ||
-                  (isHdPadLandscape &&
-                      !_hdPadRightPaneCollapsed &&
-                      _workspaceBrowserCanGoUp);
+                  (workspaceVisible && _workspaceBrowserCanGoUp);
               return PopScope(
                 // Predictive back requires the framework to declare whether it can
                 // pop before the gesture starts. At the root, let Android own the
@@ -1983,9 +2079,11 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                     unawaited(_conversationModelSelectorHandle?.dismiss());
                     return;
                   }
-                  if (isHdPadLandscape &&
-                      !_hdPadRightPaneCollapsed &&
-                      _workspaceBrowserCanGoUp) {
+                  if (_embeddedDrawerKey.currentState?.handleBackIfNeeded() ==
+                      true) {
+                    return;
+                  }
+                  if (workspaceVisible && _workspaceBrowserCanGoUp) {
                     if (_shouldUseRemoteCodexWorkspace()) {
                       _hdPadRemoteWorkspaceBrowserKey.currentState
                           ?.openParentDirectory();
@@ -2030,8 +2128,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                             onPointerDown: (event) {
                               unawaited(_handleOutsideTap(event.position));
                             },
-                            child: isHdPadLandscape
-                                ? _buildHdPadLandscapeShell(
+                            child: isChatWorkspace
+                                ? _buildAdaptiveWorkspaceShell(
                                     backgroundConfig: backgroundConfig,
                                     visualProfile: visualProfile,
                                     backgroundActive: backgroundActive,
@@ -2090,7 +2188,23 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       ),
     );
     if (!_isFirstUseTourActive) {
-      return chatPage;
+      return CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.keyL, control: true): () =>
+              _requestComposerFocus(),
+          if (isChatWorkspace) ...{
+            const SingleActivator(LogicalKeyboardKey.keyB, control: true):
+                _toggleHdPadLeftPaneCollapsed,
+            const SingleActivator(LogicalKeyboardKey.keyE, control: true):
+                _toggleHdPadRightPaneCollapsed,
+          },
+        },
+        child: Focus(
+          focusNode: _pageShortcutsFocusNode,
+          autofocus: true,
+          child: chatPage,
+        ),
+      );
     }
     return Stack(
       fit: StackFit.expand,

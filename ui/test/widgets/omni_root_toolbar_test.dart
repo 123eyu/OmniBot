@@ -64,8 +64,10 @@ void main() {
   testWidgets('inline root toolbar consumes an existing SafeArea only once', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 800);
     tester.view.padding = const FakeViewPadding(top: 24, left: 12, right: 8);
     tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetPadding);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(

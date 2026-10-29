@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/omni_segmented_slider.dart';
 import 'package:ui/widgets/omni_glass.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -393,26 +394,28 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
         title: LegacyTextLocalizer.isEnglish ? 'Scheduled' : '定时',
         primary: true,
       ),
-      body: Column(
-        children: [
-          const SizedBox(height: 8),
-          _buildTabSwitcher(),
-          const SizedBox(height: 12),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : PageView(
-                    controller: _pageController,
-                    onPageChanged: (index) {
-                      if (!mounted) return;
-                      setState(() {
-                        _currentTab = index;
-                      });
-                    },
-                    children: [_buildSchedulePage(), _buildAlarmPage()],
-                  ),
-          ),
-        ],
+      body: OmniContentWidth(
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            _buildTabSwitcher(),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : PageView(
+                      controller: _pageController,
+                      onPageChanged: (index) {
+                        if (!mounted) return;
+                        setState(() {
+                          _currentTab = index;
+                        });
+                      },
+                      children: [_buildSchedulePage(), _buildAlarmPage()],
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

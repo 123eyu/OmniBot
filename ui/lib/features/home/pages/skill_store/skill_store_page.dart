@@ -1,3 +1,4 @@
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:ui/widgets/omni_circle_button.dart';
@@ -297,30 +298,32 @@ class _SkillStorePageState extends State<SkillStorePage>
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              top: false,
-              bottom: false,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                    child: OmniSettingsSearchField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      hintText: context.trLegacy('搜索技能名称或描述'),
+      body: OmniContentWidth(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : SafeArea(
+                top: false,
+                bottom: false,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                      child: OmniSettingsSearchField(
+                        controller: _searchController,
+                        focusNode: _searchFocusNode,
+                        hintText: context.trLegacy('搜索技能名称或描述'),
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: _loadSkills,
-                      child: _buildScrollableContent(visibleSkills),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _loadSkills,
+                        child: _buildScrollableContent(visibleSkills),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 

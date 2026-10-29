@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:flutter/material.dart';
@@ -556,10 +557,15 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
     return Scaffold(
       backgroundColor: palette.pageBackground,
       appBar: CommonAppBar(title: _title, primary: true),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: RefreshIndicator(onRefresh: _loadSessions, child: _buildBody()),
+      body: OmniContentWidth(
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: RefreshIndicator(
+            onRefresh: _loadSessions,
+            child: _buildBody(),
+          ),
+        ),
       ),
     );
   }
@@ -1296,13 +1302,15 @@ class _AgentSessionWorkspacePage extends StatelessWidget {
     return Scaffold(
       backgroundColor: palette.pageBackground,
       appBar: CommonAppBar(title: title, primary: true),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: CodexRemoteWorkspaceBrowser(
-          workspacePath: workspacePath,
-          remoteBridgeUrl: remoteBridgeUrl,
-          remoteBridgeToken: remoteBridgeToken,
+      body: OmniContentWidth(
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: CodexRemoteWorkspaceBrowser(
+            workspacePath: workspacePath,
+            remoteBridgeUrl: remoteBridgeUrl,
+            remoteBridgeToken: remoteBridgeToken,
+          ),
         ),
       ),
     );

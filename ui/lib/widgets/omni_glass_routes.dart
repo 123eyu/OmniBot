@@ -87,7 +87,13 @@ Future<T?> showOmniGlassBottomSheet<T>({
       elevation: elevation,
       shape: shape,
       clipBehavior: clipBehavior,
-      constraints: constraints,
+      // Keep modal content readable on large windows regardless of whether a
+      // host uses Material 2 or 3. Native route alignment remains responsible
+      // for centering, display features and caller-supplied size overrides.
+      constraints:
+          constraints ??
+          Theme.of(context).bottomSheetTheme.constraints ??
+          const BoxConstraints(maxWidth: 640),
       isDismissible: isDismissible,
       modalBarrierColor:
           barrierColor ??

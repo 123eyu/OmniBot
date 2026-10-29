@@ -166,4 +166,31 @@ void main() {
     );
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('tablet memory selection stays aligned and survives resize', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 1024);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await mount(tester);
+    final state = tester.state(find.byType(MemoryCenterPage));
+    expect(tester.getSize(find.byType(PageView)).width, 840);
+    expect(tester.getSize(find.byType(Scaffold)).width, 1366);
+    await tester.longPress(find.text('Memory a'));
+    await tester.pump();
+    final selectionBar = find.byType(SelectionBottomBar);
+    expect(tester.widget<SelectionBottomBar>(selectionBar).isActive, isTrue);
+    expect(tester.getSize(selectionBar).width, 840);
+    tester.view.physicalSize = const Size(600, 900);
+    await tester.pump();
+    expect(tester.state(find.byType(MemoryCenterPage)), same(state));
+    expect(tester.widget<SelectionBottomBar>(selectionBar).isActive, isTrue);
+    expect(tester.getSize(find.byType(PageView)).width, 600);
+    expect(tester.getSize(selectionBar).width, 600);
+    expect(deletes, isEmpty);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 }

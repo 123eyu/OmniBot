@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:ui/widgets/omni_glass.dart';
@@ -345,59 +346,61 @@ class _StorageUsagePageState extends State<StorageUsagePage>
         title: _t(context, '存储占用', 'Storage Usage'),
         primary: true,
       ),
-      body: _loading
-          ? Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  palette.accentPrimary,
-                ),
-              ),
-            )
-          : summary == null
-          ? _buildErrorView()
-          : RefreshIndicator(
-              color: palette.accentPrimary,
-              onRefresh: _loadSummary,
-              child: ListView(
-                padding: edgeToEdgeScrollPadding(
-                  context,
-                  const EdgeInsets.fromLTRB(22, 12, 22, 32),
-                ),
-                children: [
-                  SettingsSectionTitle(
-                    label: _t(context, '存储概览', 'Storage overview'),
-                    subtitle: _t(
-                      context,
-                      '查看当前占用总量、可清理空间和最近变化',
-                      'Review total usage, cleanable space, and recent changes',
-                    ),
+      body: OmniContentWidth(
+        child: _loading
+            ? Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    palette.accentPrimary,
                   ),
-                  OmniSettingsCard(child: _buildOverviewSection(summary)),
-                  if (summary.strategyPresets.isNotEmpty) ...[
-                    const SizedBox(height: 22),
+                ),
+              )
+            : summary == null
+            ? _buildErrorView()
+            : RefreshIndicator(
+                color: palette.accentPrimary,
+                onRefresh: _loadSummary,
+                child: ListView(
+                  padding: edgeToEdgeScrollPadding(
+                    context,
+                    const EdgeInsets.fromLTRB(22, 12, 22, 32),
+                  ),
+                  children: [
                     SettingsSectionTitle(
-                      label: _t(context, '清理建议', 'Cleanup suggestions'),
+                      label: _t(context, '存储概览', 'Storage overview'),
                       subtitle: _t(
                         context,
-                        '根据当前占用情况执行推荐的清理策略',
-                        'Run recommended cleanup actions based on current usage',
+                        '查看当前占用总量、可清理空间和最近变化',
+                        'Review total usage, cleanable space, and recent changes',
                       ),
                     ),
-                    OmniSettingsCard(child: _buildStrategySection(summary)),
-                  ],
-                  const SizedBox(height: 22),
-                  SettingsSectionTitle(
-                    label: _t(context, '分类占用', 'Usage by category'),
-                    subtitle: _t(
-                      context,
-                      '查看各类数据占用，并对可清理项进行处理',
-                      'Review occupied categories and clean removable data',
+                    OmniSettingsCard(child: _buildOverviewSection(summary)),
+                    if (summary.strategyPresets.isNotEmpty) ...[
+                      const SizedBox(height: 22),
+                      SettingsSectionTitle(
+                        label: _t(context, '清理建议', 'Cleanup suggestions'),
+                        subtitle: _t(
+                          context,
+                          '根据当前占用情况执行推荐的清理策略',
+                          'Run recommended cleanup actions based on current usage',
+                        ),
+                      ),
+                      OmniSettingsCard(child: _buildStrategySection(summary)),
+                    ],
+                    const SizedBox(height: 22),
+                    SettingsSectionTitle(
+                      label: _t(context, '分类占用', 'Usage by category'),
+                      subtitle: _t(
+                        context,
+                        '查看各类数据占用，并对可清理项进行处理',
+                        'Review occupied categories and clean removable data',
+                      ),
                     ),
-                  ),
-                  OmniSettingsCard(child: _buildCategorySection(summary)),
-                ],
+                    OmniSettingsCard(child: _buildCategorySection(summary)),
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 

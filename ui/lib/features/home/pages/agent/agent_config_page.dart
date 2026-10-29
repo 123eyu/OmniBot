@@ -1,3 +1,4 @@
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/conversation_model_selector.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 
@@ -489,68 +490,70 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
               ),
           ],
         ),
-        body: SafeArea(
-          top: false,
-          bottom: false,
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null && _agent == null
-              ? _ErrorState(error: _error!, onRetry: _load)
-              : _agent?.configurationAvailable == false
-              ? _buildManagedAccountNotice()
-              : ListView(
-                  padding: edgeToEdgeScrollPadding(
-                    context,
-                    const EdgeInsets.fromLTRB(22, 12, 22, 28),
+        body: OmniContentWidth(
+          child: SafeArea(
+            top: false,
+            bottom: false,
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null && _agent == null
+                ? _ErrorState(error: _error!, onRetry: _load)
+                : _agent?.configurationAvailable == false
+                ? _buildManagedAccountNotice()
+                : ListView(
+                    padding: edgeToEdgeScrollPadding(
+                      context,
+                      const EdgeInsets.fromLTRB(22, 12, 22, 28),
+                    ),
+                    children: [
+                      SettingsSectionTitle(
+                        label: _pageTitle,
+                        subtitle: _pageSubtitle,
+                      ),
+                      OmniSettingsCard(
+                        padding: const EdgeInsets.all(16),
+                        child: _buildEditor(),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _error!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                      if (_kind.isNotEmpty) ...[
+                        const SizedBox(height: 18),
+                        FilledButton.icon(
+                          key: const Key('agent-config-save'),
+                          onPressed:
+                              _saving ||
+                                  (_kind == 'na-cloud' &&
+                                      !_naDevelopment &&
+                                      !_naSignedIn)
+                              ? null
+                              : _save,
+                          icon: _saving
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(LucideIcons.save),
+                          label: Text(
+                            _kind == 'na-cloud' && !_naDevelopment
+                                ? _text('连接我的云端空间', 'Connect my workspace')
+                                : _text('保存配置', 'Save configuration'),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  children: [
-                    SettingsSectionTitle(
-                      label: _pageTitle,
-                      subtitle: _pageSubtitle,
-                    ),
-                    OmniSettingsCard(
-                      padding: const EdgeInsets.all(16),
-                      child: _buildEditor(),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                    if (_kind.isNotEmpty) ...[
-                      const SizedBox(height: 18),
-                      FilledButton.icon(
-                        key: const Key('agent-config-save'),
-                        onPressed:
-                            _saving ||
-                                (_kind == 'na-cloud' &&
-                                    !_naDevelopment &&
-                                    !_naSignedIn)
-                            ? null
-                            : _save,
-                        icon: _saving
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(LucideIcons.save),
-                        label: Text(
-                          _kind == 'na-cloud' && !_naDevelopment
-                              ? _text('连接我的云端空间', 'Connect my workspace')
-                              : _text('保存配置', 'Save configuration'),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+          ),
         ),
       ),
     );

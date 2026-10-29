@@ -11,6 +11,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/utils/picked_attachment_metadata.dart';
 import 'package:flutter/material.dart';
 import 'package:ui/widgets/omni_menu.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -155,6 +156,9 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   );
   final PageController _modePageController = PageController(initialPage: 0);
   final FocusNode _inputFocusNode = FocusNode();
+  final FocusNode _pageShortcutsFocusNode = FocusNode(
+    debugLabel: 'chat-shortcuts',
+  );
 
   // ===================== Keys =====================
   final GlobalKey<AcpConfigButtonState> _acpConfigButtonKey =
@@ -327,8 +331,9 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   double? _hdPadRightPaneWidth;
   bool _hdPadLeftPaneCollapsed = false;
   bool _hdPadRightPaneCollapsed = false;
-  bool? _wasHdPadLandscape;
+  bool? _wasChatWorkspace;
   bool _isHdPadPaneDragging = false;
+  double? _hdPadLastLayoutWidth;
   double? _hdPadPaneDragStartWidth;
   double _hdPadPaneDragDelta = 0;
   final GlobalKey<OmnibotWorkspaceBrowserState> _hdPadWorkspaceBrowserKey =
@@ -661,8 +666,8 @@ abstract class _ChatPageStateBase extends State<ChatPage>
 
   double get _normalSurfaceVisibility =>
       (1.0 - _surfacePageProgress).clamp(0.0, 1.0).toDouble();
-  bool _isHdPadLandscapeForMediaQuery(MediaQueryData mediaQuery) {
-    return isHdPadLandscapeViewport(mediaQuery.size);
+  bool _isChatWorkspaceForMediaQuery(MediaQueryData mediaQuery) {
+    return isChatWorkspaceViewport(mediaQuery.size);
   }
 
   void _loadHdPadPanePreferences() {
@@ -702,19 +707,43 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     unawaited(_applyConversationThreadTarget(target));
   }
 
+  HdPadPaneLayout _currentPadLayout({double? availableWidth}) {
+    return _hdPadPaneLayoutResolver.resolve(
+      availableWidth ??
+          _hdPadLastLayoutWidth ??
+          MediaQuery.sizeOf(context).width -
+              MediaQuery.viewPaddingOf(context).horizontal -
+              16,
+      preferredLeftWidth: _hdPadLeftPaneWidth,
+      preferredRightWidth: _hdPadRightPaneWidth,
+      collapseLeftPane: _hdPadLeftPaneCollapsed,
+      collapseRightPane: _hdPadRightPaneCollapsed,
+    );
+  }
+
   void _toggleHdPadLeftPaneCollapsed() {
     _dismissChatInputFocus();
+    final layout = _currentPadLayout();
     setState(() {
       _resetHdPadPaneDragState();
-      _hdPadLeftPaneCollapsed = !_hdPadLeftPaneCollapsed;
+      _hdPadLeftPaneCollapsed = layout.leftWidth > 0;
+      if ((_hdPadLastLayoutWidth ?? 0) <
+          HdPadPaneLayoutResolver.threePaneMinWidth) {
+        _hdPadRightPaneCollapsed = true;
+      }
     });
   }
 
   void _toggleHdPadRightPaneCollapsed() {
     _dismissChatInputFocus();
+    final layout = _currentPadLayout();
     setState(() {
       _resetHdPadPaneDragState();
-      _hdPadRightPaneCollapsed = !_hdPadRightPaneCollapsed;
+      _hdPadRightPaneCollapsed = layout.rightWidth > 0;
+      if ((_hdPadLastLayoutWidth ?? 0) <
+          HdPadPaneLayoutResolver.threePaneMinWidth) {
+        _hdPadLeftPaneCollapsed = true;
+      }
     });
   }
 
@@ -723,6 +752,9 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       _inputFocusNode.unfocus();
     }
     FocusManager.instance.primaryFocus?.unfocus();
+    if (_pageShortcutsFocusNode.context != null) {
+      _pageShortcutsFocusNode.requestFocus();
+    }
   }
 
   ConversationThreadTarget get _threadTargetForMode {

@@ -37,6 +37,10 @@ Widget _app({
   VoidCallback? onTerminal,
   VoidCallback? onBrowser,
   VoidCallback? onEnvironment,
+  VoidCallback? onSidebar,
+  VoidCallback? onWorkspace,
+  bool sidebarVisible = false,
+  bool workspaceVisible = false,
   VoidCallback? onUpdate,
   ValueChanged<ChatSurfaceMode>? onMode,
   bool pure = false,
@@ -61,6 +65,11 @@ Widget _app({
           ChatAppBar(
             title: 'Inspect the current workspace',
             onMenuTap: onBack ?? () {},
+            onConversationPaneTap: onSidebar,
+            showWorkspacePaneButton: onWorkspace != null,
+            onWorkspacePaneTap: onWorkspace,
+            conversationPaneVisible: sidebarVisible,
+            workspacePaneVisible: workspaceVisible,
             onPetTap: onPet,
             onTerminalTap: onTerminal ?? () {},
             onBrowserTap: onBrowser ?? () {},
@@ -91,6 +100,52 @@ Future<void> _openActions(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('Pad pane controls remain usable in a 420dp chat column', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var sidebarTaps = 0;
+    var workspaceTaps = 0;
+    await tester.pumpWidget(
+      _app(
+        onSidebar: () => sidebarTaps++,
+        onWorkspace: () => workspaceTaps++,
+        sidebarVisible: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final sidebar = find.byKey(const ValueKey('chat-app-bar-sidebar-button'));
+    final workspace = find.byKey(
+      const ValueKey('chat-app-bar-workspace-button'),
+    );
+    expect(tester.getSize(sidebar), const Size.square(48));
+    expect(tester.getSize(workspace), const Size.square(48));
+    await tester.tap(sidebar);
+    await tester.tap(workspace);
+    expect(sidebarTaps, 1);
+    expect(workspaceTaps, 1);
+    expect(find.byTooltip('Hide conversations (Ctrl+B)'), findsOneWidget);
+    expect(find.byTooltip('Show workspace (Ctrl+E)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('phone header keeps the compact navigation controls', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app());
+    expect(
+      find.byKey(const ValueKey('chat-app-bar-sidebar-button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('chat-app-bar-workspace-button')),
+      findsNothing,
+    );
+  });
+
   testWidgets(
     'popup circle measures the visible surface with compact density',
     (tester) async {

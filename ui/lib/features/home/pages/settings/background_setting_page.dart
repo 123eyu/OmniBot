@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -506,54 +507,62 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage>
     return Scaffold(
       backgroundColor: palette.pageBackground,
       appBar: CommonAppBar(title: context.l10n.appearanceTitle, primary: true),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: ListView.builder(
-          scrollCacheExtent: const ScrollCacheExtent.pixels(0),
-          padding: edgeToEdgeScrollPadding(
-            context,
-            const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          ),
-          itemCount: _showPetAppearanceSettings ? 6 : 5,
-          itemBuilder: (context, index) => switch (index) {
-            0 => _buildInterfaceSettings(),
-            1 => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 28, 18, 16),
-                  child: Text(
-                    context.l10n.appearanceBackgroundSource,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      color: palette.textTertiary,
-                      height: 1.35,
+      body: OmniContentWidth(
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: ListView.builder(
+            scrollCacheExtent: const ScrollCacheExtent.pixels(0),
+            padding: edgeToEdgeScrollPadding(
+              context,
+              const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            ),
+            itemCount: _showPetAppearanceSettings ? 6 : 5,
+            itemBuilder: (context, index) => switch (index) {
+              0 => _buildInterfaceSettings(),
+              1 => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 28, 18, 16),
+                    child: Text(
+                      context.l10n.appearanceBackgroundSource,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        color: palette.textTertiary,
+                        height: 1.35,
+                      ),
                     ),
                   ),
-                ),
-                _buildBackgroundSection(child: _buildSourceCard(), first: true),
-              ],
-            ),
-            2 => _buildBackgroundSection(child: _buildPreviewCard()),
-            3 => _buildBackgroundSection(child: _buildAdjustCard(), last: true),
-            4 => Padding(
-              padding: const EdgeInsets.fromLTRB(6, 8, 6, 0),
-              child: Text(
-                context.trLegacy(_autoSaveHint),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: palette.textTertiary,
-                  height: 1.45,
+                  _buildBackgroundSection(
+                    child: _buildSourceCard(),
+                    first: true,
+                  ),
+                ],
+              ),
+              2 => _buildBackgroundSection(child: _buildPreviewCard()),
+              3 => _buildBackgroundSection(
+                child: _buildAdjustCard(),
+                last: true,
+              ),
+              4 => Padding(
+                padding: const EdgeInsets.fromLTRB(6, 8, 6, 0),
+                child: Text(
+                  context.trLegacy(_autoSaveHint),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: palette.textTertiary,
+                    height: 1.45,
+                  ),
                 ),
               ),
-            ),
-            _ => Padding(
-              padding: const EdgeInsets.only(top: 28),
-              child: _buildPetCard(),
-            ),
-          },
+              _ => Padding(
+                padding: const EdgeInsets.only(top: 28),
+                child: _buildPetCard(),
+              ),
+            },
+          ),
         ),
       ),
     );

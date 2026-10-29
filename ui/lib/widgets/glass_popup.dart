@@ -448,11 +448,12 @@ class _GlassPopupLayoutDelegate extends SingleChildLayoutDelegate {
         // 触点居中 — popup 顶边中点对齐 anchor 中心
         x = anchor.center.dx - childSize.width / 2;
       case GlassPopupHorizontalPlacement.centerOnScreen:
-        // 屏幕居中 — 给宽 popup + 窄 trigger 用,看起来像贴着输入栏的浮动卡片
-        x = (overlaySize.width - childSize.width) / 2;
+        // Center in the usable window, including a docked keyboard or an
+        // asymmetric display cutout on a landscape tablet.
+        x = (usableLeft + usableRight - childSize.width) / 2;
       case GlassPopupHorizontalPlacement.edgeAlign:
         // 默认 — anchor 边对齐
-        final anchorOnRight = anchor.center.dx > overlaySize.width / 2;
+        final anchorOnRight = anchor.center.dx > (usableLeft + usableRight) / 2;
         if (anchorOnRight) {
           x = anchor.right - childSize.width;
         } else {

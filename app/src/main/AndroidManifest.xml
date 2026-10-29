@@ -120,7 +120,7 @@
         <activity
             android:name=".activity.LauncherActivity"
             android:exported="true"
-            android:screenOrientation="portrait"
+            android:resizeableActivity="true"
             android:theme="@style/Theme.OmnibotApp.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -134,7 +134,7 @@
             android:exported="true"
             android:label="@string/omni_app_name"
             android:launchMode="singleTask"
-            android:screenOrientation="portrait"
+            android:resizeableActivity="true"
             android:configChanges="uiMode|orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|locale|layoutDirection|fontScale|density"
             android:theme="@style/Theme.OmnibotApp.Splash"
             android:windowSoftInputMode="adjustResize" />

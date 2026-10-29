@@ -23,6 +23,14 @@ Future<T?> showOmniMenu<T>({
   EdgeInsetsGeometry padding = OmniMenuStyle.panelPadding,
 }) {
   final focusMenu = requestFocus ?? Navigator.of(context).widget.requestFocus;
+  // Large text can use the extra space on a tablet instead of keeping the
+  // phone's narrow menu column. The popup still clamps to its actual viewport.
+  final menuWidth =
+      width ??
+      (280 * MediaQuery.textScalerOf(context).scale(15) / 15).clamp(
+        280.0,
+        420.0,
+      );
   return showGlassPopup<T>(
     context: context,
     sourceContext: sourceContext,
@@ -43,8 +51,8 @@ Future<T?> showOmniMenu<T>({
             color: Colors.transparent,
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                minWidth: math.min(160, width ?? 280),
-                maxWidth: width ?? 280,
+                minWidth: math.min(160, menuWidth),
+                maxWidth: menuWidth,
                 maxHeight:
                     padding.resolve(Directionality.of(context)).vertical +
                     7.5 * (24 + MediaQuery.textScalerOf(context).scale(20)),

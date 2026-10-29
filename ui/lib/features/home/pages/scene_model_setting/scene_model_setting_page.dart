@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -834,74 +835,76 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage>
         title: context.l10n.settingsSceneModelTitle,
         primary: true,
       ),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: edgeToEdgeScrollPadding(
-                  context,
-                  const EdgeInsets.fromLTRB(22, 12, 22, 24),
-                ),
-                children: [
-                  SettingsSectionTitle(
-                    label: context.l10n.sceneModelMapping,
-                    subtitle: context.l10n.sceneModelMappingDesc,
+      body: OmniContentWidth(
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : ListView(
+                  padding: edgeToEdgeScrollPadding(
+                    context,
+                    const EdgeInsets.fromLTRB(22, 12, 22, 24),
                   ),
-                  _buildCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.trLegacy('点击右侧按钮选择模型，也可按模型名称、ID 或服务商搜索。'),
-                          style: TextStyle(
-                            color: _secondaryTextColor,
-                            fontSize: 12,
-                            height: 1.5,
-                            fontFamily: 'PingFang SC',
+                  children: [
+                    SettingsSectionTitle(
+                      label: context.l10n.sceneModelMapping,
+                      subtitle: context.l10n.sceneModelMappingDesc,
+                    ),
+                    _buildCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.trLegacy('点击右侧按钮选择模型，也可按模型名称、ID 或服务商搜索。'),
+                            style: TextStyle(
+                              color: _secondaryTextColor,
+                              fontSize: 12,
+                              height: 1.5,
+                              fontFamily: 'PingFang SC',
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (_orderedCatalog.isEmpty)
-                          Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Text(
-                              context.l10n.sceneModelNoScenes,
-                              style: TextStyle(
-                                color: _secondaryTextColor,
-                                fontSize: 12,
-                                fontFamily: 'PingFang SC',
+                          const SizedBox(height: 12),
+                          if (_orderedCatalog.isEmpty)
+                            Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text(
+                                context.l10n.sceneModelNoScenes,
+                                style: TextStyle(
+                                  color: _secondaryTextColor,
+                                  fontSize: 12,
+                                  fontFamily: 'PingFang SC',
+                                ),
+                              ),
+                            )
+                          else
+                            ListView.separated(
+                              physics: const NeverScrollableScrollPhysics(),
+                              shrinkWrap: true,
+                              itemCount: _orderedCatalog.length,
+                              itemBuilder: (context, index) {
+                                final scene = _orderedCatalog[index];
+                                return _buildSceneRow(scene);
+                              },
+                              separatorBuilder: (_, _) => Divider(
+                                height: 20,
+                                thickness: 0.6,
+                                color: context.omniPalette.borderSubtle
+                                    .withValues(alpha: 0.9),
                               ),
                             ),
-                          )
-                        else
-                          ListView.separated(
-                            physics: const NeverScrollableScrollPhysics(),
-                            shrinkWrap: true,
-                            itemCount: _orderedCatalog.length,
-                            itemBuilder: (context, index) {
-                              final scene = _orderedCatalog[index];
-                              return _buildSceneRow(scene);
-                            },
-                            separatorBuilder: (_, _) => Divider(
-                              height: 20,
-                              thickness: 0.6,
-                              color: context.omniPalette.borderSubtle
-                                  .withValues(alpha: 0.9),
-                            ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  SettingsSectionTitle(
-                    label: context.trLegacy('语音能力'),
-                    subtitle: context.trLegacy('统一由 ACP 语音场景提供播放和自动朗读。'),
-                  ),
-                  _buildVoiceCard(),
-                ],
-              ),
+                    const SizedBox(height: 16),
+                    SettingsSectionTitle(
+                      label: context.trLegacy('语音能力'),
+                      subtitle: context.trLegacy('统一由 ACP 语音场景提供播放和自动朗读。'),
+                    ),
+                    _buildVoiceCard(),
+                  ],
+                ),
+        ),
       ),
     );
   }

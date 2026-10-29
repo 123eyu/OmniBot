@@ -19,6 +19,8 @@ import 'package:ui/services/app_update_service.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/widgets/flclash/navigation_dock.dart';
+import 'package:ui/widgets/flclash/tab_view.dart';
+import 'package:ui/widgets/omni_navigation_rail.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -123,8 +125,12 @@ void main() {
     }
   });
 
-  Future<void> pumpShell(WidgetTester tester, {String? tab}) async {
-    tester.view.physicalSize = const Size(390, 844);
+  Future<void> pumpShell(
+    WidgetTester tester, {
+    String? tab,
+    Size size = const Size(390, 844),
+  }) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     tester.view.padding = FakeViewPadding(bottom: 24);
     addTearDown(tester.view.resetPhysicalSize);
@@ -330,4 +336,104 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final size in const [
+    Size(600, 900),
+    Size(768, 1024),
+    Size(1024, 768),
+    Size(1366, 1024),
+  ]) {
+    testWidgets('tablet $size uses a rail and an aligned home column', (
+      tester,
+    ) async {
+      await pumpShell(tester, size: size);
+      expect(find.byType(OmniNavigationRail), findsOneWidget);
+      expect(find.byType(FlClashNavigationDock), findsNothing);
+      final pageRect = tester.getRect(find.byType(FlClashTabView));
+      expect(pageRect.left, OmniNavigationRail.width);
+      expect(pageRect.width, size.width - OmniNavigationRail.width);
+      final homeScaffold = find.descendant(
+        of: find.byKey(const ValueKey('home-content-column')),
+        matching: find.byType(Scaffold),
+      );
+      final homeRect = tester.getRect(homeScaffold);
+      expect(homeRect.width, lessThanOrEqualTo(840));
+      expect(homeRect.center.dx, closeTo(pageRect.center.dx, 0.1));
+      final createRect = tester.getRect(
+        find.byKey(const ValueKey('home-new-conversation')),
+      );
+      expect(createRect.left, greaterThan(homeRect.left));
+      expect(createRect.right, lessThan(homeRect.right));
+      await tester.tap(find.byKey(const ValueKey('main-navigation-rail-1')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AgentModeSettingPage).hitTestable(), findsOneWidget);
+      expect(
+        tester
+            .widget<OmniNavigationRail>(find.byType(OmniNavigationRail))
+            .selectedIndex,
+        MainNavigationTab.agents.index,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('resizing across dock and rail retains home search and owners', (
+    tester,
+  ) async {
+    await pumpShell(tester);
+    await tester.tap(find.byKey(const ValueKey('home-search-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('home-search-input')),
+      '保留平板搜索',
+    );
+    await tester.pumpAndSettle();
+    final homeState = tester.state(find.byType(HomeDrawer));
+    final tabState = tester.state(find.byType(FlClashTabView));
+    final initialReads = agentReads();
+    for (final size in const [
+      Size(768, 1024),
+      Size(1366, 768),
+      Size(540, 900),
+      Size(1024, 768),
+    ]) {
+      tester.view.physicalSize = size;
+      await tester.pumpAndSettle();
+      expect(tester.state(find.byType(HomeDrawer)), same(homeState));
+      expect(tester.state(find.byType(FlClashTabView)), same(tabState));
+      expect(find.text('保留平板搜索'), findsOneWidget);
+      expect(agentReads(), initialReads);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('tablet keeps navigation reachable with the keyboard visible', (
+    tester,
+  ) async {
+    await pumpShell(tester, size: const Size(768, 1024));
+    tester.view.viewInsets = const FakeViewPadding(bottom: 360);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.tap(find.byKey(const ValueKey('home-search-button')));
+    await tester.pumpAndSettle();
+    for (var index = 0; index < MainNavigationTab.values.length; index++) {
+      final destination = find.byKey(ValueKey('main-navigation-rail-$index'));
+      expect(destination.hitTestable(), findsOneWidget);
+      expect(tester.getRect(destination).bottom, lessThanOrEqualTo(664));
+    }
+    final homeScaffold = find.descendant(
+      of: find.byKey(const ValueKey('home-content-column')),
+      matching: find.byType(Scaffold),
+    );
+    expect(
+      tester.getRect(homeScaffold).bottom,
+      1024,
+      reason: 'The inner Scaffold owns keyboard avoidance exactly once.',
+    );
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit2);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(find.byType(AgentModeSettingPage).hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

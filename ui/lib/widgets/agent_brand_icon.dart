@@ -17,6 +17,7 @@ class AgentBrandIcon extends StatelessWidget {
     this.size = 20,
     this.fallbackColor,
     this.tint,
+    this.avatarBackgroundColor,
   });
 
   /// [AcpAgentProfile.id]（例如 `codex-acp`、`deepseek-harness-acp`）。
@@ -30,6 +31,10 @@ class AgentBrandIcon extends StatelessWidget {
 
   /// 可选的统一着色。菜单等需要表达选中态时使用；未提供时保留品牌色。
   final Color? tint;
+
+  /// Optional solid backing for the default Xiaowan artwork, e.g. home rows.
+  /// Custom images retain their original colors.
+  final Color? avatarBackgroundColor;
 
   static const Map<String, _AgentBrand> _brands = {
     'xiaowan-acp': _AgentBrand(
@@ -109,7 +114,10 @@ class AgentBrandIcon extends StatelessWidget {
       );
     }
     if (brand?.presentation == _AgentBrandPresentation.avatar) {
-      return _XiaowanAgentAvatar(size: size);
+      return _XiaowanAgentAvatar(
+        size: size,
+        backgroundColor: avatarBackgroundColor,
+      );
     }
     if (brand == null) {
       return Icon(
@@ -134,9 +142,10 @@ class AgentBrandIcon extends StatelessWidget {
 /// brands. Keep the same state source as the existing picker so every
 /// presentation layer updates through the notifier without a second setting.
 class _XiaowanAgentAvatar extends StatefulWidget {
-  const _XiaowanAgentAvatar({required this.size});
+  const _XiaowanAgentAvatar({required this.size, this.backgroundColor});
 
   final double size;
+  final Color? backgroundColor;
 
   @override
   State<_XiaowanAgentAvatar> createState() => _XiaowanAgentAvatarState();
@@ -158,6 +167,7 @@ class _XiaowanAgentAvatarState extends State<_XiaowanAgentAvatar> {
           state: state,
           size: widget.size,
           showBorder: false,
+          backgroundColor: widget.backgroundColor,
         );
       },
     );

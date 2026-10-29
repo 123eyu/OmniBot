@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/omni_glass.dart';
 
 /// Presents a settings detail card using the app-wide bottom-sheet treatment.
@@ -27,6 +28,7 @@ Future<T?> showSettingsDetailSheet<T>({
     isDismissible: isDismissible,
     enableDrag: enableDrag,
     useRootNavigator: useRootNavigator,
+    useSafeArea: true,
     builder: builder,
   );
 }
@@ -37,7 +39,7 @@ ButtonStyle settingsDetailSheetActionStyle(
 }) {
   return TextButton.styleFrom(
     foregroundColor: foregroundColor ?? context.omniPalette.accentPrimary,
-    minimumSize: const Size(0, 40),
+    minimumSize: const Size(0, 48),
     padding: const EdgeInsets.symmetric(horizontal: 10),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
   );
@@ -104,8 +106,37 @@ class SettingsDetailSheet extends StatelessWidget {
           top: false,
           child: LayoutBuilder(
             builder: (context, constraints) {
+              final horizontalPadding =
+                  constraints.maxWidth >= OmniLayoutBreakpoints.medium
+                  ? 24.0
+                  : 16.0;
+              final actionContent = Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (actions.isNotEmpty)
+                    Wrap(
+                      key: actionsKey,
+                      spacing: 6,
+                      runSpacing: 6,
+                      alignment: WrapAlignment.start,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: actions,
+                    ),
+                  if (footer != null) ...[
+                    if (actions.isNotEmpty) const SizedBox(height: 10),
+                    footer!,
+                  ],
+                ],
+              );
+              final hasActions = actions.isNotEmpty || footer != null;
               final content = SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  16,
+                  horizontalPadding,
+                  hasActions ? 12 : 16,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -134,29 +165,46 @@ class SettingsDetailSheet extends StatelessWidget {
                       ),
                     const SizedBox(height: 14),
                     body,
-                    if (actions.isNotEmpty) ...[
+                    if (!hasActions) const SizedBox(height: 4),
+                    if (hasActions && !constraints.hasBoundedHeight) ...[
                       const SizedBox(height: 14),
-                      Wrap(
-                        key: actionsKey,
-                        spacing: 6,
-                        runSpacing: 6,
-                        alignment: WrapAlignment.start,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: actions,
-                      ),
+                      actionContent,
                     ],
-                    if (footer != null) ...[
-                      const SizedBox(height: 10),
-                      footer!,
-                    ],
-                    const SizedBox(height: 4),
                   ],
                 ),
               );
-              if (!fillAvailableHeight || !constraints.hasBoundedHeight) {
-                return content;
-              }
-              return SizedBox(height: constraints.maxHeight, child: content);
+              if (!constraints.hasBoundedHeight) return content;
+              final layout = Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Flexible(
+                    fit: fillAvailableHeight ? FlexFit.tight : FlexFit.loose,
+                    child: content,
+                  ),
+                  if (hasActions)
+                    // Keep save/confirm controls reachable while the form
+                    // scrolls. A separate scroll viewport also allows large
+                    // text to wrap on a short split-screen or above the IME.
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: constraints.maxHeight * 0.45,
+                      ),
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontalPadding,
+                          0,
+                          horizontalPadding,
+                          20,
+                        ),
+                        child: actionContent,
+                      ),
+                    ),
+                ],
+              );
+              return fillAvailableHeight
+                  ? SizedBox(height: constraints.maxHeight, child: layout)
+                  : layout;
             },
           ),
         ),
@@ -164,10 +212,16 @@ class SettingsDetailSheet extends StatelessWidget {
     );
     if (!avoidKeyboard) return sheet;
     return AnimatedPadding(
-      duration: const Duration(milliseconds: 180),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: sheet,
+      child: MediaQuery.removeViewInsets(
+        context: context,
+        removeBottom: true,
+        child: sheet,
+      ),
     );
   }
 }

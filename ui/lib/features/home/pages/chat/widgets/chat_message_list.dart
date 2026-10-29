@@ -731,7 +731,10 @@ class _ChatMessageListState extends State<ChatMessageList> {
                           widget.liftEmptyGreeting)
                       ? const Alignment(-1, -1)
                       : const Alignment(0, -0.18),
-                  child: greeting,
+                  // A landscape Pad with an IME can leave less than one
+                  // greeting's height above the composer. Keep every prompt
+                  // reachable without overflowing or reducing text size.
+                  child: SingleChildScrollView(primary: false, child: greeting),
                 ),
               ),
             )

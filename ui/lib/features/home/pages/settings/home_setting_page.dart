@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:ui/widgets/omni_glass.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -152,64 +153,66 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
     return Scaffold(
       backgroundColor: palette.pageBackground,
       appBar: CommonAppBar(title: context.trLegacy('首页设置'), primary: true),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: ListView(
-          padding: edgeToEdgeScrollPadding(
-            context,
-            const EdgeInsets.fromLTRB(22, 12, 22, 32),
-          ),
-          children: [
-            OmniSettingsGroup(
-              title: context.trLegacy('首页问候'),
-              children: [
-                OmniSettingsTile(
-                  icon: LucideIcons.hand,
-                  title: context.trLegacy('显示问候语'),
-                  subtitle: context.trLegacy('关闭后，聊天首页不再显示问候语和快捷指令'),
-                  trailing: OmniSettingsSwitch(
-                    value: settings.greetingEnabled,
-                    onToggle: _setGreetingEnabled,
-                  ),
-                  onTap: () => _setGreetingEnabled(!settings.greetingEnabled),
-                ),
-              ],
+      body: OmniContentWidth(
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: ListView(
+            padding: edgeToEdgeScrollPadding(
+              context,
+              const EdgeInsets.fromLTRB(22, 12, 22, 32),
             ),
-            const SizedBox(height: 22),
-            SettingsSectionTitle(
-              label: context.trLegacy('快捷指令'),
-              bottomPadding: 8,
-              trailing: TextButton(
-                style: TextButton.styleFrom(
-                  foregroundColor: palette.accentPrimary,
-                  minimumSize: const Size(0, 30),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                onPressed: _resetPrompts,
-                child: Text(
-                  context.trLegacy('恢复默认'),
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-            if (settings.quickPrompts.isEmpty)
-              OmniSettingsCard(child: _buildEmptyPrompts())
-            else
+            children: [
               OmniSettingsGroup(
-                dividerIndent: 56,
+                title: context.trLegacy('首页问候'),
                 children: [
-                  for (final prompt in settings.quickPrompts)
-                    _buildPromptTile(prompt, settings),
+                  OmniSettingsTile(
+                    icon: LucideIcons.hand,
+                    title: context.trLegacy('显示问候语'),
+                    subtitle: context.trLegacy('关闭后，聊天首页不再显示问候语和快捷指令'),
+                    trailing: OmniSettingsSwitch(
+                      value: settings.greetingEnabled,
+                      onToggle: _setGreetingEnabled,
+                    ),
+                    onTap: () => _setGreetingEnabled(!settings.greetingEnabled),
+                  ),
                 ],
               ),
-            const SizedBox(height: 14),
-            _buildAddButton(),
-          ],
+              const SizedBox(height: 22),
+              SettingsSectionTitle(
+                label: context.trLegacy('快捷指令'),
+                bottomPadding: 8,
+                trailing: TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: palette.accentPrimary,
+                    minimumSize: const Size(0, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: _resetPrompts,
+                  child: Text(
+                    context.trLegacy('恢复默认'),
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+              if (settings.quickPrompts.isEmpty)
+                OmniSettingsCard(child: _buildEmptyPrompts())
+              else
+                OmniSettingsGroup(
+                  dividerIndent: 56,
+                  children: [
+                    for (final prompt in settings.quickPrompts)
+                      _buildPromptTile(prompt, settings),
+                  ],
+                ),
+              const SizedBox(height: 14),
+              _buildAddButton(),
+            ],
+          ),
         ),
       ),
     );

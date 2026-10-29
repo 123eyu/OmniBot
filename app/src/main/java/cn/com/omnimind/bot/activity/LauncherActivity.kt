@@ -33,8 +33,8 @@ class LauncherActivity : ComponentActivity() {
     }
 
     private fun applyResponsiveOrientation() {
-        val isTablet = resources.configuration.smallestScreenWidthDp >= 600
-        requestedOrientation = if (isTablet) {
+        val allowRotation = resources.configuration.smallestScreenWidthDp >= 600 || isInMultiWindowMode
+        requestedOrientation = if (allowRotation) {
             ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         } else {
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT

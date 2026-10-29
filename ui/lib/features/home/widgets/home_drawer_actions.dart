@@ -473,6 +473,8 @@ extension _HomeDrawerActions on HomeDrawerState {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: HomeConversationTileContent(
                     conversation: conversation,
+                    avatarColorIndex:
+                        _homeAvatarColorIndices[conversation.threadKey],
                     title: _resolveConversationTitle(conversation),
                     previewOverride: previewOverride,
                     badge: showArchivedBadge ? _buildArchivedBadge() : null,

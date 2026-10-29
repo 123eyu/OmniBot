@@ -27,6 +27,7 @@ import 'package:ui/theme/app_text_styles.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 
 /// 记忆建议的前三条记录ID存储key
 const String kMemorySuggestionTopThreeIdsKey =
@@ -730,24 +731,27 @@ class MemoryCenterPageState extends State<MemoryCenterPage>
                   // ),
                   SafeArea(
                     top: false,
-                    child: Column(
-                      children: [
-                        // 主内容
-                        Expanded(
-                          child: _isLoading
-                              ? _buildLoadingIndicator()
-                              : localMemoryCards.isEmpty && !hasMem0Section
-                              ? _buildEmptyState()
-                              : _buildContent(filteredCards),
-                        ),
-                        // 选择模式下的底部删除按钮栏
-                        SelectionBottomBar(
-                          isActive: _isSelectionMode,
-                          onDeletePressed: _selectedCardIds.isNotEmpty
-                              ? _batchDeleteSelectedCards
-                              : null,
-                        ),
-                      ],
+                    child: OmniContentWidth(
+                      key: const ValueKey('memory-content-column'),
+                      child: Column(
+                        children: [
+                          // 主内容
+                          Expanded(
+                            child: _isLoading
+                                ? _buildLoadingIndicator()
+                                : localMemoryCards.isEmpty && !hasMem0Section
+                                ? _buildEmptyState()
+                                : _buildContent(filteredCards),
+                          ),
+                          // 选择模式下的底部删除按钮栏
+                          SelectionBottomBar(
+                            isActive: _isSelectionMode,
+                            onDeletePressed: _selectedCardIds.isNotEmpty
+                                ? _batchDeleteSelectedCards
+                                : null,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

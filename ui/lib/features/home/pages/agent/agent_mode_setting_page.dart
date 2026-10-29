@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:ui/widgets/omni_glass.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -768,29 +769,31 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage>
             ),
           ],
         ),
-        body: SafeArea(
-          top: false,
-          bottom: false,
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null && (_catalog?.agents.isEmpty ?? true)
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_error!, textAlign: TextAlign.center),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: _load,
-                          child: Text(_text('重试', 'Retry')),
-                        ),
-                      ],
+        body: OmniContentWidth(
+          child: SafeArea(
+            top: false,
+            bottom: false,
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null && (_catalog?.agents.isEmpty ?? true)
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_error!, textAlign: TextAlign.center),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: _load,
+                            child: Text(_text('重试', 'Retry')),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                )
-              : _buildList(managed: managed, custom: custom),
+                  )
+                : _buildList(managed: managed, custom: custom),
+          ),
         ),
       ),
     );

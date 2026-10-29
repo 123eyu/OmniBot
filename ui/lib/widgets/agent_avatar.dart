@@ -115,6 +115,7 @@ class AgentAvatarCircle extends StatelessWidget {
     this.showEditBadge = false,
     this.showCompletedBadge = false,
     this.showBorder = true,
+    this.backgroundColor,
   });
 
   final AgentAvatarState? state;
@@ -129,6 +130,9 @@ class AgentAvatarCircle extends StatelessWidget {
   /// 边线是 `foregroundDecoration`,盖在已铺满 `size` 的图片外沿上,
   /// 去掉后图片自然补满这 1.5px,整体 `size×size` 尺寸不变。
   final bool showBorder;
+
+  /// Solid backing for the built-in monochrome mark; custom photos are kept.
+  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -170,6 +174,7 @@ class AgentAvatarCircle extends StatelessWidget {
                 presetIndex: resolvedPresetIndex,
                 customImagePath: resolvedCustomImagePath,
                 size: size,
+                backgroundColor: backgroundColor,
               ),
             ),
           ),
@@ -203,11 +208,13 @@ class _AvatarImage extends StatelessWidget {
     required this.presetIndex,
     required this.customImagePath,
     required this.size,
+    this.backgroundColor,
   });
 
   final int presetIndex;
   final String customImagePath;
   final double size;
+  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -220,6 +227,10 @@ class _AvatarImage extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.cover,
+        color: presetAsset == AgentAvatarService.defaultAvatarAsset
+            ? backgroundColor
+            : null,
+        colorBlendMode: BlendMode.modulate,
         errorBuilder: (_, _, _) {
           return ColoredBox(
             color: palette.surfaceElevated,

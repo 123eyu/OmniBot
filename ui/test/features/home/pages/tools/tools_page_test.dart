@@ -48,6 +48,36 @@ void main() {
     messenger.setMockMethodCallHandler(_remote, null);
   });
 
+  testWidgets('tablet tool search and toolbar stay aligned through resize', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    for (final dark in [false, true]) {
+      tester.view.physicalSize = const Size(1366, 1024);
+      await tester.pumpWidget(_app(dark: dark));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '工作区');
+      final editorState = tester.state(find.byType(EditableText));
+      for (final width in [1366.0, 1024.0, 768.0, 600.0, 390.0]) {
+        tester.view.physicalSize = Size(width, 900);
+        await tester.pumpAndSettle();
+        final columnLeft = (width - width.clamp(0, 840)) / 2;
+        final search = tester.getRect(find.byType(TextField));
+        expect(search.left, greaterThanOrEqualTo(columnLeft + 22));
+        expect(search.right, lessThanOrEqualTo(width - columnLeft - 22));
+        expect(tester.state(find.byType(EditableText)), same(editorState));
+        expect(find.text('工作区'), findsOneWidget);
+        expect(find.text('读取文件'), findsOneWidget);
+        final back = find.byType(OmniCircleButton).first;
+        expect(tester.getCenter(back).dx, closeTo(columnLeft + 36, 1));
+        expect(tester.takeException(), isNull);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
+  });
+
   testWidgets('toolbar circles share 16dp visible insets and 40dp diameter', (
     tester,
   ) async {

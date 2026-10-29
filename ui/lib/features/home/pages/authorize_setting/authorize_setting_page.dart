@@ -1,3 +1,4 @@
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/flclash/popup.dart';
 import 'package:ui/widgets/flclash/page_activity.dart';
@@ -497,22 +498,24 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
         title: context.l10n.authorizePageTitle,
         primary: true,
       ),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: ListView.separated(
-          padding: edgeToEdgeScrollPadding(
-            context,
-            const EdgeInsets.fromLTRB(22, 12, 22, 32),
+      body: OmniContentWidth(
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: ListView.separated(
+            padding: edgeToEdgeScrollPadding(
+              context,
+              const EdgeInsets.fromLTRB(22, 12, 22, 32),
+            ),
+            itemCount: sections.length + 1,
+            separatorBuilder: (_, __) => const SizedBox(height: 22),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return _buildOverview();
+              }
+              return _buildSettingsSection(sections[index - 1]);
+            },
           ),
-          itemCount: sections.length + 1,
-          separatorBuilder: (_, __) => const SizedBox(height: 22),
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return _buildOverview();
-            }
-            return _buildSettingsSection(sections[index - 1]);
-          },
         ),
       ),
     );

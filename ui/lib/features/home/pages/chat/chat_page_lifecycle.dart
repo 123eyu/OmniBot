@@ -139,12 +139,17 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     super.didChangeDependencies();
     final viewportSize = MediaQuery.maybeSizeOf(context);
     if (viewportSize != null) {
-      final isHdPadLandscape = isHdPadLandscapeViewport(viewportSize);
-      if (_wasHdPadLandscape == true && !isHdPadLandscape) {
+      final safeWidth =
+          viewportSize.width -
+          (MediaQuery.maybeViewPaddingOf(context)?.horizontal ?? 0);
+      final isChatWorkspace = isChatWorkspaceViewport(
+        Size(safeWidth, viewportSize.height),
+      );
+      if (_wasChatWorkspace == true && !isChatWorkspace) {
         _embeddedDrawerKey.currentState?.unfocusSearch();
       }
-      _wasHdPadLandscape = isHdPadLandscape;
-      if (isHdPadLandscape && _activeSurfaceMode == ChatSurfaceMode.workspace) {
+      _wasChatWorkspace = isChatWorkspace;
+      if (isChatWorkspace && _activeSurfaceMode == ChatSurfaceMode.workspace) {
         _activeSurfaceMode = ChatSurfaceMode.normal;
       }
     }
@@ -851,6 +856,7 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     _agentMessageScrollController.dispose();
     _modePageController.dispose();
     _inputFocusNode.dispose();
+    _pageShortcutsFocusNode.dispose();
     _chatKeyboardLayoutChanges.dispose();
     _openClawBaseUrlController.dispose();
     _openClawTokenController.dispose();

@@ -22,6 +22,15 @@ const double _kScheduledChildConversationItemInset =
     _kScheduledConversationLeadingInset + 26;
 
 extension _HomeDrawerConversationList on HomeDrawerState {
+  bool _isCurrentConversationRow(ConversationModel conversation) {
+    final target = widget.selectedThreadTarget;
+    return !_isSelectingConversations &&
+        target != null &&
+        !target.isNewConversation &&
+        target.conversationId == conversation.id &&
+        target.mode == conversation.mode;
+  }
+
   Widget _buildConversationSection() {
     final visibleConversationResults = _visibleConversationResults;
     return Column(
@@ -646,9 +655,12 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     final isEditing = _editingThreadKey == group.parent.threadKey;
     final row = Builder(
       builder: (rowContext) => Semantics(
+        key: ValueKey('home-current-thread-${group.parent.threadKey}'),
         selected: _isSelectingConversations
             ? _selectedConversationKeys.contains(group.parent.threadKey)
-            : null,
+            : widget.selectedThreadTarget == null
+            ? null
+            : _isCurrentConversationRow(group.parent),
         child: Opacity(
           key: ValueKey(
             'home-context-source-visibility-${group.parent.threadKey}',
@@ -674,7 +686,10 @@ extension _HomeDrawerConversationList on HomeDrawerState {
                     }
                   },
             child: Material(
-              color: Colors.transparent,
+              color: _isCurrentConversationRow(group.parent)
+                  ? palette.accentPrimary.withValues(alpha: 0.08)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 onTap: isEditing
                     ? null
@@ -688,6 +703,10 @@ extension _HomeDrawerConversationList on HomeDrawerState {
                           Expanded(
                             child: HomeConversationTileContent(
                               conversation: group.parent,
+                              avatarColorIndex:
+                                  _homeAvatarColorIndices[group
+                                      .parent
+                                      .threadKey],
                               title: title,
                               titleWidget: isEditing
                                   ? _buildEditableConversationTitle(
@@ -1033,9 +1052,12 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     final isEditing = _editingThreadKey == conversation.threadKey;
 
     final row = Semantics(
+      key: ValueKey('home-current-thread-${conversation.threadKey}'),
       selected: _isSelectingConversations
           ? _selectedConversationKeys.contains(conversation.threadKey)
-          : null,
+          : widget.selectedThreadTarget == null
+          ? null
+          : _isCurrentConversationRow(conversation),
       child: IgnorePointer(
         key: ValueKey(conversation.threadKey),
         ignoring: isBusy,
@@ -1069,7 +1091,9 @@ extension _HomeDrawerConversationList on HomeDrawerState {
                             showArchivedBadge: showArchivedBadge,
                           ),
                     child: Material(
-                      color: Colors.transparent,
+                      color: _isCurrentConversationRow(conversation)
+                          ? palette.accentPrimary.withValues(alpha: 0.08)
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                       child: InkWell(
                         onTap: isEditing
@@ -1088,6 +1112,9 @@ extension _HomeDrawerConversationList on HomeDrawerState {
                                 children: [
                                   HomeConversationTileContent(
                                     conversation: conversation,
+                                    avatarColorIndex:
+                                        _homeAvatarColorIndices[conversation
+                                            .threadKey],
                                     title: title,
                                     titleWidget: isEditing
                                         ? _buildEditableConversationTitle(

@@ -483,12 +483,14 @@ class AppDialog {
     String cancelText = '取消',
     String confirmText = '确认',
     bool barrierDismissible = true,
+    bool fitsContent = false,
     double? buttonTextSize,
     Color? confirmButtonColor,
   }) {
     return showOmniGlassCardSheet<bool>(
       context: context,
       barrierDismissible: barrierDismissible,
+      fitsContent: fitsContent,
       builder: (context) => _AppDialogWidget(
         title: title,
         content: content,

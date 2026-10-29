@@ -28,6 +28,7 @@ class UsageStatisticsPage extends StatelessWidget {
         title: LegacyTextLocalizer.localize('轨迹'),
         primary: true,
         showBackButton: !embedded,
+        maxContentWidth: 720,
       ),
       body: SafeArea(
         top: false,

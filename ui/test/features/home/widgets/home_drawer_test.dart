@@ -230,6 +230,8 @@ void main() {
     ValueChanged<ConversationThreadTarget>? onOpen,
     double textScale = 1,
     bool disableAnimations = false,
+    bool conversationSidebar = false,
+    ConversationThreadTarget? selectedThreadTarget,
     String? initialCategory,
     HabitualHand habitualHand = HabitualHand.right,
   }) async {
@@ -253,6 +255,8 @@ void main() {
           home: HomeDrawer(
             key: key,
             homePage: true,
+            conversationSidebar: conversationSidebar,
+            selectedThreadTarget: selectedThreadTarget,
             embedded: true,
             closeOnNavigate: false,
             onThreadTargetSelected: onOpen,
@@ -271,6 +275,182 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('home-drawer-context-select')));
     await tester.pumpAndSettle();
+  }
+
+  Finder conversationAvatar(int id, {Finder? within}) {
+    final avatar = find.byKey(ValueKey('home-conversation-avatar-agent:$id'));
+    return within == null
+        ? avatar
+        : find.descendant(of: within, matching: avatar);
+  }
+
+  Color avatarFill(WidgetTester tester, int id, {Finder? within}) {
+    final avatar = tester.widget<Container>(
+      conversationAvatar(id, within: within),
+    );
+    return (avatar.decoration! as BoxDecoration).color!;
+  }
+
+  List<Color> expectDistinctAvatarSequence(WidgetTester tester, List<int> ids) {
+    final colors = ids.map((id) => avatarFill(tester, id)).toList();
+    for (var index = 0; index < ids.length; index++) {
+      expect(colors[index].a, 1);
+      if (index == 0) continue;
+      expect(colors[index], isNot(colors[index - 1]));
+      expect(
+        tester.getCenter(conversationAvatar(ids[index])).dy,
+        greaterThan(tester.getCenter(conversationAvatar(ids[index - 1])).dy),
+      );
+    }
+    return colors;
+  }
+
+  testWidgets(
+    'home avatar colors follow promoted rows and remain stable in refresh and preview',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final yesterday = DateTime.now()
+          .subtract(const Duration(days: 1))
+          .millisecondsSinceEpoch;
+      // These identities share a preferred hue, so each visual group boundary
+      // needs the list's assignment rather than a standalone row's fallback.
+      nativeConversations = [
+        selectionRow(1, '配色今天'),
+        selectionRow(9, '配色置顶', pinned: true),
+        selectionRow(13, '配色昨天', updatedAt: yesterday),
+      ];
+      final drawerKey = GlobalKey<HomeDrawerState>();
+      await pumpSelectionHome(tester, key: drawerKey);
+      const visualOrder = [9, 1, 13];
+      final original = expectDistinctAvatarSequence(tester, visualOrder);
+
+      nativeConversations = nativeConversations
+          .map((row) => Map<String, Object?>.of(row))
+          .toList();
+      drawerKey.currentState!.reloadConversations();
+      await tester.pumpAndSettle();
+      expect(expectDistinctAvatarSequence(tester, visualOrder), original);
+
+      final sourceColor = avatarFill(tester, 1);
+      await tester.longPress(find.text('配色今天'));
+      await tester.pumpAndSettle();
+      final preview = find.byKey(
+        const ValueKey('conversation-context-preview'),
+      );
+      expect(preview, findsOneWidget);
+      expect(avatarFill(tester, 1, within: preview), sourceColor);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(avatarFill(tester, 1), sourceColor);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'home avatar colors resolve new neighbors after filtering and search',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      nativeConversations = [
+        selectionRow(1, '匹配第一条'),
+        {...selectionRow(2, '其他 Agent 会话'), 'agentId': 'codex-acp'},
+        selectionRow(9, '匹配第二条'),
+      ];
+      await pumpSelectionHome(tester, initialCategory: 'all');
+      expectDistinctAvatarSequence(tester, [1, 2, 9]);
+
+      await selectHomeCategory(tester, 'xiaowan-acp');
+      expect(conversationAvatar(2), findsNothing);
+      expectDistinctAvatarSequence(tester, [1, 9]);
+
+      await selectHomeCategory(tester, 'all');
+      await tester.tap(find.byKey(const ValueKey('home-search-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '匹配');
+      await tester.pumpAndSettle(const Duration(milliseconds: 250));
+      expect(conversationAvatar(2), findsNothing);
+      expectDistinctAvatarSequence(tester, [1, 9]);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Pad current row follows host identity without owning selection',
+    (tester) async {
+      nativeConversations = [
+        selectionRow(1, '第一条'),
+        selectionRow(2, '第二条'),
+        selectionRow(1, '同号纯聊天', mode: 'chat_only'),
+      ];
+      Future<void> show(int id) => pumpSelectionHome(
+        tester,
+        conversationSidebar: true,
+        selectedThreadTarget: ConversationThreadTarget.existing(
+          conversationId: id,
+          mode: ConversationMode.agent,
+        ),
+      );
+      bool? selected(String key) => tester
+          .widget<Semantics>(find.byKey(ValueKey('home-current-thread-$key')))
+          .properties
+          .selected;
+      await show(1);
+      expect(selected('agent:1'), isTrue);
+      expect(selected('agent:2'), isFalse);
+      expect(selected('chat_only:1'), isFalse);
+      await show(2);
+      expect(selected('agent:1'), isFalse);
+      expect(selected('agent:2'), isTrue);
+      expect(selected('chat_only:1'), isFalse);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final width in [220.0, 260.0]) {
+    testWidgets('Pad sidebar shares modern home controls at $width dp', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      nativeConversations = [
+        {...selectionRow(1, 'Codex侧栏会话'), 'agentId': 'codex-acp'},
+        selectionRow(2, '小万侧栏会话'),
+      ];
+      final opened = <ConversationThreadTarget>[];
+      await pumpSelectionHome(
+        tester,
+        conversationSidebar: true,
+        onOpen: opened.add,
+      );
+      expect(find.text('全部'), findsOneWidget);
+      expect(find.text('Codex侧栏会话'), findsOneWidget);
+      expect(find.text('小万侧栏会话'), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-agent-switcher')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('home-new-conversation')),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Codex侧栏会话'));
+      await tester.pumpAndSettle();
+      expect(opened.single.conversationId, 1);
+      await startSelection(tester, 'Codex侧栏会话');
+      expect(
+        find.byKey(const ValueKey('home-selection-count')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byKey(const ValueKey('home-selection-cancel')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('home-search-button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('home-close-search')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   }
 
   void installSelectionMutations(

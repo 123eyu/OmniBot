@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/widgets/omni_glass.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ui/l10n/l10n.dart';
@@ -193,11 +194,13 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
           primary: true,
           onBackPressed: () => context.pop(_changed),
         ),
-        body: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _plugin == null
-            ? _buildUnavailable()
-            : _buildDetails(_plugin!),
+        body: OmniContentWidth(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _plugin == null
+              ? _buildUnavailable()
+              : _buildDetails(_plugin!),
+        ),
         bottomNavigationBar: _plugin == null
             ? null
             : _buildBottomActions(_plugin!),

@@ -1,13 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/features/home/widgets/home_conversation_tile_content.dart';
+import 'package:ui/features/home/widgets/home_conversation_avatar_colors.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/models/conversation_model.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/theme/omni_theme_palette.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
+import 'package:ui/widgets/agent_avatar.dart';
 
 ConversationModel _conversation({
   String? agentId = 'codex-acp',
@@ -63,6 +67,39 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   for (final dark in [false, true]) {
+    testWidgets(
+      'assigned avatar color follows ${dark ? 'dark' : 'light'} theme',
+      (tester) async {
+        final conversation = _conversation();
+        await tester.pumpWidget(
+          _app(
+            dark: dark,
+            child: HomeConversationTileContent(
+              conversation: conversation,
+              title: 'Title',
+              avatarColorIndex: 3,
+            ),
+          ),
+        );
+        final avatar = find.byKey(
+          ValueKey('home-conversation-avatar-${conversation.threadKey}'),
+        );
+        final decoration =
+            tester.widget<Container>(avatar).decoration! as BoxDecoration;
+        expect(decoration.shape, BoxShape.circle);
+        expect(decoration.gradient, isNull);
+        expect(
+          decoration.color,
+          HomeConversationAvatarColors.colorAt(
+            3,
+            dark ? Brightness.dark : Brightness.light,
+          ),
+        );
+        expect(tester.getSize(avatar), const Size.square(42));
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets(
       'two-line content follows the ${dark ? 'dark' : 'light'} theme',
       (tester) async {
@@ -217,8 +254,8 @@ void main() {
       await tester.pumpAndSettle();
       final brand = tester.widget<AgentBrandIcon>(find.byType(AgentBrandIcon));
       expect(brand.agentId, agent);
-      expect(brand.size, 40);
-      expect(brand.tint, isNull);
+      expect(brand.size, 28);
+      expect(brand.tint, const Color(0xFF20242A));
       expect(
         find.byKey(const ValueKey('home-conversation-executing-dot')),
         findsOneWidget,
@@ -249,6 +286,47 @@ void main() {
       tester.widget<AgentBrandIcon>(find.byType(AgentBrandIcon)).agentId,
       'xiaowan-acp',
     );
+    final image = tester.widget<Image>(find.byType(Image));
+    expect(
+      image.color,
+      tester
+          .widget<AgentBrandIcon>(find.byType(AgentBrandIcon))
+          .avatarBackgroundColor,
+    );
+    expect(image.color, isNotNull);
+    expect(image.colorBlendMode, BlendMode.modulate);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('solid backing preserves other preset and custom image colors', (
+    tester,
+  ) async {
+    const backing = Color(0xFFDBB9C7);
+    await tester.pumpWidget(
+      _app(
+        child: const AgentAvatarCircle(
+          avatarIndex: 1,
+          backgroundColor: backing,
+        ),
+      ),
+    );
+    final preset = tester.widget<Image>(find.byType(Image));
+    expect(preset.image, isA<AssetImage>());
+    expect(preset.color, isNull);
+
+    final customPath = File('assets/avatar/default_avatar2.png').absolute.path;
+    await tester.pumpWidget(
+      _app(
+        child: AgentAvatarCircle(
+          customImagePath: customPath,
+          backgroundColor: backing,
+        ),
+      ),
+    );
+    final custom = tester.widget<Image>(find.byType(Image));
+    expect(custom.image, isA<FileImage>());
+    expect((custom.image as FileImage).file.path, customPath);
+    expect(custom.color, isNull);
     expect(tester.takeException(), isNull);
   });
 

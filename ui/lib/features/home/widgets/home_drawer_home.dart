@@ -105,16 +105,17 @@ extension _HomeDrawerHome on HomeDrawerState {
 
   Widget _buildHomePage() {
     final palette = context.omniPalette;
+    // Assign before lazy rows build, across date/pinned/scheduled boundaries.
+    // Busy rows still occupy space and must participate in neighbor avoidance.
+    _homeAvatarColorIndices = HomeConversationAvatarColors.assign(
+      _visibleConversationRows.keys,
+    );
     return PopScope(
       canPop:
           !widget.active || (!_homeSearchVisible && !_isSelectingConversations),
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !widget.active) return;
-        if (_isSelectingConversations) {
-          _exitConversationSelection();
-        } else if (_homeSearchVisible) {
-          _closeHomeSearch();
-        }
+        if (didPop || widget.conversationSidebar) return;
+        handleBackIfNeeded();
       },
       child: Scaffold(
         backgroundColor: palette.pageBackground,
@@ -133,7 +134,9 @@ extension _HomeDrawerHome on HomeDrawerState {
                     );
                     return HomeSearchHeader(
                       searching: _homeSearchVisible,
-                      agentSwitcher: _buildHomeAgentSwitcher(),
+                      agentSwitcher: _buildHomeAgentSwitcher(
+                        compact: widget.conversationSidebar,
+                      ),
                       updateIndicator: updateInMenu
                           ? const SizedBox.shrink()
                           : _buildHomeAppUpdateIndicator(),
@@ -354,31 +357,33 @@ extension _HomeDrawerHome on HomeDrawerState {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: palette.brandSurface,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 2,
+              if (!compact || !widget.conversationSidebar) ...[
+                const SizedBox(width: 8),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: palette.brandSurface,
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                  child: Text(
-                    english ? 'Switch' : '切换',
-                    key: const ValueKey('home-agent-switch-action'),
-                    maxLines: 1,
-                    softWrap: false,
-                    style: TextStyle(
-                      fontSize: compact ? 10 : 11,
-                      fontWeight: FontWeight.w600,
-                      color: palette.brandPrimary,
-                      height: 1.2,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
+                    child: Text(
+                      english ? 'Switch' : '切换',
+                      key: const ValueKey('home-agent-switch-action'),
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                        fontSize: compact ? 10 : 11,
+                        fontWeight: FontWeight.w600,
+                        color: palette.brandPrimary,
+                        height: 1.2,
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
