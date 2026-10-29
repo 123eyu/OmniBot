@@ -111,12 +111,12 @@ void main() {
           .split('String get _activeAcpAgentDisplayName')
           .first;
       expect(
-        committed.indexOf('_resolvedThreadTarget?.agentId'),
-        lessThan(committed.indexOf('_agentRuntimeStatus.activeAgentId')),
+        committed.indexOf('target?.agentId'),
+        lessThan(committed.indexOf(': _conversationBoundAcpAgentId')),
       );
       expect(
-        committed.indexOf('_conversationBoundAcpAgentId'),
-        lessThan(committed.indexOf('_agentRuntimeStatus.activeAgentId')),
+        committed,
+        isNot(contains('_agentRuntimeStatus.activeAgentId')),
       );
     },
   );
@@ -139,7 +139,10 @@ void main() {
           .split('String get _activeAcpAgentDisplayName')
           .first;
       expect(committed, isNot(contains('_optimisticAcpAgentId')));
-      expect(committed, contains('_resolvedThreadTarget?.agentId'));
+      expect(
+        committed,
+        contains('final target = _resolvedThreadTarget ?? widget.threadTarget'),
+      );
       final target = page
           .split('ConversationThreadTarget get _threadTargetForMode {')
           .last
@@ -155,7 +158,9 @@ void main() {
       expect(switching, isNot(contains('_selectRemoteCodexRuntime(')));
       final service = File('lib/services/agent_runtime_service.dart')
           .readAsStringSync();
-      expect(service, contains('static Future<AcpAgentCatalog> selectAgent('));
+      expect(service, isNot(contains('static Future<AcpAgentCatalog> selectAgent(')));
+      expect(service, isNot(contains("_invokeMap('connect'")));
+      expect(service, isNot(contains('selectedAgentId')));
     },
   );
 
@@ -211,7 +216,7 @@ void main() {
       expect(send, contains('dispatchTarget?.agentId ?? _activeAcpAgentId'));
       expect(send, contains('await _prepareAcpSessionForTurn('));
       expect(send, contains('AgentRuntimeService.promptSession('));
-      expect(send, contains('agentId: remoteCodex ? null : dispatchAgentId'));
+      expect(send, contains('agentId: dispatchAgentId'));
     },
   );
 
@@ -522,7 +527,7 @@ void main() {
     expect(flowBody, contains('_runtimeCoordinator.beginAcpTurn('));
     expect(
       flowBody.indexOf('_runtimeCoordinator.beginAcpTurn('),
-      lessThan(flowBody.indexOf('await AgentRuntimeService.status()')),
+      lessThan(flowBody.indexOf('await AgentRuntimeService.newSession(')),
     );
     expect(flowBody, isNot(contains('_runtimeCoordinator.registerTask(')));
   });

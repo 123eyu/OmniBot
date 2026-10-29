@@ -252,11 +252,6 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
         _sharedModelSaving = false;
         _changed = true;
       });
-      try {
-        await AgentRuntimeService.disconnect();
-      } catch (_) {
-        // The next ACP request still prepares the selected shared mapping.
-      }
       showToast(
         _text('Agent Provider / 模型已更新。', 'Agent Provider / model updated.'),
         type: ToastType.success,

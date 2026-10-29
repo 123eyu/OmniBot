@@ -136,7 +136,7 @@ void main() {
         .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
           agentMethods.add(call.method);
           if (call.method == 'agent/list') {
-            return {'selectedAgentId': 'codex-acp', 'agents': nativeAgents};
+            return {'agents': nativeAgents};
           }
           return null;
         });

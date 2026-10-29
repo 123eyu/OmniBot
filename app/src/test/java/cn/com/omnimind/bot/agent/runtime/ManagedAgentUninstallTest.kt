@@ -358,7 +358,6 @@ class ManagedAgentUninstallTest {
         val store = AcpAgentProfileStore(context)
         val original = store.list().first { it.id == "pi-acp" }
         val configured = store.save(original.copy(environment = mapOf("CUSTOM_SETTING" to "keep")))
-        store.select(configured.id)
         store.bindSession("session-to-keep", configured.id)
         store.bindConversation(19L, configured.id)
         store.saveSessionConfiguration("session-to-keep", mapOf("model" to "model-to-keep"))
@@ -385,7 +384,7 @@ class ManagedAgentUninstallTest {
         assertEquals(false, reopened.health(configured.id).installed)
         assertNull(reopened.health(configured.id).preparationRevision)
         assertEquals(789L, reopened.health(configured.id).checkedAt)
-        assertEquals(configured.id, reopened.selected().id)
+        assertEquals(configured, reopened.requireProfile(configured.id))
         assertEquals(configured.environment, reopened.list().first { it.id == configured.id }.environment)
         assertEquals(configured.id, reopened.agentIdForSession("session-to-keep"))
         assertEquals(configured.id, reopened.agentIdForConversation(19L))

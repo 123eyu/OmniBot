@@ -88,7 +88,9 @@ List<GoRoute> homeRoutes = [
     pageBuilder: (context, state) => GoRouterManager.buildActivitySlidePage(
       key: state.pageKey,
       name: 'home/agent_sessions',
-      child: const AgentSessionsPage(),
+      child: AgentSessionsPage(
+        agentId: state.extra is String ? state.extra as String : 'codex-remote',
+      ),
     ),
   ),
   GoRoute(

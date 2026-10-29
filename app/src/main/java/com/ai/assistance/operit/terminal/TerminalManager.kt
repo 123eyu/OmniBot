@@ -388,15 +388,17 @@ class TerminalManager private constructor(
         command: String,
         executorKey: String,
         extraEnvironment: Map<String, String> = emptyMap(),
-        redirectErrorStream: Boolean = false
+        redirectErrorStream: Boolean = false,
+        distribution: TerminalDistribution.Spec = TerminalDistribution.selected(),
     ): Process {
-        check(initializeEnvironment()) { "Terminal environment is not ready." }
+        check(initializeEnvironment(distribution)) { "Terminal environment is not ready." }
         return withContext(Dispatchers.IO) {
             buildDistributionProcess(
                 executorKey = executorKey,
                 command = command,
                 redirectErrorStream = redirectErrorStream,
-                extraEnvironment = extraEnvironment
+                extraEnvironment = extraEnvironment,
+                distribution = distribution,
             ).start()
         }
     }

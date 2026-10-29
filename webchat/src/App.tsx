@@ -7,6 +7,9 @@ import { Icon } from "./components/Icon";
 import { LoginView } from "./components/LoginView";
 import {
   createConversationDraft,
+  conversationAgentId,
+  normalizeConversationMode,
+  canRunConversation,
   isPersistedConversation,
 } from "./conversationDraft";
 import { appendConversationNavigation } from "./conversationNavigation";
@@ -41,18 +44,13 @@ const MOBILE_SECTION_ICON = {
   workspace: "workspace",
   browser: "browser",
 } as const;
-const CONVERSATION_MODES = new Set<ConversationMode>(["normal", "codex", "chat_only"]);
-
-function normalizeConversationMode(mode: string | undefined): ConversationMode {
-  return CONVERSATION_MODES.has(mode as ConversationMode)
-    ? mode as ConversationMode
-    : "normal";
-}
-
+const UNSUPPORTED_CONVERSATION_MESSAGE = "此会话类型仅支持查看历史，请新建对话。";
+const MISSING_AGENT_MESSAGE = "此对话没有可用的助手归属。历史记录仍可查看，请新建对话。";
 const RETIRED_AGENT_MESSAGE = "此助手已停止支持。历史记录仍可查看，请新建其他助手的对话。";
 
 function errorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? "请求失败");
+  if (message.includes("agent_identity_required:")) return MISSING_AGENT_MESSAGE;
   return message.includes("agent_retired:") ? RETIRED_AGENT_MESSAGE : message;
 }
 
@@ -169,7 +167,7 @@ export default function App() {
     const visibility = historyVisibilityRevision.current;
     try {
       const payload = await request<ChatMessage[]>(`/conversations/${conversation.id}/messages`, {
-        query: { mode: conversation.mode ?? "normal" },
+        query: conversation.mode ? { mode: conversation.mode } : undefined,
       });
       if ((!isNaConversation(conversation) || visibility === historyVisibilityRevision.current)
           && conversationKey(conversation) === conversationKey(selectedRef.current)) {
@@ -370,7 +368,8 @@ export default function App() {
   }
 
   async function sendMessage(text: string, attachments: Attachment[]): Promise<boolean> {
-    if (isRetiredAgentConversation(selectedRef.current, retiredAgentIds)) {
+    if (isRetiredAgentConversation(selectedRef.current, retiredAgentIds)
+      || (selectedRef.current && (!conversationAgentId(selectedRef.current) || !canRunConversation(selectedRef.current)))) {
       return false;
     }
     const visibility = historyVisibilityRevision.current;
@@ -390,10 +389,10 @@ export default function App() {
         return true;
       }
 
-      let conversation = selectedRef.current;
+      let conversation = selectedRef.current ?? createConversationDraft("normal");
       if (!isPersistedConversation(conversation)) {
         const draftMode = normalizeConversationMode(conversation?.mode);
-        const draftAgentId = conversation?.agentId?.trim() || undefined;
+        const draftAgentId = conversationAgentId(conversation);
         conversation = await request<Conversation>("/conversations", {
           method: "POST",
           body: {
@@ -445,7 +444,7 @@ export default function App() {
           userMessage: text,
           userMessageCreatedAt,
           conversationMode,
-          agentId: conversation.agentId,
+          agentId: conversationAgentId(conversation),
           attachments,
         },
       });
@@ -624,7 +623,7 @@ export default function App() {
     if (eventName === "messages_replaced" && sameSelectedConversation(data)) {
       const incoming = Array.isArray(data.messages) ? data.messages : [];
       const mode = normalizeConversationMode(
-        String(data.conversationMode ?? data.mode ?? selectedRef.current?.mode ?? "normal"),
+        String(data.conversationMode ?? data.mode ?? selectedRef.current?.mode ?? ""),
       );
       setMessages((current) => (
         mode === "codex"
@@ -806,6 +805,10 @@ export default function App() {
           conversation={selectedConversation}
           unavailableMessage={isRetiredAgentConversation(selectedConversation, retiredAgentIds)
             ? RETIRED_AGENT_MESSAGE
+            : selectedConversation && !canRunConversation(selectedConversation)
+            ? UNSUPPORTED_CONVERSATION_MESSAGE
+            : selectedConversation && !conversationAgentId(selectedConversation)
+            ? MISSING_AGENT_MESSAGE
             : undefined}
           messages={messages}
           globalError={globalError}

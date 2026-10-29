@@ -70,7 +70,6 @@ void main() {
 
   Map<String, dynamic> catalog(List<Map<String, dynamic>> agents) => {
     'distributionId': 'ubuntu',
-    'selectedAgentId': 'pi-acp',
     'agents': agents,
   };
 

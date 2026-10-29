@@ -28,7 +28,7 @@ class CodexRemoteWorkspaceBrowser extends StatefulWidget {
   const CodexRemoteWorkspaceBrowser({
     super.key,
     required this.workspacePath,
-    this.agentId,
+    this.agentId = 'codex-remote',
     this.allowFileMutations = true,
     this.remoteBridgeUrl = '',
     this.remoteBridgeToken = '',
@@ -40,7 +40,7 @@ class CodexRemoteWorkspaceBrowser extends StatefulWidget {
   });
 
   final String workspacePath;
-  final String? agentId;
+  final String agentId;
   final bool allowFileMutations;
   final String remoteBridgeUrl;
   final String remoteBridgeToken;

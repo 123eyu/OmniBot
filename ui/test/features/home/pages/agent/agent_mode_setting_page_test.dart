@@ -27,7 +27,6 @@ void main() {
         .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
           if (call.method != 'agent/list') return null;
           return <String, dynamic>{
-            'selectedAgentId': 'codex-acp',
             'agents': <Map<String, dynamic>>[
               _agent('codex-acp', 'Codex', 'codex-acp', 'online'),
               _agent(
@@ -79,7 +78,6 @@ void main() {
           if (call.method != 'agent/list') return null;
           catalogReads++;
           return {
-            'selectedAgentId': 'codex-acp',
             'agents': [
               _agent('codex-acp', 'Codex', 'codex-acp', 'online'),
               _agent('claude-code-acp', 'Claude Code', 'claude', 'offline'),
@@ -284,7 +282,6 @@ void main() {
               calls.add(call);
               if (call.method == 'agent/list') {
                 return {
-                  'selectedAgentId': 'na-cloud',
                   'agents': [
                     {
                       ..._agent('na-cloud', 'Na', 'na-cloud', 'offline'),
@@ -350,7 +347,6 @@ void main() {
         .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
           if (call.method == 'agent/list') {
             return {
-              'selectedAgentId': 'codex-acp',
               'agents': [
                 _agent(
                   'codex-acp',
@@ -407,7 +403,6 @@ void main() {
             .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
               if (call.method != 'agent/list') return null;
               return <String, dynamic>{
-                'selectedAgentId': 'codex-acp',
                 'agents': [
                   _agent(
                     'codex-acp',
@@ -443,7 +438,6 @@ void main() {
           .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
             if (call.method == 'agent/list') {
               return <String, dynamic>{
-                'selectedAgentId': 'codex-acp',
                 'agents': [
                   _agent(
                     'codex-acp',
@@ -570,7 +564,6 @@ void main() {
           switch (call.method) {
             case 'agent/list':
               return <String, dynamic>{
-                'selectedAgentId': 'codex-acp',
                 'agents': <Map<String, dynamic>>[
                   _agent('codex-acp', 'Codex', 'codex-acp', 'online'),
                 ],
@@ -695,7 +688,6 @@ void main() {
             switch (call.method) {
               case 'agent/list':
                 return <String, dynamic>{
-                  'selectedAgentId': 'codex-acp',
                   'agents': <Map<String, dynamic>>[
                     _agent('codex-acp', 'Codex', 'codex-acp', 'online'),
                     _agent(

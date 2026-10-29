@@ -651,7 +651,6 @@ Future<void> _pumpPage(WidgetTester tester, String agentId) async {
 
 Map<String, dynamic> _catalog(Map<String, dynamic> agent) {
   return <String, dynamic>{
-    'selectedAgentId': agent['id'],
     'agents': <Map<String, dynamic>>[agent],
   };
 }

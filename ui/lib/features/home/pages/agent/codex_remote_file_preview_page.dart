@@ -19,7 +19,7 @@ class CodexRemoteFilePreviewPage extends StatefulWidget {
     super.key,
     required this.path,
     this.title,
-    this.agentId,
+    this.agentId = 'codex-remote',
     this.sessionId,
     this.workspaceOwner,
     this.remoteBridgeUrl = '',
@@ -29,7 +29,7 @@ class CodexRemoteFilePreviewPage extends StatefulWidget {
   });
 
   final String path;
-  final String? agentId;
+  final String agentId;
   final String? sessionId;
   final String? workspaceOwner;
   final String? title;

@@ -30,6 +30,24 @@ val adapter = AcpHarnessAdapters.forProfile(profile)
 - `app/src/main/java/cn/com/omnimind/bot/agent/runtime/LocalAcpRuntime.kt`
 - `app/src/main/java/cn/com/omnimind/bot/agent/runtime/AgentRuntimeMcp.kt`
 
+## 请求必须携带自身归属
+
+运行时不再保存“当前选中的全局 Agent”。`AgentConversationModePolicy` 统一校验请求的 `agentId`、持久 Conversation owner 和 ACP Session owner；已存在的归属不得被页面选择覆盖，彼此冲突时报 `agent_owner_conflict`。没有已知 owner 的新 Agent 请求必须明确传 `agentId`，否则报 `agent_identity_required`。
+
+`normal`、`chat_only` 是明确的小万产品模式，只有 owner 缺失时可据此确定 `xiaowan-acp`；不能用它们改写另一 Agent 的既有会话。新建内置 SubAgent 定时任务由产品入口显式写入 `xiaowan-acp`。没有可验证归属的历史仍可查看及管理，不自动补写默认 Agent。
+
+| 宿主操作 | 身份要求 |
+| --- | --- |
+| `agent/list` | 只读目录；返回 `agents`、`retiredAgentIds`，不返回 `selectedAgentId` 或条目 `selected` |
+| `status`、`disconnect` | 指定 `agentId`，或提供能解析持久 owner 的 `conversationId` / `sessionId` |
+| `initialize` | 连接级握手，明确指定 `agentId`，不靠 Conversation 或 Session hint 切换连接 |
+| `session/new`、`session/prompt` 及其他 session 操作 | 新会话明确指定 Agent；已有会话沿持久 owner 执行，连接由同一 ACP runtime 按需建立 |
+| `agent/select`、`connect` | 已移除，不作为发送前置操作 |
+
+本机 Codex 的身份是 `codex-acp`，PC Bridge 的身份是 `codex-remote`。`remoteEnabled` 只控制远端连接是否可用，不能据此把本地会话改发到远端。配置、模型列表和文件请求也必须寻址对应 owner。
+
+持久化变更仅删除 `acp_agent_profiles` 中旧的 `selected_profile_id`；不读取其值决定运行时，也不创建替代全局选择键。现有 Conversation/Session bindings 与 Room schema 保持原有格式。页面草稿继续使用既有 Conversation target 保存自己的 `agentId`，它不是运行时默认值。Provider 解析、凭据与长期记忆 API/数据不随这次归属调整改变。
+
 ## 哪些必须由 Harness adapter 处理
 
 这些内容属于外部 Harness 的部署或协议差异，应该放在 `AcpHarnessAdapter` 或对应的官方 runtime metadata 中：

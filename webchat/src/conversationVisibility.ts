@@ -16,5 +16,6 @@ export function isRetiredAgentConversation(
   retiredAgentIds: readonly string[],
 ): boolean {
   const agentId = conversation?.agentId?.trim();
-  return conversation?.mode === "codex" && Boolean(agentId && retiredAgentIds.includes(agentId));
+  return conversation?.mode !== "normal" && conversation?.mode !== "chat_only"
+    && Boolean(agentId && retiredAgentIds.includes(agentId));
 }

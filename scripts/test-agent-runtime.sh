@@ -120,6 +120,7 @@ if [[ "$RUN_GRADLE" == "1" ]]; then
       --tests 'cn.com.omnimind.bot.agent.runtime.McpProcessCleanupTest' \
       --tests 'cn.com.omnimind.bot.agent.AgentEventAdapterTest' \
       --tests 'cn.com.omnimind.bot.agent.AgentConversationModePolicyTest' \
+      --tests 'cn.com.omnimind.bot.agent.ConversationUiActionsTest' \
       --tests 'cn.com.omnimind.bot.agent.AgentSystemPromptTest' \
       --tests 'cn.com.omnimind.bot.agent.AgentLlmStreamAccumulatorTest' \
       --tests 'cn.com.omnimind.bot.agent.HttpAgentLlmClientTest' \
@@ -137,6 +138,7 @@ if [[ "$RUN_GRADLE" == "1" ]]; then
       --tests 'cn.com.omnimind.bot.webchat.WorkspaceFileServiceTest' \
       --tests 'cn.com.omnimind.bot.webchat.BrowserMirrorServiceTest' \
       --tests 'cn.com.omnimind.bot.webchat.RealtimeHubTest' \
+      --tests 'cn.com.omnimind.bot.webchat.WebConversationCreationTest' \
     --tests 'cn.com.omnimind.bot.agent.SubagentProgressTextTest' \
     --tests 'cn.com.omnimind.bot.agent.SubagentConcurrencyTest' \
     --tests 'cn.com.omnimind.bot.agent.SubagentProfileRegistryTest' \
@@ -148,6 +150,9 @@ if [[ "$RUN_GRADLE" == "1" ]]; then
     --tests 'cn.com.omnimind.bot.agent.BrowserUseRequestTest' \
       --tests 'cn.com.omnimind.bot.agent.AgentRuntimeContextQueryTest' \
       --tests 'cn.com.omnimind.bot.agent.runtime.LocalAcpRuntimeTest' \
+      --tests 'cn.com.omnimind.bot.agent.runtime.LocalAcpRuntimeOwnershipTest' \
+      --tests 'cn.com.omnimind.bot.agent.runtime.LocalAcpDraftSessionTest' \
+      --tests 'cn.com.omnimind.bot.agent.runtime.NaCloudDraftSessionTest' \
       --tests 'cn.com.omnimind.bot.agent.runtime.LocalAcpSessionListStateTest' \
       --tests 'cn.com.omnimind.bot.agent.runtime.LocalAcpCancellationFailureTest' \
       --tests 'cn.com.omnimind.bot.agent.runtime.LocalAcpSessionCloseTest' \
@@ -156,6 +161,8 @@ if [[ "$RUN_GRADLE" == "1" ]]; then
       --tests 'cn.com.omnimind.bot.agent.runtime.XiaowanSessionAdmissionTest' \
       --tests 'cn.com.omnimind.bot.agent.runtime.LocalAcpSessionDeleteTest' \
       --tests 'cn.com.omnimind.bot.agent.runtime.AgentSessionBindingMetadataTest' \
+      --tests 'cn.com.omnimind.bot.agent.runtime.AgentSessionBindingOwnershipTest' \
+      --tests 'cn.com.omnimind.bot.agent.runtime.AgentSessionMissingConversationTest' \
       --tests 'cn.com.omnimind.bot.agent.runtime.LocalAcpRuntimeConfigTest' \
       --tests 'cn.com.omnimind.bot.agent.runtime.LocalAcpRuntimeInitializationTest' \
       --tests 'cn.com.omnimind.bot.agent.runtime.AcpAgentProfileStoreTest' \

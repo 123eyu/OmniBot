@@ -760,19 +760,6 @@ class AgentRuntimeProtocolPayloadTest {
     }
 
     @Test
-    fun freshSessionOnlyReconnectFallsBackToANewThread() {
-        assertTrue(
-            isRecoverableAgentThreadError(
-                "The selected ACP agent did not advertise session resume or loadSession."
-            )
-        )
-        assertTrue(isRecoverableAgentThreadError("unknown session: old-session"))
-        assertTrue(isRecoverableAgentThreadError("session metadata not found"))
-        assertTrue(isRecoverableAgentThreadError("session file missing"))
-        assertFalse(isRecoverableAgentThreadError("provider authentication failed"))
-    }
-
-    @Test
     fun managedNpmPackageSpecsResolveTheirInstalledPackageNames() {
         assertEquals(
             "@agentclientprotocol/codex-acp",
