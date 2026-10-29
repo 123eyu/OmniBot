@@ -18,7 +18,9 @@ import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/settings_section_title.dart';
 
 class AgentSessionsPage extends StatefulWidget {
-  const AgentSessionsPage({super.key});
+  const AgentSessionsPage({super.key, required this.agentId});
+
+  final String agentId;
 
   @override
   State<AgentSessionsPage> createState() => _AgentSessionsPageState();
@@ -58,8 +60,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
     super.dispose();
   }
 
-  bool get _isRemoteRuntime =>
-      _status.runtime == 'remote' || _status.remoteEnabled;
+  bool get _isRemoteRuntime => widget.agentId == 'codex-remote';
 
   Future<void> _loadSessions({bool showLoading = true}) async {
     if (!mounted || _isRefreshing) return;
@@ -72,31 +73,16 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
     }
     AgentRuntimeStatus? lastStatus;
     try {
-      var status = await AgentRuntimeService.status();
+      final status = await AgentRuntimeService.status(agentId: widget.agentId);
       lastStatus = status;
-      if (status.ready && !status.connected) {
-        status = await AgentRuntimeService.connect();
-        lastStatus = status;
-      }
-      if (!status.ready) {
-        if (!mounted) return;
-        setState(() {
-          _status = status;
-          if (showLoading) {
-            _sessions = const <_AgentSessionSummary>[];
-          }
-          _isLoading = false;
-          _error =
-              status.error ??
-              (_isEnglish ? 'Agent runtime is unavailable' : 'Agent 运行时不可用');
-        });
-        return;
-      }
       final payloads = <Map<String, dynamic>>[];
       String? cursor;
       final seenCursors = <String>{};
       while (true) {
-        final payload = await AgentRuntimeService.listSessions(cursor: cursor);
+        final payload = await AgentRuntimeService.listSessions(
+          agentId: widget.agentId,
+          cursor: cursor,
+        );
         payloads.add(payload);
         final nextCursor = _stringValue(
           payload['nextCursor'] ??
@@ -155,13 +141,14 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
       _openingThreadId = session.threadId;
     });
     try {
-      if (_status.runtime == 'remote' || _status.remoteEnabled) {
+      if (_isRemoteRuntime) {
         if (!mounted) return;
         GoRouterManager.push(
           '/home/chat',
           extra: ConversationThreadTarget.agentSession(
             sessionId: session.threadId,
             runtime: 'remote',
+            agentId: widget.agentId,
             agentSessionActive: session.active,
             requestKey: DateTime.now().microsecondsSinceEpoch.toString(),
           ),
@@ -169,6 +156,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
         return;
       }
       final response = await AgentRuntimeService.loadSession(
+        agentId: widget.agentId,
         sessionId: session.threadId,
         conversationMode: ConversationMode.agent.storageValue,
       );
@@ -185,6 +173,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
         '/home/chat',
         extra: ConversationThreadTarget.existing(
           conversationId: conversationId,
+          agentId: widget.agentId,
           mode: ConversationMode.agent,
           requestKey: DateTime.now().microsecondsSinceEpoch.toString(),
         ),
@@ -212,12 +201,9 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
       _isStartingSession = true;
     });
     try {
-      AgentRuntimeStatus status = _status;
-      if (!status.connected) {
-        status = await AgentRuntimeService.connect();
-      }
-      final cwd = _workspacePathForStatus(status);
+      final cwd = _workspacePathForStatus(_status);
       final response = await AgentRuntimeService.newSession(
+        agentId: widget.agentId,
         cwd: cwd.isEmpty ? null : cwd,
       );
       final threadId = _threadIdFromResponse(response);
@@ -229,14 +215,12 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
         );
       }
       if (!mounted) return;
-      setState(() {
-        _status = status;
-      });
       GoRouterManager.push(
         '/home/chat',
         extra: ConversationThreadTarget.agentSession(
           sessionId: threadId,
           runtime: 'remote',
+          agentId: widget.agentId,
           requestKey: DateTime.now().microsecondsSinceEpoch.toString(),
         ),
       );
@@ -296,7 +280,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
         remoteBridgeToken: config.remoteBridgeToken,
         remoteCwd: nextCwd,
       );
-      final status = await AgentRuntimeService.status();
+      final status = await AgentRuntimeService.status(agentId: widget.agentId);
       if (!mounted) return;
       setState(() {
         _status = status;
@@ -440,6 +424,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
     }
     try {
       await AgentRuntimeService.setSessionName(
+        agentId: widget.agentId,
         sessionId: session.threadId,
         name: nextName,
       );
@@ -473,9 +458,15 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
   }) async {
     try {
       if (archived) {
-        await AgentRuntimeService.archiveSession(sessionId: session.threadId);
+        await AgentRuntimeService.archiveSession(
+          sessionId: session.threadId,
+          agentId: widget.agentId,
+        );
       } else {
-        await AgentRuntimeService.unarchiveSession(sessionId: session.threadId);
+        await AgentRuntimeService.unarchiveSession(
+          sessionId: session.threadId,
+          agentId: widget.agentId,
+        );
       }
       if (!mounted) return;
       setState(() {
@@ -546,7 +537,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
     }
   }
 
-  String get _title => _status.runtime == 'remote'
+  String get _title => _isRemoteRuntime
       ? (_isEnglish ? 'Remote Codex Sessions' : '远程 Codex Sessions')
       : (_isEnglish ? 'Local Agent Sessions' : '本地 Agent Sessions');
 
@@ -603,7 +594,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
           _buildInlineState(
             icon: Icons.history_rounded,
             title: _isEnglish ? 'No Agent sessions' : '暂无 Agent Sessions',
-            subtitle: _status.runtime == 'remote'
+            subtitle: _isRemoteRuntime
                 ? (_isEnglish
                       ? 'The remote PC Bridge returned no sessions.'
                       : '远程 PC Bridge 暂无可用 session。')

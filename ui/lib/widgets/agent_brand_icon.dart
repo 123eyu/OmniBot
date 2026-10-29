@@ -6,7 +6,7 @@ import 'package:ui/widgets/agent_avatar.dart';
 
 /// ACP Agent 品牌图标。
 ///
-/// 已知的内置 Agent（Kimi Code / DeepSeek Harness / Codex / Claude Code / OpenCode）渲染各自来自 Lobe Icons
+/// 已知 Agent（包括历史会话中的已停用 Agent）渲染各自来自 Lobe Icons
 /// (https://icons.lobehub.com) 的原始品牌 SVG。小万沿用可编辑的 AgentAvatarService，
 /// 让头像选择器同时影响 ACP 顶部、运行头和旧兼容卡片；未识别的自定义 Agent
 /// 回退到默认机器人图标 [Icons.smart_toy_outlined]。
@@ -19,7 +19,7 @@ class AgentBrandIcon extends StatelessWidget {
     this.tint,
   });
 
-  /// [AcpAgentProfile.id]（例如 `codex-acp`、`deepseek-harness-acp`）。
+  /// [AcpAgentProfile.id]（例如 `codex-acp`、`kimi-code-acp`）。
   final String agentId;
 
   /// 图标绘制尺寸。
@@ -47,6 +47,7 @@ class AgentBrandIcon extends StatelessWidget {
       brandColor: Color(0xFFD97757),
     ),
     'opencode-acp': _AgentBrand('assets/agents/opencode.svg'),
+    // Historical conversations retain the retired Agent's visual identity.
     'deepseek-harness-acp': _AgentBrand(
       'assets/provider_icons/deepseek.svg',
       brandColor: Color(0xFF4D6BFE),

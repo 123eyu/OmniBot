@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 /** Package maintenance only; the existing ACP runtime still owns all sessions and turns. */
 internal enum class ManagedAgentUninstallStrategy(val id: String) {
     CLAUDE_CODE("claude-code"), CODEX("codex"), OPENCODE("opencode"),
+    // Kept only for removal of installations created before this Agent was retired.
     DEEPSEEK_HARNESS("deepseek-harness"), PI("pi"), KIMI_CODE("kimi-code");
 
     companion object {

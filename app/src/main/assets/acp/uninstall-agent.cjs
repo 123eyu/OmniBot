@@ -10,7 +10,11 @@ const PLANS = Object.freeze({
   'claude-code': { packages: ['@anthropic-ai/claude-code', '@agentclientprotocol/claude-agent-acp'], commands: ['claude', 'claude-agent-acp'] },
   codex: { packages: ['@openai/codex', '@agentclientprotocol/codex-acp'], commands: ['codex', 'codex-acp'] },
   opencode: { packages: ['@opencode/cli', 'opencode-ai'], commands: ['opencode', 'opencode2'] },
-  'deepseek-harness': { packages: ['@deepseek-ai/dsh'], commands: ['dsh', 'dsh-acp-android'] },
+  // Retired runtime: retained only for cleanup of previously managed installs.
+  'deepseek-harness': {
+    packages: ['@deepseek-ai/dsh', '@openma/deepseek-harness-acp', '@deepseek-ai/dsh-acp-demo'],
+    commands: ['dsh', 'dsh-acp-android', 'dsh-acp', 'dsh-acp-demo'],
+  },
   pi: { packages: [], commands: ['omnibot-pi-acp'] },
   'kimi-code': { packages: ['@moonshot-ai/kimi-code'], commands: ['kimi'] },
 });
@@ -63,9 +67,13 @@ function ownedWrapper(strategy, file, layout) {
     return new RegExp(`^#!/bin/sh\\nexec node '${escaped}/[a-f0-9]{20}/dist/index\\.js' "\\$@"\\n?$`).test(source);
   }
   if (strategy === 'deepseek-harness') {
-    const launch = `exec node --expose-internals ${path.join(layout.modules, '@deepseek-ai/dsh/lib/bin.js')} "$@"\n`;
+    if (path.basename(file) !== 'dsh-acp-android') return false;
+    const entry = path.join(layout.modules, '@deepseek-ai/dsh/lib/bin.js');
+    const launch = `exec node --expose-internals ${entry} "$@"\n`;
+    const legacyPatch = path.join(layout.root, 'root/.dsh/omnibot-acp/omnibot-acp-headless.patch.yml');
     return source === '#!/bin/sh\n' + launch || source === '#!/bin/sh\n' +
-      'export DSH_BUNDLED_SKILL_DIR="${DSH_BUNDLED_SKILL_DIR:-$DSH_HOME/omnibot-bundled-skills}"\n' + launch;
+      'export DSH_BUNDLED_SKILL_DIR="${DSH_BUNDLED_SKILL_DIR:-$DSH_HOME/omnibot-bundled-skills}"\n' + launch ||
+      source === `#!/bin/sh\nexec node --expose-internals ${entry} --patch "${legacyPatch}" "$@"\n`;
   }
   return false;
 }

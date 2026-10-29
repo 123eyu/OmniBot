@@ -49,7 +49,6 @@ void main() {
       agentCalls.add(call.method);
       return switch (call.method) {
         'agent/list' => {
-          'selectedAgentId': 'codex-acp',
           'agents': [
             {
               'id': 'codex-acp',

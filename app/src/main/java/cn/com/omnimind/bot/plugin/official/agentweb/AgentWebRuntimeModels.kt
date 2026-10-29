@@ -1,8 +1,5 @@
 package cn.com.omnimind.bot.plugin.official.agentweb
 
-import cn.com.omnimind.bot.agent.runtime.normalizeAnthropicServiceRoot
-
-import cn.com.omnimind.baselib.llm.DeepSeekProvider
 import cn.com.omnimind.baselib.llm.OpenAiWireApi
 import cn.com.omnimind.baselib.llm.ProviderCustomHeaderUtils
 import cn.com.omnimind.baselib.llm.ProviderModelOption
@@ -10,31 +7,17 @@ import cn.com.omnimind.bot.agent.runtime.AgentProviderCredentials
 import cn.com.omnimind.bot.agent.runtime.AcpHarnessAdapters
 import cn.com.omnimind.bot.agent.runtime.AgentConfigAdapterRegistry
 import cn.com.omnimind.bot.agent.runtime.AgentProviderMappingInput
-import cn.com.omnimind.bot.agent.runtime.KIMI_CODE_NATIVE_HEALTH_COMMAND
-import cn.com.omnimind.bot.agent.runtime.KIMI_CODE_NPM_INSTALL_COMMAND
 import cn.com.omnimind.bot.agent.runtime.buildKimiCodeEnvironment
 import cn.com.omnimind.bot.agent.runtime.buildKimiCodeManagedFiles
 import java.net.URI
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-private const val DEEPSEEK_HARNESS_NODE_ENTRYPOINT =
-    "/root/.npm-global/lib/node_modules/@deepseek-ai/dsh/lib/bin.js"
-
-internal const val DEEPSEEK_HARNESS_WEB_HOME = "/root/.dsh/omnibot-web"
-internal const val DEEPSEEK_HARNESS_WEB_PATCH_PATH =
-    "$DEEPSEEK_HARNESS_WEB_HOME/omnibot-dispatch.patch.yml"
-internal const val DEEPSEEK_HARNESS_API_KEY_ENV = "OMNIBOT_DSH_API_KEY"
 internal const val OPENCODE_WEB_CONFIG_PATH = "/root/.config/opencode/omnibot-web.json"
-private const val DEEPSEEK_HARNESS_FALLBACK_ROUTE = "omnibot-dispatch"
 
 internal enum class AgentWebUrlKind {
     KIMI,
-    DEEPSEEK_HARNESS,
     OPENCODE,
 }
 
@@ -60,21 +43,6 @@ internal enum class AgentWebService(
         sessionId = "omnibot-web-kimi",
         urlKind = AgentWebUrlKind.KIMI,
         readinessTimeoutMs = 60_000L,
-    ),
-    DEEPSEEK_HARNESS(
-        id = "deepseek_harness",
-        displayName = "DeepSeek Harness Web",
-        packageId = "deepseek_harness",
-        commandName = "dsh",
-        // Cordis HMR reads Node internals under Android proot. Invoke the
-        // vendor's published bin directly with the same narrow compatibility
-        // flag used by the managed ACP launcher.
-        command = "node --expose-internals $DEEPSEEK_HARNESS_NODE_ENTRYPOINT " +
-            "web --patch $DEEPSEEK_HARNESS_WEB_PATCH_PATH " +
-            "--no-open --host 127.0.0.1 --port 0",
-        sessionId = "omnibot-web-dsh",
-        urlKind = AgentWebUrlKind.DEEPSEEK_HARNESS,
-        readinessTimeoutMs = 90_000L,
     ),
     OPENCODE(
         id = "opencode",
@@ -197,16 +165,6 @@ internal fun buildAgentWebLaunchConfiguration(
             )
             managedFiles = buildKimiCodeManagedFiles(credentials, modelId, reasoningEffort)
         }
-        AgentWebService.DEEPSEEK_HARNESS -> {
-            environment = buildDeepSeekEnvironment(credentials)
-            managedFiles = mapOf(
-                DEEPSEEK_HARNESS_WEB_PATCH_PATH to buildDeepSeekProviderPatch(
-                    provider = credentials,
-                    model = modelId,
-                    reasoningEffort = reasoningEffort,
-                ),
-            )
-        }
         AgentWebService.OPENCODE -> {
             require(reasoningEffort.isNullOrBlank()) {
                 "Choose OpenCode reasoning options in its Web interface."
@@ -271,160 +229,3 @@ private fun AgentProviderCredentials.normalizedForAgentWeb(): AgentProviderCrede
             .filter { (key, value) -> key.isNotEmpty() && value.isNotEmpty() },
     )
 }
-
-private fun buildDeepSeekEnvironment(provider: AgentProviderCredentials): Map<String, String> {
-    return linkedMapOf(
-        DEEPSEEK_HARNESS_API_KEY_ENV to provider.apiKey,
-        "DSH_PERMISSION_MODE" to "workspace-write",
-        "DSH_HOME" to DEEPSEEK_HARNESS_WEB_HOME,
-        "DSH_TELEMETRY_DISABLED" to "1",
-        "NODE_NO_WARNINGS" to "1",
-    )
-}
-
-/**
- * Configure the current DSH Web profile through its official Cordis overlay
- * surface. Current DSH Web reads provider routes and its fresh-session model
- * from `llm-pi-ai` and `agent-default-model`; legacy DSH_MODEL/DSH_PROVIDER
- * variables are not Web configuration inputs.
- *
- * The API key remains an inherited credential reference and is deliberately
- * absent from this persisted patch.
- */
-internal fun buildDeepSeekProviderPatch(
-    provider: AgentProviderCredentials,
-    model: String,
-    reasoningEffort: String?,
-    acp: Boolean = false,
-    providerModelIds: List<String> = emptyList(),
-): String {
-    val effort = reasoningEffort?.trim()?.lowercase()?.takeIf(String::isNotEmpty)
-    require(effort == null || effort in DEEPSEEK_REASONING_EFFORTS) {
-        "DeepSeek Harness reasoning effort must be off, minimal, low, medium, high, xhigh, or max."
-    }
-    val route = resolveDeepSeekHarnessRoute(provider)
-    val api = resolveDeepSeekHarnessApi(provider)
-    val baseUrl = if (api == "anthropic-messages") {
-        normalizeAnthropicServiceRoot(provider.baseUrl)
-    } else {
-        normalizeOpenAiApiBaseUrl(provider.baseUrl)
-    }
-    val modelProfiles = (providerModelIds + model).filter { it.isNotBlank() }.distinct().map { modelId ->
-      val visionInputSupport = agentWebVisionInputSupport(provider, modelId)
-      buildJsonObject {
-        put("id", modelId)
-        if (route == DEEPSEEK_HARNESS_FALLBACK_ROUTE || visionInputSupport != null) {
-            put("input", buildJsonArray {
-                add(JsonPrimitive("text"))
-                if (visionInputSupport != false) add(JsonPrimitive("image"))
-            })
-        }
-        if (route == DEEPSEEK_HARNESS_FALLBACK_ROUTE || effort != null) {
-            put("reasoningEfforts", buildJsonObject {
-                // A generic OpenAI route needs an explicit wire value. Null means
-                // "omit", which leaves a thinking-by-default server enabled.
-                // Known provider dialects keep Pi's own off serialization.
-                if (route == DEEPSEEK_HARNESS_FALLBACK_ROUTE && api == "openai-completions") {
-                    put("off", "none")
-                } else {
-                    put("off", JsonNull)
-                }
-                DEEPSEEK_REASONING_EFFORTS
-                    .filterNot { it == "off" }
-                    .forEach { level -> put(level, level) }
-            })
-        }
-    }
-    }
-    val profile = buildJsonObject {
-        put("apiKeyEnv", DEEPSEEK_HARNESS_API_KEY_ENV)
-        put("displayName", "OmniBot Dispatch")
-        put("api", api)
-        put("baseURL", baseUrl)
-        put("models", buildJsonArray {
-            modelProfiles.forEach { add(it) }
-        })
-        if (provider.customHeaders.isNotEmpty()) {
-            put("headers", buildJsonObject {
-                provider.customHeaders.forEach { (name, value) -> put(name, value) }
-            })
-        }
-        effort?.let { put("reasoning", it) }
-    }
-    val providerConfig = buildJsonObject {
-        put("providers", buildJsonObject { put(route, profile) })
-    }
-    val defaultModelConfig = buildJsonObject {
-        put("provider", route)
-        put("model", model)
-    }
-    return buildString {
-        appendLine("# Generated by OmniBot for the managed DSH process.")
-        appendLine("- id: llm-pi-ai")
-        appendLine("  config: $providerConfig")
-        appendLine(if (acp) "- id: acp" else "- id: agent-default-model")
-        appendLine("  config: $defaultModelConfig")
-    }
-}
-
-/**
- * Preserve the app's tri-state Provider capability policy at the vendor Web
- * boundary. Only a route that explicitly declares text-only loses image
- * input; an unknown BYOK gateway stays permissive and lets the Provider make
- * the final decision.
- */
-private fun agentWebVisionInputSupport(
-    provider: AgentProviderCredentials,
-    model: String,
-): Boolean? = DeepSeekProvider.requestCapabilities(
-    protocolType = provider.protocolType,
-    apiBase = provider.baseUrl,
-    model = model,
-).supportsVisionInput
-
-private fun resolveDeepSeekHarnessApi(provider: AgentProviderCredentials): String = when {
-    provider.protocolType == "anthropic" -> "anthropic-messages"
-    OpenAiWireApi.isResponses(provider.wireApi) -> "openai-responses"
-    else -> "openai-completions"
-}
-
-/** Keep an upstream route identity only when the endpoint is unambiguous. */
-private fun resolveDeepSeekHarnessRoute(provider: AgentProviderCredentials): String {
-    val host = runCatching { URI(provider.baseUrl).host?.lowercase() }.getOrNull().orEmpty()
-    return when {
-        provider.protocolType == "anthropic" && host == "api.anthropic.com" -> "anthropic"
-        host == "api.deepseek.com" -> "deepseek"
-        host == "api.openai.com" -> "openai"
-        else -> DEEPSEEK_HARNESS_FALLBACK_ROUTE
-    }
-}
-
-private fun normalizeOpenAiApiBaseUrl(baseUrl: String): String {
-    var normalized = baseUrl.trim().trimEnd('/')
-    listOf(
-        "/v1/chat/completions",
-        "/chat/completions",
-        "/v1/responses",
-        "/responses",
-    ).firstOrNull { normalized.endsWith(it, ignoreCase = true) }?.let { suffix ->
-        normalized = normalized.dropLast(suffix.length).trimEnd('/')
-    }
-    if (normalized.isEmpty()) return normalized
-    if (
-        normalized.endsWith("/v1", ignoreCase = true) ||
-        normalized.endsWith("/compatible-mode/v1", ignoreCase = true)
-    ) {
-        return normalized
-    }
-    return "$normalized/v1"
-}
-
-private val DEEPSEEK_REASONING_EFFORTS = listOf(
-    "off",
-    "minimal",
-    "low",
-    "medium",
-    "high",
-    "xhigh",
-    "max",
-)

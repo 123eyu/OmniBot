@@ -1,3 +1,4 @@
+import { isAgentConversationMode } from "./conversationDraft";
 import { isRecord } from "./api";
 import type { ChatMessage, Conversation } from "./types";
 
@@ -143,7 +144,7 @@ export function markdownToHtml(value: unknown): string {
 }
 
 export function modeLabel(mode?: string, agentId?: string): string {
-  if (mode === "codex") {
+  if (isAgentConversationMode(mode)) {
     return ({
       "codex-acp": "Codex",
       "claude-code-acp": "Claude Code",

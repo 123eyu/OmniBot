@@ -271,7 +271,6 @@ void main() {
 }
 
 Map<String, dynamic> _catalog(String name) => {
-  'selectedAgentId': 'codex-acp',
   'agents': [
     {
       'id': 'codex-acp',

@@ -81,8 +81,6 @@ internal data class AgentProviderMappingInput(
     val provider: AgentProviderCredentials?,
     val model: String?,
     val harnessAdapter: AcpHarnessAdapter = AcpHarnessAdapters.standard,
-    val deepSeekConfig: DeepSeekHarnessConfig = DeepSeekHarnessConfig(),
-    val rawHarnessConfig: String? = null,
     /** Selected Provider metadata for offline settings; never a launch credential. */
     val providerProfile: ModelProviderProfile? = null,
 ) {
@@ -92,7 +90,6 @@ internal data class AgentProviderMappingInput(
 
 internal data class AgentProviderMapping(
     val environment: Map<String, String> = emptyMap(),
-    val deepSeekConfig: DeepSeekHarnessConfig? = null,
     val codexModel: String? = null,
     val codexWireApi: String? = null,
     val codexBaseUrl: String? = null,
@@ -153,6 +150,7 @@ private val PROVIDER_OWNED_ENVIRONMENT_KEYS = setOf(
     "ANTHROPIC_MODEL",
     "ANTHROPIC_SMALL_FAST_MODEL",
     "DEEPSEEK_API_KEY",
+    // Retired Harness keys remain blocked when old profile overrides are loaded.
     "OMNIBOT_DSH_API_KEY",
     "DEEPSEEK_BASE_URL",
     "DSH_MODEL",
@@ -197,7 +195,6 @@ internal interface AgentConfigAdapter {
 
 internal object AgentConfigAdapterRegistry {
     private val adaptersById: Map<String, AgentConfigAdapter> = mapOf(
-        "deepseek-harness" to DeepSeekHarnessConfigAdapter,
         "codex" to CodexConfigAdapter,
         "claude-code" to ClaudeCodeConfigAdapter,
         "kimi-code" to KimiCodeConfigAdapter,
@@ -279,23 +276,6 @@ private fun AgentProviderMappingInput.normalized(forLaunch: Boolean = false): Ag
     return copy(
         provider = normalizedProvider,
         model = model?.trim()?.takeIf { it.isNotEmpty() },
-    )
-}
-
-internal fun syncAgentProviderCredentials(
-    config: DeepSeekHarnessConfig,
-    sharedProvider: AgentProviderCredentials?,
-    sharedModel: String? = null
-): DeepSeekHarnessConfig {
-    val normalizedProvider = sharedProvider?.normalized()
-    return config.copy(
-        baseUrl = normalizedProvider?.baseUrl ?: config.baseUrl,
-        apiKey = normalizedProvider?.apiKey ?: config.apiKey,
-        model = when {
-            sharedModel != null -> sharedModel.trim()
-            normalizedProvider != null -> ""
-            else -> config.model
-        }
     )
 }
 

@@ -54,6 +54,7 @@ enum ChatBotLaunchScene {
 
 class ChatBotSheet extends StatefulWidget {
   final String? initialMessage;
+  final String agentId;
   final List<Map<String, dynamic>> initialAttachments;
 
   /// 启动场景，用于控制是否加载之前保存的上下文
@@ -63,6 +64,7 @@ class ChatBotSheet extends StatefulWidget {
   const ChatBotSheet({
     super.key,
     this.initialMessage,
+    this.agentId = 'xiaowan-acp',
     this.initialAttachments = const [],
     this.launchScene = ChatBotLaunchScene.normal,
     this.openClawEnabled,
@@ -100,7 +102,7 @@ class _ChatBotSheetState extends State<ChatBotSheet>
   String? _currentDispatchTurnId;
   String? _acpSessionId;
   String? _acpPromptId;
-  String? _activeAcpAgentId;
+  String get _activeAcpAgentId => widget.agentId;
   bool _closeRequested = false;
   bool _cancelRequested = false;
   bool _acpCloseStarted = false;
@@ -184,18 +186,6 @@ class _ChatBotSheetState extends State<ChatBotSheet>
     // a sheet observes fresh presentation metadata without replaying an event.
     _lastAgentEventProjection = _runtimeCoordinator.latestAgentEventProjection;
     _runtimeCoordinator.addListener(_handleRuntimeCoordinatorChanged);
-    unawaited(_loadActiveAcpAgentIdentity());
-  }
-
-  Future<void> _loadActiveAcpAgentIdentity() async {
-    try {
-      final status = await AgentRuntimeService.status();
-      final agentId = status.activeAgentId?.trim() ?? '';
-      if (!mounted || agentId.isEmpty) return;
-      setState(() => _activeAcpAgentId = agentId);
-    } catch (error) {
-      debugPrint('加载 ACP Agent 身份失败: $error');
-    }
   }
 
   Future<void> _loadOpenClawConfig() async {
@@ -517,11 +507,15 @@ class _ChatBotSheetState extends State<ChatBotSheet>
         final newId = await ConversationService.createConversation(
           title: title,
           summary: summary,
+          mode: ConversationMode.agent,
+          agentId: widget.agentId,
         );
         if (newId != null) {
           _currentConversationId = newId;
           _currentConversation = ConversationModel(
             id: newId,
+            mode: ConversationMode.agent,
+            agentId: widget.agentId,
             title: title,
             summary: summary,
             status: 0,
@@ -548,6 +542,8 @@ class _ChatBotSheetState extends State<ChatBotSheet>
             _currentConversation ??
             ConversationModel(
               id: _currentConversationId!,
+              mode: ConversationMode.agent,
+              agentId: widget.agentId,
               title: title,
               summary: summary,
               status: 0,
@@ -764,6 +760,7 @@ class _ChatBotSheetState extends State<ChatBotSheet>
     if (sessionId != null && sessionId.isNotEmpty) {
       try {
         await AgentRuntimeService.closeSession(
+          agentId: widget.agentId,
           sessionId: sessionId,
           conversationId: conversationId,
         );
@@ -786,6 +783,7 @@ class _ChatBotSheetState extends State<ChatBotSheet>
   Future<void> _finishAcpCancellationPresentation() async {
     try {
       await AgentRuntimeService.cancelPrompt(
+        agentId: widget.agentId,
         sessionId: _acpSessionId,
         conversationId: _currentConversationId,
         promptId: _acpPromptId,
@@ -1345,16 +1343,6 @@ class _ChatBotSheetState extends State<ChatBotSheet>
         conversationId: conversationId,
         mode: _runtimeMode,
       );
-      var status = await AgentRuntimeService.status();
-      if (!_canContinueAcpTurn(aiMessageId)) return false;
-      if (!status.connected) {
-        status = await AgentRuntimeService.connect();
-      }
-      if (!_canContinueAcpTurn(aiMessageId)) return false;
-      final activeAgentId = status.activeAgentId?.trim() ?? '';
-      if (activeAgentId.isNotEmpty) {
-        _activeAcpAgentId = activeAgentId;
-      }
       final catalog = await SceneModelConfigService.getSceneCatalog();
       final dispatchScene = catalog
           .where((item) => item.sceneId == 'scene.dispatch.model')
@@ -1364,6 +1352,7 @@ class _ChatBotSheetState extends State<ChatBotSheet>
       // session first so cancellation and late-event attribution have a
       // stable official identity before the potentially long prompt call.
       final sessionResponse = await AgentRuntimeService.newSession(
+        agentId: widget.agentId,
         conversationId: conversationId,
         model: dispatchScene?.effectiveModel.trim(),
         conversationMode: ConversationMode.agent.storageValue,
@@ -1394,7 +1383,7 @@ class _ChatBotSheetState extends State<ChatBotSheet>
         sessionId: _acpSessionId,
         conversationId: conversationId,
         requestId: aiMessageId,
-        agentId: status.activeAgentId,
+        agentId: widget.agentId,
         text: userMessage,
         attachments: attachments,
         model: dispatchScene?.effectiveModel.trim(),

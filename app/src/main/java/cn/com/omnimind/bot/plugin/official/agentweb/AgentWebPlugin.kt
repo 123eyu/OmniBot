@@ -38,7 +38,6 @@ internal class AgentWebPluginProvider(private val context: Context) : OmniPlugin
         kind = OmniPluginKind.BUNDLED_MODULE,
         capabilities = listOf(
             "OpenCode Web",
-            "DeepSeek Harness Web",
             "Kimi Code Web",
             "Validated loopback handoff",
         ),
@@ -81,9 +80,6 @@ internal object AgentWebTools {
     const val OPEN_KIMI = "open_kimi_web"
     const val KIMI_STATUS = "get_kimi_web_status"
     const val STOP_KIMI = "stop_kimi_web"
-    const val OPEN_DEEPSEEK = "open_deepseek_harness_web"
-    const val DEEPSEEK_STATUS = "get_deepseek_harness_web_status"
-    const val STOP_DEEPSEEK = "stop_deepseek_harness_web"
     const val OPEN_OPENCODE = "open_opencode_web"
     const val OPENCODE_STATUS = "get_opencode_web_status"
     const val STOP_OPENCODE = "stop_opencode_web"
@@ -92,9 +88,6 @@ internal object AgentWebTools {
         OPEN_KIMI,
         KIMI_STATUS,
         STOP_KIMI,
-        OPEN_DEEPSEEK,
-        DEEPSEEK_STATUS,
-        STOP_DEEPSEEK,
         OPEN_OPENCODE,
         OPENCODE_STATUS,
         STOP_OPENCODE,
@@ -118,25 +111,6 @@ internal object AgentWebTools {
             name = STOP_KIMI,
             displayName = "Stop Kimi Code Web",
             description = "Stop the managed Kimi Code Web process only after the user " +
-                "explicitly asks to stop or close it.",
-        ),
-        definition(
-            name = OPEN_DEEPSEEK,
-            displayName = "Open DeepSeek Harness Web",
-            description = "Open the installed DeepSeek Harness Web UI in the system browser. " +
-                "Call only after the user explicitly asks to open it. The loopback URL " +
-                "remains inside the native host and is never returned.",
-            efforts = listOf("off", "minimal", "low", "medium", "high", "xhigh", "max"),
-        ),
-        definition(
-            name = DEEPSEEK_STATUS,
-            displayName = "Get DeepSeek Harness Web status",
-            description = "Check whether the managed DeepSeek Harness Web process is starting or running.",
-        ),
-        definition(
-            name = STOP_DEEPSEEK,
-            displayName = "Stop DeepSeek Harness Web",
-            description = "Stop the managed DeepSeek Harness Web process only after the user " +
                 "explicitly asks to stop or close it.",
         ),
         definition(
@@ -189,20 +163,14 @@ internal object AgentWebActions {
     const val OPEN_KIMI = AgentWebTools.OPEN_KIMI
     const val KIMI_STATUS = AgentWebTools.KIMI_STATUS
     const val STOP_KIMI = AgentWebTools.STOP_KIMI
-    const val OPEN_DEEPSEEK = AgentWebTools.OPEN_DEEPSEEK
-    const val DEEPSEEK_STATUS = AgentWebTools.DEEPSEEK_STATUS
-    const val STOP_DEEPSEEK = AgentWebTools.STOP_DEEPSEEK
     const val OPEN_OPENCODE = AgentWebTools.OPEN_OPENCODE
     const val OPENCODE_STATUS = AgentWebTools.OPENCODE_STATUS
     const val STOP_OPENCODE = AgentWebTools.STOP_OPENCODE
 
     val ids = linkedSetOf(
         OPEN_KIMI,
-        OPEN_DEEPSEEK,
         KIMI_STATUS,
         STOP_KIMI,
-        DEEPSEEK_STATUS,
-        STOP_DEEPSEEK,
         OPEN_OPENCODE,
         OPENCODE_STATUS,
         STOP_OPENCODE,
@@ -226,28 +194,12 @@ internal object AgentWebActions {
             descriptionEn = "Open the local Web UI with the shared Provider and model",
         ),
         action(
-            id = OPEN_DEEPSEEK,
-            displayName = "DeepSeek Harness Web",
-            description = "Open the local DeepSeek Harness browser interface.",
-            packageId = AgentWebService.DEEPSEEK_HARNESS.packageId,
-            agentId = "deepseek-harness-acp",
-            quickLaunchOrder = 1,
-            statusAction = DEEPSEEK_STATUS,
-            stopAction = STOP_DEEPSEEK,
-            labelZh = "DeepSeek Harness Web",
-            labelEn = "DeepSeek Harness Web",
-            shortLabelZh = "DSH Web",
-            shortLabelEn = "DSH Web",
-            descriptionZh = "使用统一 Provider 和模型，在系统浏览器中打开本机 Web 界面",
-            descriptionEn = "Open the local Web UI with the shared Provider and model",
-        ),
-        action(
             id = OPEN_KIMI,
             displayName = "Kimi Code Web",
             description = "Open the local Kimi Code browser interface.",
             packageId = AgentWebService.KIMI.packageId,
             agentId = "kimi-code-acp",
-            quickLaunchOrder = 2,
+            quickLaunchOrder = 1,
             statusAction = KIMI_STATUS,
             stopAction = STOP_KIMI,
             labelZh = "Kimi Code Web",
@@ -266,16 +218,6 @@ internal object AgentWebActions {
             id = STOP_KIMI,
             displayName = "Stop Kimi Code Web",
             description = "Stop the managed Kimi Code Web process.",
-        ),
-        lifecycleAction(
-            id = DEEPSEEK_STATUS,
-            displayName = "Get DeepSeek Harness Web status",
-            description = "Report whether the managed DeepSeek Harness Web process is running.",
-        ),
-        lifecycleAction(
-            id = STOP_DEEPSEEK,
-            displayName = "Stop DeepSeek Harness Web",
-            description = "Stop the managed DeepSeek Harness Web process.",
         ),
         lifecycleAction(
             id = OPENCODE_STATUS,
@@ -358,14 +300,8 @@ private class AgentWebActionHandler(
                 AgentWebService.KIMI,
                 args.reasoningEffort(),
             )
-            AgentWebActions.OPEN_DEEPSEEK -> controller.open(
-                AgentWebService.DEEPSEEK_HARNESS,
-                args.reasoningEffort(),
-            )
             AgentWebActions.KIMI_STATUS -> controller.status(AgentWebService.KIMI)
             AgentWebActions.STOP_KIMI -> controller.stop(AgentWebService.KIMI)
-            AgentWebActions.DEEPSEEK_STATUS -> controller.status(AgentWebService.DEEPSEEK_HARNESS)
-            AgentWebActions.STOP_DEEPSEEK -> controller.stop(AgentWebService.DEEPSEEK_HARNESS)
             AgentWebActions.OPEN_OPENCODE -> controller.open(AgentWebService.OPENCODE, args.reasoningEffort())
             AgentWebActions.OPENCODE_STATUS -> controller.status(AgentWebService.OPENCODE)
             AgentWebActions.STOP_OPENCODE -> controller.stop(AgentWebService.OPENCODE)
@@ -400,14 +336,6 @@ private class AgentWebToolHandler(
                 )
                 AgentWebTools.KIMI_STATUS -> controller.status(AgentWebService.KIMI)
                 AgentWebTools.STOP_KIMI -> controller.stop(AgentWebService.KIMI)
-                AgentWebTools.OPEN_DEEPSEEK -> controller.open(
-                    AgentWebService.DEEPSEEK_HARNESS,
-                    args.reasoningEffort(),
-                )
-                AgentWebTools.DEEPSEEK_STATUS ->
-                    controller.status(AgentWebService.DEEPSEEK_HARNESS)
-                AgentWebTools.STOP_DEEPSEEK ->
-                    controller.stop(AgentWebService.DEEPSEEK_HARNESS)
                 AgentWebTools.OPEN_OPENCODE -> controller.open(AgentWebService.OPENCODE, args.reasoningEffort())
                 AgentWebTools.OPENCODE_STATUS -> controller.status(AgentWebService.OPENCODE)
                 AgentWebTools.STOP_OPENCODE -> controller.stop(AgentWebService.OPENCODE)

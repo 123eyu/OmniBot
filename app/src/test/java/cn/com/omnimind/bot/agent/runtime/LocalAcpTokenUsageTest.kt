@@ -2,6 +2,7 @@
 
 package cn.com.omnimind.bot.agent.runtime
 
+import com.rk.terminal.runtime.TerminalDistribution
 import cn.com.omnimind.baselib.database.AgentSessionBinding
 import cn.com.omnimind.baselib.database.TokenUsageRecord
 import cn.com.omnimind.bot.agent.AgentScheduleToolBridge
@@ -48,12 +49,11 @@ class LocalAcpTokenUsageTest {
         }
     }
 
-    @Test fun `completion retains admission conversation and model after a selection change`() = runBlocking {
+    @Test fun `completion retains admission conversation and model after mutable metadata changes`() = runBlocking {
         val fixture = fixture()
         fixture.beforeResponse = {
             fixture.binding = fixture.binding.copy(conversationId = 99)
             fixture.options.value = modelOptions("later-model")
-            fixture.runtime.setField("activeProfile", profile(AcpAgentProfileStore.XIAOWAN_AGENT_ID))
         }
         try {
             assertEquals("end_turn", fixture.prompt()["status"])
@@ -101,6 +101,8 @@ class LocalAcpTokenUsageTest {
         val messages = mutableListOf<Map<String, Any?>>()
         val runtime = LocalAcpRuntime(
             context, scope, bindings, store,
+            ownerAgentId = agentId,
+            currentDistribution = { TerminalDistribution.alpine },
             prepareLaunchEnvironment = { _, _ -> PreparedAcpLaunch(emptyMap()) },
             buildHandoffContext = { _, _ -> null },
             scheduleToolBridge = mock(AgentScheduleToolBridge::class.java),

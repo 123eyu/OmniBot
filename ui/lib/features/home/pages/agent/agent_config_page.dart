@@ -50,8 +50,6 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
   bool _naDevelopment = false;
   bool _naDevelopmentAvailable = false;
   bool _naSignedIn = false;
-  String? _reasoningEffort;
-  String? _permissionMode;
   bool _sharedModelLoading = true;
   bool _sharedModelSaving = false;
   List<ModelProviderProfileSummary> _providerProfiles = const [];
@@ -163,10 +161,6 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
     _configPath =
         payload['configPath']?.toString() ?? payload['path']?.toString() ?? '';
     _authPath = payload['authPath']?.toString() ?? '';
-    _reasoningEffort = payload['reasoningEffort']?.toString().trim();
-    _permissionMode = payload['permissionMode']?.toString().trim();
-    if (_reasoningEffort?.isEmpty == true) _reasoningEffort = null;
-    if (_permissionMode?.isEmpty == true) _permissionMode = null;
   }
 
   Future<void> _loadSharedModelSelection() async {
@@ -258,11 +252,6 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
         _sharedModelSaving = false;
         _changed = true;
       });
-      try {
-        await AgentRuntimeService.disconnect();
-      } catch (_) {
-        // The next ACP request still prepares the selected shared mapping.
-      }
       showToast(
         _text('Agent Provider / 模型已更新。', 'Agent Provider / model updated.'),
         type: ToastType.success,
@@ -339,16 +328,6 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
           final payload = await AgentRuntimeService.writeAgentConfig(
             _agent!.id,
             content: _contentController.text,
-            expectedRevision: _configRevision > 0 ? _configRevision : null,
-          );
-          if (!mounted) return;
-          _syncPayload(payload);
-          break;
-        case 'deepseek-harness':
-          final payload = await AgentRuntimeService.writeAgentConfig(
-            _agent!.id,
-            reasoningEffort: _reasoningEffort,
-            permissionMode: _permissionMode,
             expectedRevision: _configRevision > 0 ? _configRevision : null,
           );
           if (!mounted) return;
@@ -588,10 +567,6 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
       'codex' => _text('Codex API 配置', 'Codex API configuration'),
       'json' => _text('Claude Code 配置', 'Claude Code configuration'),
       'jsonc' => _text('OpenCode 配置', 'OpenCode configuration'),
-      'deepseek-harness' => _text(
-        'DeepSeek Harness 配置',
-        'DeepSeek Harness configuration',
-      ),
       'profile' => _text('ACP 启动配置', 'ACP launch configuration'),
       _ => _text('Agent 配置', 'Agent configuration'),
     };
@@ -615,10 +590,6 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
         '直接编辑 $_configPath；OpenCode 支持 JSON 和 JSONC。',
         'Edit $_configPath directly. OpenCode supports JSON and JSONC.',
       ),
-      'deepseek-harness' => _text(
-        '默认直接复用统一 Provider 和模型；这里仅保留官方 DSH 配置入口。安装官方 Harness 后，检测只检查当前运行状态。',
-        'The shared Provider and model are used by default. This page only keeps the official DSH configuration entry. After installation, Check only verifies the current runtime state.',
-      ),
       'profile' => _text(
         '保存不会中断当前对话；启动命令、参数与环境变量在下次启动 Agent 进程时生效。Provider 和模型由该 Agent 自身的配置管理。',
         'Saving does not interrupt the current conversation. Command, arguments, and environment changes apply when the Agent process next starts. Provider and model settings are managed by the Agent itself.',
@@ -632,7 +603,6 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
       'na-cloud' => _buildNaConnectionEditor(),
       'codex' => _buildCodexEditor(),
       'json' || 'jsonc' => _buildRawFileEditor(),
-      'deepseek-harness' => _buildDeepSeekHarnessEditor(),
       'profile' => _buildProfileEditor(),
       _ => Text(_text('没有可编辑的配置。', 'No editable configuration.')),
     };
@@ -736,79 +706,6 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
             'The selected Provider manages the connection and authentication. ChatGPT sign-in requires no separate API key. Official config: $_configPath; auth: $_authPath',
           ),
           style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDeepSeekHarnessEditor() {
-    return Column(
-      children: [
-        _buildSharedProviderModelSelector(),
-        const SizedBox(height: 14),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            _text('官方配置文件：$_configPath', 'Official config: $_configPath'),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
-        const SizedBox(height: 14),
-        InputDecorator(
-          decoration: InputDecoration(
-            labelText: _text('推理强度', 'Reasoning effort'),
-          ),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: OmniSettingsDropdown<String?>(
-              hint: _text('选择', 'Select'),
-              dropdownKey: ValueKey(
-                'deepseek-harness-reasoning-$_reasoningEffort',
-              ),
-              value: _reasoningEffort,
-              options: const [
-                OmniSettingsOption(value: 'off', label: 'Off'),
-                OmniSettingsOption(value: 'high', label: 'High'),
-                OmniSettingsOption(value: 'max', label: 'Max'),
-              ],
-              onChanged: (value) {
-                if (value != null) setState(() => _reasoningEffort = value);
-              },
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        InputDecorator(
-          decoration: InputDecoration(
-            labelText: _text('权限模式', 'Permission mode'),
-          ),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: OmniSettingsDropdown<String?>(
-              hint: _text('选择', 'Select'),
-              dropdownKey: ValueKey(
-                'deepseek-harness-permission-$_permissionMode',
-              ),
-              value: _permissionMode,
-              options: [
-                OmniSettingsOption(
-                  value: 'read-only',
-                  label: _text('只读', 'Read-only'),
-                ),
-                OmniSettingsOption(
-                  value: 'workspace-write',
-                  label: _text('工作区可写', 'Workspace write'),
-                ),
-                OmniSettingsOption(
-                  value: 'danger-full-access',
-                  label: _text('完全访问', 'Full access'),
-                ),
-              ],
-              onChanged: (value) {
-                if (value != null) setState(() => _permissionMode = value);
-              },
-            ),
-          ),
         ),
       ],
     );

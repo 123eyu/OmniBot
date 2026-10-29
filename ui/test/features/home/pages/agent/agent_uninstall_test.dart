@@ -70,7 +70,6 @@ void main() {
 
   Map<String, dynamic> catalog(List<Map<String, dynamic>> agents) => {
     'distributionId': 'ubuntu',
-    'selectedAgentId': 'pi-acp',
     'agents': agents,
   };
 
@@ -104,7 +103,6 @@ void main() {
         'codex-acp',
         'claude-code-acp',
         'opencode-acp',
-        'deepseek-harness-acp',
         'kimi-code-acp',
       ];
       final agents = [
@@ -383,7 +381,7 @@ void main() {
   ) async {
     messenger.setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'agent/list') {
-        return catalog([agent('DeepSeek Harness')]);
+        return catalog([agent('Custom Long Agent Name')]);
       }
       return null;
     });
@@ -392,7 +390,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Uninstall'), findsOneWidget);
     expect(find.text('Update'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('agent-uninstall-DeepSeek Harness')));
+    await tester.tap(
+      find.byKey(const Key('agent-uninstall-Custom Long Agent Name')),
+    );
     await tester.pumpAndSettle();
     expect(
       find.textContaining(
