@@ -67,6 +67,106 @@ void main() {
         .setMockMethodCallHandler(pluginPlatformChannel, null);
   });
 
+  for (final scenario in [
+    (width: 1100.0, scale: 1.0, inline: true),
+    (width: 500.0, scale: 1.0, inline: false),
+    (width: 1100.0, scale: 2.0, inline: false),
+  ]) {
+    testWidgets(
+      'Agent maintenance adapts at ${scenario.width}dp and ${scenario.scale}x text',
+      (tester) async {
+        tester.view.physicalSize = Size(scenario.width, 1000);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = scenario.scale;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final calls = <MethodCall>[];
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
+              calls.add(call);
+              if (call.method != 'agent/list') return null;
+              return {
+                'distributionId': 'pad-layout-test',
+                'agents': [
+                  {
+                    ..._agent(
+                      'kimi-code-acp',
+                      'Kimi Code',
+                      'kimi',
+                      'unchecked',
+                      managedAdapter: true,
+                    ),
+                    'uninstallable': true,
+                  },
+                ],
+              };
+            });
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.lightTheme,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('zh'),
+            home: const AgentModeSettingPage(embedded: true),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final action = find.byKey(const Key('agent-check-kimi-code-acp'));
+        final uninstall = find.byKey(
+          const Key('agent-uninstall-kimi-code-acp'),
+        );
+        final navigation = find.byKey(
+          const Key('agent-navigation-kimi-code-acp'),
+        );
+        for (final control in [action, uninstall, navigation]) {
+          expect(
+            tester.getSize(control).shortestSide,
+            greaterThanOrEqualTo(48),
+          );
+        }
+        final actionBounds = tester.getRect(action);
+        final navigationBounds = tester.getRect(navigation);
+        if (scenario.inline) {
+          expect(
+            actionBounds.center.dy,
+            closeTo(navigationBounds.center.dy, 1),
+          );
+          expect(
+            actionBounds.left,
+            greaterThan(tester.getRect(find.text('Kimi Code')).right),
+          );
+        } else {
+          expect(
+            actionBounds.top,
+            greaterThanOrEqualTo(navigationBounds.bottom),
+          );
+        }
+        expect(tester.widget<IconButton>(navigation).onPressed, isNotNull);
+        // Reflowing a row must not remove the existing uninstall confirmation.
+        await tester.tap(uninstall);
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('agent-uninstall-confirm-kimi-code-acp')),
+          findsOneWidget,
+        );
+        expect(
+          calls.where((call) => call.method == 'agent/uninstall'),
+          isEmpty,
+        );
+        await tester.tap(
+          find.byKey(const Key('agent-uninstall-cancel-kimi-code-acp')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          calls.where((call) => call.method == 'agent/uninstall'),
+          isEmpty,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets('embedded contacts keep search and filters when reactivated', (
     tester,
   ) async {
@@ -540,11 +640,12 @@ void main() {
       findsNothing,
     ); // No separate Na route tile.
     expect(
-      tester.getTopLeft(find.byKey(const Key('agent-check-kimi-code-acp'))).dy,
-      greaterThan(
+      tester.getCenter(find.byKey(const Key('agent-check-kimi-code-acp'))).dy,
+      closeTo(
         tester
-            .getTopLeft(find.byKey(const Key('agent-navigation-kimi-code-acp')))
+            .getCenter(find.byKey(const Key('agent-navigation-kimi-code-acp')))
             .dy,
+        1,
       ),
     );
     expect(find.text('远程 PC Bridge'), findsOneWidget);
@@ -731,6 +832,14 @@ void main() {
       await tester.pump();
 
       expect(find.text('后台安装 / 升级中'), findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const Key('agent-navigation-kimi-code-acp')),
+            )
+            .onPressed,
+        isNull,
+      );
       await tester.tap(find.byTooltip('添加自定义 ACP Agent'));
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('添加自定义 ACP Agent'), findsOneWidget);

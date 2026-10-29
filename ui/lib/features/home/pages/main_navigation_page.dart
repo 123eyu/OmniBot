@@ -138,6 +138,9 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
                         ),
                       ),
                       child: FlClashTabView(
+                        scrollDirection: useRail
+                            ? Axis.vertical
+                            : Axis.horizontal,
                         selectedIndex: _index,
                         itemCount: MainNavigationTab.values.length,
                         builder: _page,

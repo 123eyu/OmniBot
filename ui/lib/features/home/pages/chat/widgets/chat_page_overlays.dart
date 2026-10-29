@@ -76,44 +76,6 @@ class _ChatPaneVisibility extends StatelessWidget {
   );
 }
 
-class _PaneResizeHandle extends StatelessWidget {
-  const _PaneResizeHandle({
-    required this.onDragUpdate,
-    this.onDragStart,
-    this.onDragEnd,
-  });
-
-  final ValueChanged<double> onDragUpdate;
-  final VoidCallback? onDragStart;
-  final VoidCallback? onDragEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeColumn,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragStart: (_) => onDragStart?.call(),
-        onHorizontalDragUpdate: (details) => onDragUpdate(details.delta.dx),
-        onHorizontalDragEnd: (_) => onDragEnd?.call(),
-        onHorizontalDragCancel: () => onDragEnd?.call(),
-        child: SizedBox(
-          width: HdPadPaneLayoutResolver.dividerHitWidth,
-          child: Center(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: context.omniPalette.borderStrong,
-                borderRadius: const BorderRadius.all(Radius.circular(999)),
-              ),
-              child: SizedBox(width: 3, height: 52),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _ContextThresholdSheet extends StatefulWidget {
   const _ContextThresholdSheet({
     required this.initialThreshold,

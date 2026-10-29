@@ -152,6 +152,12 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       );
       if (_wasChatWorkspace == true && !isChatWorkspace) {
         _embeddedDrawerKey.currentState?.unfocusSearch();
+        if (_isHdPadPaneDragging) {
+          _resetHdPadPaneDragState();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _persistHdPadPanePreferences();
+          });
+        }
       }
       _wasChatWorkspace = isChatWorkspace;
       if (isChatWorkspace && _activeSurfaceMode == ChatSurfaceMode.workspace) {

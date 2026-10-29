@@ -26,7 +26,12 @@ void main() {
       expect(layout.leftWidth, greaterThan(0));
       expect(layout.rightWidth, 0);
       expect(layout.centerWidth, greaterThanOrEqualTo(420));
-      expect(layout.leftWidth + layout.centerWidth + 12, width - 16);
+      expect(
+        layout.leftWidth +
+            layout.centerWidth +
+            HdPadPaneLayoutResolver.dividerHitWidth,
+        width - 16,
+      );
     }
   });
 
@@ -35,14 +40,20 @@ void main() {
     expect(layout.leftWidth, 0);
     expect(layout.rightWidth, greaterThanOrEqualTo(240));
     expect(layout.centerWidth, greaterThanOrEqualTo(420));
-    expect(layout.rightWidth + layout.centerWidth + 12, 752);
+    expect(
+      layout.rightWidth +
+          layout.centerWidth +
+          HdPadPaneLayoutResolver.dividerHitWidth,
+      752,
+    );
   });
 
   test('narrow and invalid constraints never overflow or return negatives', () {
     for (final width in [0.0, 300.0, 600.0, 650.0, 900.0, 1366.0]) {
       final layout = resolver.resolve(width);
       final dividers =
-          (layout.leftWidth > 0 ? 12 : 0) + (layout.rightWidth > 0 ? 12 : 0);
+          (layout.leftWidth > 0 ? HdPadPaneLayoutResolver.dividerHitWidth : 0) +
+          (layout.rightWidth > 0 ? HdPadPaneLayoutResolver.dividerHitWidth : 0);
       expect(
         layout.leftWidth + layout.centerWidth + layout.rightWidth + dividers,
         closeTo(width, .001),

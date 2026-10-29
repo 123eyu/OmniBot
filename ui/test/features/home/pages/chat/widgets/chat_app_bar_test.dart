@@ -26,6 +26,7 @@ class _SvgTestAssetBundle extends CachingAssetBundle {
 }
 
 Widget _app({
+  String title = 'Inspect the current workspace',
   String? selectedAgent = 'xiaowan-acp',
   List<ChatAcpAgentModeOption> agents = const [
     ChatAcpAgentModeOption(id: 'xiaowan-acp', name: 'OmniBot Agent'),
@@ -46,15 +47,18 @@ Widget _app({
   bool pure = false,
   bool showTerminalActions = true,
   bool translucent = false,
+  bool usePadLayout = false,
   AppBackgroundVisualProfile visualProfile =
       AppBackgroundVisualProfile.defaultProfile,
   ChatSurfaceMode surface = ChatSurfaceMode.normal,
   List<ChatAppBarAction> actions = const [],
   VisualDensity? buttonDensity,
+  Brightness brightness = Brightness.light,
 }) => DefaultAssetBundle(
   bundle: _SvgTestAssetBundle(),
   child: MaterialApp(
     theme: ThemeData(
+      brightness: brightness,
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(visualDensity: buttonDensity),
       ),
@@ -63,11 +67,13 @@ Widget _app({
       body: Column(
         children: [
           ChatAppBar(
-            title: 'Inspect the current workspace',
+            title: title,
+            usePadLayout: usePadLayout,
             onMenuTap: onBack ?? () {},
             onConversationPaneTap: onSidebar,
             showWorkspacePaneButton: onWorkspace != null,
             onWorkspacePaneTap: onWorkspace,
+            showSurfaceSwitcher: onSidebar == null,
             conversationPaneVisible: sidebarVisible,
             workspacePaneVisible: workspaceVisible,
             onPetTap: onPet,
@@ -100,7 +106,71 @@ Future<void> _openActions(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('Pad pane controls remain usable in a 420dp chat column', (
+  testWidgets(
+    '668dp portrait Pad keeps its title hierarchy without pane controls',
+    (tester) async {
+      tester.view.physicalSize = const Size(668, 1069);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var backs = 0;
+      await tester.pumpWidget(_app(usePadLayout: true, onBack: () => backs++));
+      await tester.pumpAndSettle();
+      final title = find.byKey(const ValueKey('chat-app-bar-title'));
+      final subtitle = find.byKey(const ValueKey('chat-app-bar-mode-label'));
+      final more = find.byKey(const ValueKey('chat-app-bar-more-button'));
+      expect(tester.widget<Text>(title).style!.fontSize, 20);
+      expect(
+        tester.getRect(title).bottom,
+        lessThan(tester.getRect(subtitle).top),
+      );
+      expect(tester.getSize(find.byType(ChatAppBar)).height, 80);
+      expect(
+        find.byKey(const ValueKey('chat-app-bar-layout-button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('chat-app-bar-sidebar-button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('chat-app-bar-workspace-button')),
+        findsNothing,
+      );
+      expect(tester.getRect(more).left - tester.getRect(subtitle).right, 12);
+      expect(find.byType(OmniCircleButton), findsNWidgets(2));
+      await tester.tap(find.byKey(const ValueKey('chat-app-bar-menu-button')));
+      expect(backs, 1);
+      await _openActions(tester);
+      expect(find.text('Workspace files'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('390dp phone retains the compact single-line header', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(_app());
+    await tester.pumpAndSettle();
+    final title = find.byKey(const ValueKey('chat-app-bar-title'));
+    final mark = find.byKey(const ValueKey('chat-app-bar-mode-icon'));
+    expect(tester.widget<Text>(title).style!.fontSize, 17);
+    expect(tester.getCenter(title).dy, closeTo(tester.getCenter(mark).dy, .1));
+    expect(tester.getSize(find.byType(ChatAppBar)).height, 58);
+    expect(find.byKey(const ValueKey('chat-app-bar-mode-label')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('chat-app-bar-layout-button')),
+      findsNothing,
+    );
+    expect(find.byType(OmniCircleButton), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Pad layout menu preserves title space in a 420dp chat column', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(420, 900);
@@ -117,19 +187,206 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final sidebar = find.byKey(const ValueKey('chat-app-bar-sidebar-button'));
-    final workspace = find.byKey(
-      const ValueKey('chat-app-bar-workspace-button'),
+    final layout = find.byKey(const ValueKey('chat-app-bar-layout-button'));
+    expect(tester.getSize(layout), const Size.square(48));
+    expect(
+      find.byKey(const ValueKey('chat-app-bar-sidebar-button')),
+      findsNothing,
     );
-    expect(tester.getSize(sidebar), const Size.square(48));
-    expect(tester.getSize(workspace), const Size.square(48));
-    await tester.tap(sidebar);
-    await tester.tap(workspace);
+    expect(
+      find.byKey(const ValueKey('chat-app-bar-workspace-button')),
+      findsNothing,
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('chat-app-bar-title'))).width,
+      greaterThan(200),
+    );
+    await tester.tap(layout);
+    await tester.pumpAndSettle();
+    expect(find.text('Hide conversations'), findsOneWidget);
+    expect(find.text('Show workspace'), findsOneWidget);
+    expect(find.text('Ctrl+B'), findsOneWidget);
+    expect(find.text('Ctrl+E'), findsOneWidget);
+    await tester.tap(find.text('Hide conversations'));
+    await tester.pumpAndSettle();
+    await tester.tap(layout);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show workspace'));
+    await tester.pumpAndSettle();
+    expect(sidebarTaps, 1);
+    expect(workspaceTaps, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Pad controls adapt to the column width and keep their owner', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(720, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var sidebarTaps = 0;
+    var workspaceTaps = 0;
+    var backTaps = 0;
+    await tester.pumpWidget(
+      _app(
+        onBack: () => backTaps++,
+        onSidebar: () => sidebarTaps++,
+        onWorkspace: () => workspaceTaps++,
+        sidebarVisible: true,
+        workspaceVisible: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final appBar = tester.element(find.byType(ChatAppBar));
+    expect(
+      find.byKey(const ValueKey('chat-app-bar-layout-button')),
+      findsNothing,
+    );
+    for (final key in ['sidebar', 'workspace']) {
+      final control = find.byKey(ValueKey('chat-app-bar-$key-button'));
+      expect(tester.getSize(control), const Size.square(48));
+      await tester.tap(control);
+    }
     expect(sidebarTaps, 1);
     expect(workspaceTaps, 1);
     expect(find.byTooltip('Hide conversations (Ctrl+B)'), findsOneWidget);
-    expect(find.byTooltip('Show workspace (Ctrl+E)'), findsOneWidget);
+    expect(find.byTooltip('Hide workspace (Ctrl+E)'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('chat-app-bar-menu-button')));
+    expect(backTaps, 1);
+    tester.view.physicalSize = const Size(420, 900);
+    await tester.pumpAndSettle();
+    expect(tester.element(find.byType(ChatAppBar)), same(appBar));
+    expect(
+      find.byKey(const ValueKey('chat-app-bar-layout-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('chat-app-bar-sidebar-button')),
+      findsNothing,
+    );
+    expect(sidebarTaps, 1);
+    expect(workspaceTaps, 1);
     expect(tester.takeException(), isNull);
+  });
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'Pad title supports large text and ${brightness.name} wallpaper',
+      (tester) async {
+        tester.view.physicalSize = const Size(420, 900);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final profile = AppBackgroundVisualProfile(
+          sampledImageLuminance: brightness == Brightness.dark ? .05 : .95,
+          effectiveLuminance: brightness == Brightness.dark ? .05 : .95,
+          textTone: brightness == Brightness.dark
+              ? AppBackgroundTextTone.light
+              : AppBackgroundTextTone.dark,
+        );
+        const title =
+            'A detailed conversation title that must remain available in full';
+        var modeChanges = 0;
+        await tester.pumpWidget(
+          _app(
+            title: title,
+            brightness: brightness,
+            translucent: true,
+            visualProfile: profile,
+            onSidebar: () {},
+            onWorkspace: () {},
+            onMode: (_) => modeChanges++,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final titleFinder = find.byKey(const ValueKey('chat-app-bar-title'));
+        final subtitle = find.byKey(const ValueKey('chat-app-bar-mode-label'));
+        expect(
+          tester.getRect(titleFinder).bottom,
+          lessThan(tester.getRect(subtitle).top),
+        );
+        expect(
+          tester.widget<Text>(titleFinder).style!.color,
+          profile.appBarIconColor,
+        );
+        expect(find.byTooltip(title), findsOneWidget);
+        expect(
+          tester
+              .widget<ColoredBox>(
+                find.byKey(const ValueKey('chat-app-bar-background')),
+              )
+              .color,
+          Colors.transparent,
+        );
+        expect(tester.getSize(find.byType(ChatAppBar)).height, greaterThan(80));
+        await tester.tap(titleFinder);
+        await tester.pumpAndSettle();
+        expect(modeChanges, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('Pad menus support keyboard activation and cancellation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var sidebarTaps = 0;
+    await tester.pumpWidget(
+      _app(onSidebar: () => sidebarTaps++, onWorkspace: () {}),
+    );
+    await tester.pumpAndSettle();
+    final layoutIcon = find.descendant(
+      of: find.byKey(const ValueKey('chat-app-bar-layout-button')),
+      matching: find.byType(Icon),
+    );
+    Focus.of(tester.element(layoutIcon)).requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('Show conversations'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(sidebarTaps, 0);
+    expect(find.text('Show conversations'), findsNothing);
+    Focus.of(tester.element(layoutIcon)).requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    final itemText = find.text('Show conversations');
+    Focus.of(tester.element(itemText)).requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(sidebarTaps, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Pad workspace menu describes the current visibility', (
+    tester,
+  ) async {
+    var workspaceTaps = 0;
+    for (final visible in [true, false]) {
+      await tester.pumpWidget(
+        _app(
+          onSidebar: () {},
+          onWorkspace: () => workspaceTaps++,
+          workspaceVisible: visible,
+        ),
+      );
+      await _openActions(tester);
+      await tester.tap(
+        find.text(visible ? 'Hide workspace' : 'Show workspace'),
+      );
+      await tester.pumpAndSettle();
+    }
+    expect(workspaceTaps, 2);
   });
 
   testWidgets('phone header keeps the compact navigation controls', (

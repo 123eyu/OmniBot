@@ -34,6 +34,10 @@ void main() {
     'dock-light-ultra': flClashNavigationGlassLightUltraPreview,
     'dock-dark-standard': flClashNavigationGlassDarkStandardPreview,
     'dock-dark-ultra': flClashNavigationGlassDarkUltraPreview,
+    'rail-light-standard': flClashRailGlassLightStandardPreview,
+    'rail-light-ultra': flClashRailGlassLightUltraPreview,
+    'rail-dark-standard': flClashRailGlassDarkStandardPreview,
+    'rail-dark-ultra': flClashRailGlassDarkUltraPreview,
     'search-light-standard': flClashSearchGlassLightStandardPreview,
     'search-light-ultra': flClashSearchGlassLightUltraPreview,
     'search-dark-standard': flClashSearchGlassDarkStandardPreview,
@@ -43,7 +47,10 @@ void main() {
     testWidgets('${preview.key} preview renders and toggles its material', (
       tester,
     ) async {
-      tester.view.physicalSize = const Size(390, 300);
+      final rail = preview.key.startsWith('rail-');
+      tester.view.physicalSize = rail
+          ? const Size(390, 540)
+          : const Size(390, 300);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -54,17 +61,35 @@ void main() {
       await tester.pumpAndSettle();
       expect(LiquidGlassHost.debugHeldCaptures, greaterThan(0));
       expect(tester.takeException(), isNull);
-      if (output.isNotEmpty) {
+      Future<void> capture(String name) async {
+        if (output.isEmpty) return;
         final boundary =
             key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
         final image = boundary.toImageSync();
         await tester.runAsync(() async {
           final png = await image.toByteData(format: ui.ImageByteFormat.png);
           await Directory(output).create(recursive: true);
-          await File('$output/${preview.key}.png')
+          await File('$output/$name.png')
               .writeAsBytes(png!.buffer.asUint8List());
           image.dispose();
         });
+      }
+
+      await capture(preview.key);
+      if (rail) {
+        final first = find.byKey(const ValueKey('main-navigation-rail-0'));
+        final third = find.byKey(const ValueKey('main-navigation-rail-2'));
+        final gesture = await tester.startGesture(tester.getCenter(first));
+        await tester.pump(const Duration(milliseconds: 100));
+        await gesture.moveTo(tester.getCenter(third));
+        // Start the retargeted spring's ticker before advancing its time.
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 160));
+        expect(find.byType(LiquidGlass).evaluate().length, greaterThan(1));
+        await capture('${preview.key}-drag');
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
       }
       await tester.tap(
         find.text(preview.key.endsWith('standard') ? '极致' : '标准'),

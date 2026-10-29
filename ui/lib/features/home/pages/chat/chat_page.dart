@@ -86,6 +86,7 @@ import 'mixins/conversation_manager.dart';
 import 'chat_page_models.dart';
 import 'widgets/chat_widgets.dart';
 import 'widgets/chat_keyboard_layout.dart';
+import 'widgets/chat_pane_resize_handle.dart';
 import 'widgets/chat_message_viewport.dart';
 import 'widgets/chat_browser_overlay.dart';
 import 'widgets/chat_history_loading_transition.dart';
@@ -124,6 +125,7 @@ enum _SlashCommandPanelRoute { root, effort, agentModel }
 
 const String _kRemoteCodexModeAgentId = 'codex-remote';
 const String _kXiaowanAcpAgentId = 'xiaowan-acp';
+const double _kHdPadShellHorizontalPadding = 4;
 
 class ChatPage extends StatefulWidget {
   final ConversationThreadTarget? threadTarget;
@@ -727,7 +729,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
           _hdPadLastLayoutWidth ??
           MediaQuery.sizeOf(context).width -
               MediaQuery.viewPaddingOf(context).horizontal -
-              16,
+              _kHdPadShellHorizontalPadding * 2,
       preferredLeftWidth: _hdPadLeftPaneWidth,
       preferredRightWidth: _hdPadRightPaneWidth,
       collapseLeftPane: _hdPadLeftPaneCollapsed,

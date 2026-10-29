@@ -14,6 +14,7 @@ import 'package:ui/features/home/pages/chat/widgets/acp_config_button.dart';
 import 'package:ui/features/home/pages/chat/widgets/chat_empty_greeting.dart';
 import 'package:ui/features/home/pages/chat/widgets/chat_spotlight_tour.dart';
 import 'package:ui/features/home/pages/chat/widgets/chat_widgets.dart';
+import 'package:ui/features/home/pages/chat/widgets/chat_pane_resize_handle.dart';
 import 'package:ui/features/home/pages/chat/widgets/new_conversation_mode_selector.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/chat_input_area.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
@@ -539,11 +540,34 @@ void main() {
       final controller = composer(tester).controller;
       controller.text = '旋转平板后仍保留的草稿';
       final focusNode = composer(tester).focusNode;
-      final sidebar = find.byKey(const ValueKey('chat-app-bar-sidebar-button'));
-      final workspace = find.byKey(
-        const ValueKey('chat-app-bar-workspace-button'),
-      );
-      expect(sidebar, findsOneWidget);
+      Future<void> togglePane({required bool conversation}) async {
+        final direct = find.byKey(
+          ValueKey(
+            conversation
+                ? 'chat-app-bar-sidebar-button'
+                : 'chat-app-bar-workspace-button',
+          ),
+        );
+        if (direct.evaluate().isNotEmpty) {
+          await tester.tap(direct);
+        } else {
+          await tester.tap(
+            find.byKey(const ValueKey('chat-app-bar-layout-button')),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.byKey(
+              ValueKey(
+                conversation
+                    ? 'chat-app-bar-layout-conversations'
+                    : 'chat-app-bar-layout-workspace',
+              ),
+            ),
+          );
+        }
+        await tester.pumpAndSettle();
+      }
+
       expect(
         tester
             .widget<ChatAppBar>(find.byType(ChatAppBar))
@@ -554,7 +578,7 @@ void main() {
         tester.widget<ChatAppBar>(find.byType(ChatAppBar)).workspacePaneVisible,
         isFalse,
       );
-      await tester.tap(sidebar);
+      await togglePane(conversation: true);
       await tester.pumpAndSettle();
       expect(
         tester
@@ -578,7 +602,7 @@ void main() {
             .conversationPaneVisible,
         isTrue,
       );
-      await tester.tap(workspace);
+      await togglePane(conversation: false);
       await tester.pumpAndSettle();
       expect(
         tester.widget<ChatAppBar>(find.byType(ChatAppBar)).workspacePaneVisible,
@@ -590,7 +614,7 @@ void main() {
             .conversationPaneVisible,
         isFalse,
       );
-      await tester.tap(sidebar);
+      await togglePane(conversation: true);
       await tester.pumpAndSettle();
       expect(
         tester
@@ -623,12 +647,50 @@ void main() {
             tester.getRect(find.byType(ChatInputArea)).bottom,
             lessThanOrEqualTo(size.height - 160),
           );
-          expect(sidebar, findsOneWidget);
+          expect(
+            find
+                    .byKey(const ValueKey('chat-app-bar-sidebar-button'))
+                    .evaluate()
+                    .isNotEmpty ||
+                find
+                    .byKey(const ValueKey('chat-app-bar-layout-button'))
+                    .evaluate()
+                    .isNotEmpty,
+            isTrue,
+          );
           tester.view.viewInsets = FakeViewPadding.zero;
           await tester.pumpAndSettle();
         }
         expect(tester.takeException(), isNull);
       }
+      // A split-window resize can unmount the divider while the pointer is
+      // still down. Returning to Pad layout must accept a fresh transaction.
+      final resizeHandle = find.byKey(
+        const ValueKey('chat-conversation-resize-handle'),
+      );
+      final drag = await tester.startGesture(tester.getCenter(resizeHandle));
+      await drag.moveBy(const Offset(30, 0));
+      await tester.pump();
+      await drag.moveBy(const Offset(20, 0));
+      await tester.pump();
+      tester.view.physicalSize = const Size(600, 960);
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatPaneResizeHandle), findsNothing);
+      await drag.up();
+      tester.view.physicalSize = const Size(768, 1024);
+      await tester.pumpAndSettle();
+      await togglePane(conversation: true);
+      await togglePane(conversation: true);
+      final dividerAnimation = tester.widget<AnimatedContainer>(
+        find
+            .ancestor(
+              of: resizeHandle,
+              matching: find.byType(AnimatedContainer),
+            )
+            .first,
+      );
+      expect(dividerAnimation.duration, const Duration(milliseconds: 280));
+      expect(controller.text, '旋转平板后仍保留的草稿');
       focusNode.requestFocus();
       await tester.pump();
       tester.view.viewInsets = const FakeViewPadding(bottom: 340);
@@ -637,7 +699,17 @@ void main() {
         tester.getRect(find.byType(ChatInputArea)).bottom,
         lessThanOrEqualTo(684),
       );
-      expect(sidebar, findsOneWidget);
+      expect(
+        find
+                .byKey(const ValueKey('chat-app-bar-sidebar-button'))
+                .evaluate()
+                .isNotEmpty ||
+            find
+                .byKey(const ValueKey('chat-app-bar-layout-button'))
+                .evaluate()
+                .isNotEmpty,
+        isTrue,
+      );
       expectNoSessionAdmission();
       expectNoPersistedDraft();
       await disposeChat(tester);
@@ -800,6 +872,95 @@ void main() {
       await disposeChat(tester);
     },
   );
+
+  for (final keyboardAlreadyOpen in [false, true]) {
+    testWidgets('Pad history search keeps the greeting at rest '
+        '(keyboardAlreadyOpen=$keyboardAlreadyOpen)', (tester) async {
+      addTearDown(tester.view.resetViewInsets);
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.newConversation(
+          mode: ConversationMode.agent,
+          requestKey: 'pad-search-keyboard',
+          agentId: 'xiaowan-acp',
+        ),
+        size: const Size(1069, 668),
+      );
+      final input = composer(tester);
+      input.focusNode.unfocus();
+      await tester.pumpAndSettle();
+      final greeting = find.byType(ChatEmptyGreeting);
+      AlignmentGeometry greetingAlignment() => tester
+          .widget<AnimatedAlign>(
+            find.ancestor(of: greeting, matching: find.byType(AnimatedAlign)),
+          )
+          .alignment;
+      const restingAlignment = Alignment(0, -.18);
+      final restingPosition = tester.getTopLeft(greeting);
+      final restingComposerBottom = tester
+          .getRect(find.byType(ChatInputArea))
+          .bottom;
+      expect(greetingAlignment(), restingAlignment);
+
+      if (keyboardAlreadyOpen) {
+        input.focusNode.requestFocus();
+        await tester.pump();
+        tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+        await tester.pumpAndSettle();
+        expect(greetingAlignment(), Alignment.topLeft);
+      }
+
+      await tester.tap(find.byKey(const ValueKey('home-search-button')));
+      await tester.pumpAndSettle();
+      final searchFocus = tester
+          .widget<TextField>(
+            find.descendant(
+              of: find.byType(HomeDrawer),
+              matching: find.byType(TextField),
+            ),
+          )
+          .focusNode!;
+      expect(searchFocus.hasFocus, isTrue);
+      expect(input.focusNode.hasFocus, isFalse);
+      expect(greetingAlignment(), restingAlignment);
+
+      for (final inset
+          in keyboardAlreadyOpen ? [280.0] : [40.0, 140.0, 280.0]) {
+        tester.view.viewInsets = FakeViewPadding(bottom: inset);
+        await tester.pumpAndSettle();
+        expect(greetingAlignment(), restingAlignment);
+        expect(tester.getTopLeft(greeting).dx, closeTo(restingPosition.dx, .5));
+        expect(tester.getTopLeft(greeting).dy, closeTo(restingPosition.dy, .5));
+        expect(
+          tester.getRect(find.byType(ChatInputArea)).bottom,
+          closeTo(restingComposerBottom, .5),
+        );
+      }
+
+      // Focus ownership can change without any new keyboard-metrics event.
+      input.focusNode.requestFocus();
+      await tester.pumpAndSettle();
+      expect(greetingAlignment(), Alignment.topLeft);
+      searchFocus.requestFocus();
+      await tester.pumpAndSettle();
+      expect(greetingAlignment(), restingAlignment);
+      await tester.tap(find.byKey(const ValueKey('home-close-search')));
+      await tester.pumpAndSettle();
+      expect(greetingAlignment(), restingAlignment);
+
+      // Unmounting the focused sidebar must not notify during tree disposal.
+      await tester.tap(find.byKey(const ValueKey('home-search-button')));
+      await tester.pumpAndSettle();
+      tester.view.physicalSize = const Size(668, 1069);
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeDrawer), findsNothing);
+      expect(greetingAlignment(), restingAlignment);
+      expect(tester.takeException(), isNull);
+      expectNoSessionAdmission();
+      expectNoPersistedDraft();
+      await disposeChat(tester);
+    });
+  }
 
   for (final existing in [false, true]) {
     testWidgets('chat keeps its editor and messages above the keyboard without rebuilding page content '
@@ -1467,36 +1628,51 @@ void main() {
 
   for (final owner in ['xiaowan-acp', 'codex-remote']) {
     for (final leave in ['dispose', 'switch-agent', 'switch-mode']) {
-      testWidgets('unused config session closes with its creation owner: $owner/$leave', (tester) async {
-        useRemoteRuntime = owner == 'codex-remote';
-        await pumpChat(
-          tester,
-          ConversationThreadTarget.newConversation(
-            agentId: owner,
-            agentRuntime: owner == 'codex-remote' ? 'remote' : 'local',
-          ),
-        );
-        await tester.tap(find.byKey(const ValueKey('chat-acp-config-button')));
-        await tester.pumpAndSettle();
-        final created = agentCalls.singleWhere((call) => call.method == 'session/new');
-        expect((created.arguments as Map)['agentId'], owner);
-        await dismissConfigPanel(tester);
-        if (leave == 'switch-agent') {
-          await chooseMode(tester, owner == 'xiaowan-acp' ? 'codex-acp' : 'xiaowan-acp');
-        } else if (leave == 'switch-mode') {
-          await chooseMode(tester, kNewConversationPureChatModeId);
-        }
-        await disposeChat(tester);
+      testWidgets(
+        'unused config session closes with its creation owner: $owner/$leave',
+        (tester) async {
+          useRemoteRuntime = owner == 'codex-remote';
+          await pumpChat(
+            tester,
+            ConversationThreadTarget.newConversation(
+              agentId: owner,
+              agentRuntime: owner == 'codex-remote' ? 'remote' : 'local',
+            ),
+          );
+          await tester.tap(
+            find.byKey(const ValueKey('chat-acp-config-button')),
+          );
+          await tester.pumpAndSettle();
+          final created = agentCalls.singleWhere(
+            (call) => call.method == 'session/new',
+          );
+          expect((created.arguments as Map)['agentId'], owner);
+          await dismissConfigPanel(tester);
+          if (leave == 'switch-agent') {
+            await chooseMode(
+              tester,
+              owner == 'xiaowan-acp' ? 'codex-acp' : 'xiaowan-acp',
+            );
+          } else if (leave == 'switch-mode') {
+            await chooseMode(tester, kNewConversationPureChatModeId);
+          }
+          await disposeChat(tester);
 
-        final closes = agentCalls.where((call) => call.method == 'session/close');
-        expect(closes, hasLength(1));
-        expect(closes.single.arguments, {
-          'sessionId': 'new-draft-session',
-          'agentId': owner,
-        });
-        expect(agentCalls.where((call) => call.method == 'session/prompt'), isEmpty);
-        expect(conversations, isEmpty);
-      });
+          final closes = agentCalls.where(
+            (call) => call.method == 'session/close',
+          );
+          expect(closes, hasLength(1));
+          expect(closes.single.arguments, {
+            'sessionId': 'new-draft-session',
+            'agentId': owner,
+          });
+          expect(
+            agentCalls.where((call) => call.method == 'session/prompt'),
+            isEmpty,
+          );
+          expect(conversations, isEmpty);
+        },
+      );
     }
   }
 
@@ -1623,18 +1799,32 @@ void main() {
     },
   );
 
-  testWidgets('unowned Agent history stays readable without selecting a default runtime', (tester) async {
-    conversations = [historyConversation(811, ConversationMode.agent)..remove('agentId')];
-    historyPages[811] = historyMessage(811);
-    await pumpChat(tester, const ConversationThreadTarget.existing(conversationId: 811));
-    expect(find.text('已加载历史消息 811'), findsOneWidget);
-    expect(find.byKey(const Key('chat-agent-unavailable')), findsOneWidget);
-    expect(find.byType(ChatInputArea), findsNothing);
-    expect(conversations.single['agentId'], isNull);
-    expect(agentCalls.where((call) => call.method == 'session/new' || call.method == 'session/prompt'), isEmpty);
-    expect(agentCalls.where((call) => call.method == 'status'), isEmpty);
-    await disposeChat(tester);
-  });
+  testWidgets(
+    'unowned Agent history stays readable without selecting a default runtime',
+    (tester) async {
+      conversations = [
+        historyConversation(811, ConversationMode.agent)..remove('agentId'),
+      ];
+      historyPages[811] = historyMessage(811);
+      await pumpChat(
+        tester,
+        const ConversationThreadTarget.existing(conversationId: 811),
+      );
+      expect(find.text('已加载历史消息 811'), findsOneWidget);
+      expect(find.byKey(const Key('chat-agent-unavailable')), findsOneWidget);
+      expect(find.byType(ChatInputArea), findsNothing);
+      expect(conversations.single['agentId'], isNull);
+      expect(
+        agentCalls.where(
+          (call) =>
+              call.method == 'session/new' || call.method == 'session/prompt',
+        ),
+        isEmpty,
+      );
+      expect(agentCalls.where((call) => call.method == 'status'), isEmpty);
+      await disposeChat(tester);
+    },
+  );
 
   for (final globalRemote in [false, true]) {
     for (final configureFirst in [false, true]) {

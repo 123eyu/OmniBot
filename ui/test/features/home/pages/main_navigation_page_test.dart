@@ -242,6 +242,66 @@ void main() {
     },
   );
 
+  for (final size in const [Size(768, 1024), Size(1069, 668)]) {
+    testWidgets('rail at $size slides pages vertically in destination order', (
+      tester,
+    ) async {
+      await pumpShell(tester, size: size);
+      final rail = find.byType(OmniNavigationRail);
+      final railBounds = tester.getRect(rail);
+      final home = find.byType(HomeDrawer, skipOffstage: false);
+      final homeOrigin = tester.getTopLeft(home);
+      final pageHeight = tester.getSize(home).height;
+      final initialAgentReads = agentReads();
+
+      // Skipping two destinations still animates only the requested pair.
+      await tester.tap(destination('设置'));
+      await tester.pump();
+      final settings = find.byType(SettingsPage, skipOffstage: false);
+      expect(tester.getTopLeft(home), homeOrigin);
+      expect(tester.getTopLeft(settings), homeOrigin + Offset(0, pageHeight));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 90));
+      final outgoing = tester.getTopLeft(home);
+      final incoming = tester.getTopLeft(settings);
+      expect(outgoing.dx, homeOrigin.dx);
+      expect(incoming.dx, homeOrigin.dx);
+      expect(outgoing.dy, lessThan(homeOrigin.dy));
+      expect(incoming.dy, greaterThan(homeOrigin.dy));
+      expect(incoming.dy, lessThan(homeOrigin.dy + pageHeight));
+      expect(incoming.dy - outgoing.dy, closeTo(pageHeight, 0.1));
+      expect(tester.getRect(rail), railBounds);
+      expect(agentReads(), initialAgentReads);
+      expect(
+        find.byType(AgentModeSettingPage, skipOffstage: false),
+        findsNothing,
+      );
+      expect(
+        find.byType(UsageStatisticsPage, skipOffstage: false),
+        findsNothing,
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(settings), homeOrigin);
+
+      await tester.tap(destination('首页'));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 90));
+      expect(tester.getTopLeft(home).dx, homeOrigin.dx);
+      expect(tester.getTopLeft(settings).dx, homeOrigin.dx);
+      expect(tester.getTopLeft(home).dy, lessThan(homeOrigin.dy));
+      expect(tester.getTopLeft(settings).dy, greaterThan(homeOrigin.dy));
+      expect(
+        tester.getTopLeft(settings).dy - tester.getTopLeft(home).dy,
+        closeTo(pageHeight, 0.1),
+      );
+      expect(tester.getRect(rail), railBounds);
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(home), homeOrigin);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'Agent configuration uses the existing route and returns to the selected tab',
     (tester) async {
@@ -347,7 +407,12 @@ void main() {
     ) async {
       await pumpShell(tester, size: size);
       expect(find.byType(OmniNavigationRail), findsOneWidget);
-      expect(find.byType(FlClashNavigationDock), findsNothing);
+      expect(
+        tester
+            .widget<FlClashNavigationDock>(find.byType(FlClashNavigationDock))
+            .axis,
+        Axis.vertical,
+      );
       final pageRect = tester.getRect(find.byType(FlClashTabView));
       expect(pageRect.left, OmniNavigationRail.width);
       expect(pageRect.width, size.width - OmniNavigationRail.width);
@@ -400,6 +465,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.state(find.byType(HomeDrawer)), same(homeState));
       expect(tester.state(find.byType(FlClashTabView)), same(tabState));
+      expect(
+        tester
+            .widget<FlClashTabView>(find.byType(FlClashTabView))
+            .scrollDirection,
+        size.width >= 600 ? Axis.vertical : Axis.horizontal,
+      );
       expect(find.text('保留平板搜索'), findsOneWidget);
       expect(agentReads(), initialReads);
       expect(tester.takeException(), isNull);

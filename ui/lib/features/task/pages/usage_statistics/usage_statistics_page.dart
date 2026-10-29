@@ -4,6 +4,7 @@ import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/omni_root_toolbar.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
 
 /// Conversation activity and model token usage statistics.
 ///
@@ -28,22 +29,17 @@ class UsageStatisticsPage extends StatelessWidget {
         title: LegacyTextLocalizer.localize('轨迹'),
         primary: true,
         showBackButton: !embedded,
-        maxContentWidth: 720,
       ),
       body: SafeArea(
         top: false,
         bottom: false,
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: SingleChildScrollView(
-              padding: edgeToEdgeScrollPadding(
-                context,
-                const EdgeInsets.only(top: 10, bottom: 32),
-              ),
-              child: ActivityDashboardCard(active: active),
+        child: OmniContentWidth(
+          child: SingleChildScrollView(
+            padding: edgeToEdgeScrollPadding(
+              context,
+              const EdgeInsets.only(top: 10, bottom: 32),
             ),
+            child: ActivityDashboardCard(active: active),
           ),
         ),
       ),

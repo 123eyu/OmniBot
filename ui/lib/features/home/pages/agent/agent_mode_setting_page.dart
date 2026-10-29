@@ -1437,176 +1437,200 @@ class _AgentContactTile extends StatelessWidget {
     final palette = context.omniPalette;
     final showAction = actionLabel != null && onAction != null;
     final showSecondaryAction = secondaryActionLabel != null && !busy;
+    final details = <Widget>[
+      if ((subtitle ?? '').isNotEmpty)
+        Text(
+          subtitle!,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.45,
+            color: palette.textSecondary,
+          ),
+        ),
+      if ((detailText ?? '').isNotEmpty)
+        Text(
+          detailText!,
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.45,
+            color: detailIsError
+                ? Theme.of(context).colorScheme.error
+                : palette.textSecondary,
+          ),
+        ),
+      if ((errorText ?? '').isNotEmpty)
+        Text(
+          errorText!,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.45,
+            color: Theme.of(context).colorScheme.error,
+          ),
+        ),
+    ];
+    final maintenanceActions = <Widget>[
+      if (!quietAction && showAction && !busy)
+        _actionButton(
+          key: actionKey,
+          label: actionLabel!,
+          color: palette.accentPrimary,
+          onPressed: onAction,
+        ),
+      if (showSecondaryAction)
+        _actionButton(
+          key: secondaryActionKey,
+          label: secondaryActionLabel!,
+          color: Theme.of(context).colorScheme.error,
+          onPressed: onSecondaryAction,
+        ),
+    ];
     return Material(
       color: Colors.transparent,
       child: InkWell(
         key: tileKey,
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Use the row's available space, including when this page is in a
+            // split window. Larger text keeps maintenance on its own line.
+            final inlineActions =
+                constraints.maxWidth >= OmniLayoutBreakpoints.medium &&
+                MediaQuery.textScalerOf(context).scale(15) <= 19.5;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(
-                    key: ValueKey('agent-avatar-$title'),
-                    width: 44,
-                    height: 44,
-                    child: Center(child: leading),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w400,
-                            color: palette.textPrimary,
-                            height: 1.38,
-                          ),
-                        ),
-                        if (statusLabel != null) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Container(
-                                width: 5,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  color: statusColor,
-                                  shape: BoxShape.circle,
-                                ),
+                  Row(
+                    children: [
+                      SizedBox(
+                        key: ValueKey('agent-avatar-$title'),
+                        width: 44,
+                        height: 44,
+                        child: Center(child: leading),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w400,
+                                color: palette.textPrimary,
+                                height: 1.38,
                               ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  statusLabel!,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    height: 1.45,
-                                    color: palette.textSecondary,
+                            ),
+                            if (statusLabel != null) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 5,
+                                    height: 5,
+                                    decoration: BoxDecoration(
+                                      color: statusColor,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      statusLabel!,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        height: 1.45,
+                                        color: palette.textSecondary,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
-                          ),
-                        ],
+                            if (inlineActions && details.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              ...details,
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (inlineActions && maintenanceActions.isNotEmpty) ...[
+                        const SizedBox(width: 16),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (
+                              var index = 0;
+                              index < maintenanceActions.length;
+                              index++
+                            ) ...[
+                              if (index > 0) const SizedBox(width: 8),
+                              maintenanceActions[index],
+                            ],
+                          ],
+                        ),
                       ],
-                    ),
-                  ),
-                  if (busy) ...[
-                    const SizedBox(width: 10),
-                    const _AgentBusyIndicator(),
-                  ] else if (quietAction && showAction)
-                    OmniCircleButton(
-                      key: actionKey,
-                      tooltip: actionLabel!,
-                      onPressed: onAction,
-                      icon: LucideIcons.rotateCw,
-                      size: 40,
-                      tapTargetSize: MaterialTapTargetSize.padded,
-                      foregroundColor: palette.textTertiary,
-                    ),
-                  if (navigationLabel != null)
-                    Semantics(
-                      label: navigationLabel,
-                      button: true,
-                      child: InkWell(
-                        key: navigationKey,
-                        onTap: onTap,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Padding(
-                          padding: const EdgeInsets.only(
-                            left: 6,
-                            top: 10,
-                            bottom: 10,
-                          ),
-                          child: Icon(
-                            LucideIcons.chevronRight,
-                            size: 18,
-                            color: palette.textTertiary,
+                      if (busy) ...[
+                        const SizedBox(width: 10),
+                        const SizedBox.square(
+                          dimension: 48,
+                          child: Center(child: _AgentBusyIndicator()),
+                        ),
+                      ] else if (quietAction && showAction)
+                        OmniCircleButton(
+                          key: actionKey,
+                          tooltip: actionLabel!,
+                          onPressed: onAction,
+                          icon: LucideIcons.rotateCw,
+                          size: 40,
+                          tapTargetSize: MaterialTapTargetSize.padded,
+                          foregroundColor: palette.textTertiary,
+                        ),
+                      if (navigationLabel != null)
+                        IconButton(
+                          key: navigationKey,
+                          onPressed: onTap,
+                          tooltip: navigationLabel,
+                          icon: const Icon(LucideIcons.chevronRight, size: 18),
+                          style: IconButton.styleFrom(
+                            foregroundColor: palette.textTertiary,
+                            minimumSize: const Size.square(48),
+                            visualDensity: VisualDensity.standard,
+                            padding: EdgeInsets.zero,
+                            tapTargetSize: MaterialTapTargetSize.padded,
                           ),
                         ),
+                    ],
+                  ),
+                  if (!inlineActions &&
+                      (details.isNotEmpty || maintenanceActions.isNotEmpty))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 58, top: 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ...details,
+                          if (maintenanceActions.isNotEmpty)
+                            Wrap(
+                              spacing: 12,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: maintenanceActions,
+                            ),
+                        ],
                       ),
                     ),
                 ],
               ),
-              if ((subtitle ?? '').isNotEmpty ||
-                  (detailText ?? '').isNotEmpty ||
-                  (errorText ?? '').isNotEmpty ||
-                  (!quietAction && showAction && !busy) ||
-                  showSecondaryAction)
-                Padding(
-                  padding: const EdgeInsets.only(left: 58, top: 6),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if ((subtitle ?? '').isNotEmpty)
-                        Text(
-                          subtitle!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            height: 1.45,
-                            color: palette.textSecondary,
-                          ),
-                        ),
-                      if ((detailText ?? '').isNotEmpty)
-                        Text(
-                          detailText!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            height: 1.45,
-                            color: detailIsError
-                                ? Theme.of(context).colorScheme.error
-                                : palette.textSecondary,
-                          ),
-                        ),
-                      if ((errorText ?? '').isNotEmpty)
-                        Text(
-                          errorText!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            height: 1.45,
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                      if ((!quietAction && showAction && !busy) ||
-                          showSecondaryAction)
-                        Wrap(
-                          spacing: 12,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            if (!quietAction && showAction && !busy)
-                              _actionButton(
-                                key: actionKey,
-                                label: actionLabel!,
-                                color: palette.accentPrimary,
-                                onPressed: onAction,
-                              ),
-                            if (showSecondaryAction)
-                              _actionButton(
-                                key: secondaryActionKey,
-                                label: secondaryActionLabel!,
-                                color: Theme.of(context).colorScheme.error,
-                                onPressed: onSecondaryAction,
-                              ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -1622,8 +1646,9 @@ class _AgentContactTile extends StatelessWidget {
     onPressed: onPressed,
     style: TextButton.styleFrom(
       foregroundColor: color,
-      minimumSize: const Size(0, 36),
-      padding: const EdgeInsets.symmetric(horizontal: 2),
+      minimumSize: const Size(48, 48),
+      visualDensity: VisualDensity.standard,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
     ),

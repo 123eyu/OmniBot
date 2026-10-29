@@ -118,7 +118,9 @@ extension _HomeDrawerHome on HomeDrawerState {
         handleBackIfNeeded();
       },
       child: Scaffold(
-        backgroundColor: palette.pageBackground,
+        backgroundColor: widget.conversationSidebar
+            ? Colors.transparent
+            : palette.pageBackground,
         resizeToAvoidBottomInset: true,
         body: SafeArea(
           child: Column(

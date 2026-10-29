@@ -1071,12 +1071,12 @@ class BrowserUserscriptSummary {
 
   factory BrowserUserscriptSummary.fromMap(Map<dynamic, dynamic> raw) {
     return BrowserUserscriptSummary(
-      installedScripts: _browserMapList(
-        raw['installedScripts'],
-      ).map(BrowserUserscriptItem.fromMap).toList(growable: false),
-      currentPageMenuCommands: _browserMapList(
-        raw['currentPageMenuCommands'],
-      ).map(BrowserUserscriptMenuCommand.fromMap).toList(growable: false),
+      installedScripts: _browserMapList(raw['installedScripts'])
+          .map(BrowserUserscriptItem.fromMap)
+          .toList(growable: false),
+      currentPageMenuCommands: _browserMapList(raw['currentPageMenuCommands'])
+          .map(BrowserUserscriptMenuCommand.fromMap)
+          .toList(growable: false),
       pendingInstall: raw['pendingInstall'] == null
           ? null
           : BrowserUserscriptInstallPreview.fromMap(
@@ -1275,21 +1275,21 @@ class ChatBrowserSessionSnapshot {
       recommendedNextAction: normalized['recommendedNextAction']?.toString(),
       throttleDelayMs: _browserInt(normalized['throttleDelayMs']),
       activeDownloadCount: _browserInt(normalized['activeDownloadCount']) ?? 0,
-      tabs: _browserMapList(
-        normalized['tabs'],
-      ).map(AgentBrowserTab.fromMap).toList(growable: false),
-      bookmarks: _browserMapList(
-        normalized['bookmarks'],
-      ).map(AgentBrowserHistoryEntry.fromMap).toList(growable: false),
-      history: _browserMapList(
-        normalized['history'],
-      ).map(AgentBrowserHistoryEntry.fromMap).toList(growable: false),
-      sessionHistory: _browserMapList(
-        normalized['sessionHistory'],
-      ).map(AgentBrowserHistoryEntry.fromMap).toList(growable: false),
-      downloads: _browserMapList(
-        normalized['downloads'],
-      ).map(BrowserDownloadItem.fromMap).toList(growable: false),
+      tabs: _browserMapList(normalized['tabs'])
+          .map(AgentBrowserTab.fromMap)
+          .toList(growable: false),
+      bookmarks: _browserMapList(normalized['bookmarks'])
+          .map(AgentBrowserHistoryEntry.fromMap)
+          .toList(growable: false),
+      history: _browserMapList(normalized['history'])
+          .map(AgentBrowserHistoryEntry.fromMap)
+          .toList(growable: false),
+      sessionHistory: _browserMapList(normalized['sessionHistory'])
+          .map(AgentBrowserHistoryEntry.fromMap)
+          .toList(growable: false),
+      downloads: _browserMapList(normalized['downloads'])
+          .map(BrowserDownloadItem.fromMap)
+          .toList(growable: false),
       downloadSummary: BrowserDownloadSummary.fromMap(
         _browserMap(normalized['downloadSummary']),
       ),
@@ -1506,7 +1506,7 @@ bool isChatWorkspaceViewport(Size size) {
 class HdPadPaneLayoutResolver {
   const HdPadPaneLayoutResolver();
 
-  static const double dividerHitWidth = 12;
+  static const double dividerHitWidth = 24;
   static const double defaultLeftWidth = 260;
   static const double minLeftWidth = 220;
   static const double maxLeftWidth = 360;

@@ -121,12 +121,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
             onSelected: (_) => this._handleContextUsageRingLongPress(),
           ),
       ],
-      if (isChatWorkspaceViewport(MediaQuery.sizeOf(context)))
-        ChatAppBarAction(
-          label: english ? 'Conversation sidebar' : '会话侧栏',
-          icon: LucideIcons.panelLeft,
-          onSelected: (_) => _toggleHdPadLeftPaneCollapsed(),
-        ),
     ];
   }
 
@@ -141,20 +135,23 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     if (!mounted || _isHomeDrawerSearchFocused == hasFocus) {
       return;
     }
-    final chatInputWasFocused = _inputFocusNode.hasFocus;
-    final composerLiftWasLatched = _composerLiftIntentTracker.isLatched;
+    _isHomeDrawerSearchFocused = hasFocus;
     if (hasFocus && _inputFocusNode.hasFocus) {
       _inputFocusNode.unfocus();
     }
     _composerLiftIntentTracker.reset();
-    // Avoid an unconditional ChatPage rebuild just to record focus ownership.
-    // The search field repaints itself locally, while the next focus/IME
-    // metrics frame normally reads this flag for composer suppression.
-    _isHomeDrawerSearchFocused = hasFocus;
-    if (hasFocus && composerLiftWasLatched && !chatInputWasFocused) {
-      // A previously lost chat focus may have left the lift latched against a
-      // stable IME inset, so no new focus/metrics notification is guaranteed.
-      _chatKeyboardLayoutChanges.value++;
+    // Search and the composer can exchange focus while the IME stays at the
+    // same height. Update their shared geometry even without a metrics event.
+    void notifyLayout() {
+      if (mounted) _chatKeyboardLayoutChanges.value++;
+    }
+
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      // A resize may dispose the focused sidebar during tree finalization.
+      WidgetsBinding.instance.addPostFrameCallback((_) => notifyLayout());
+    } else {
+      notifyLayout();
     }
   }
 
@@ -1232,43 +1229,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         : ChatIslandDisplayLayer.mode;
   }
 
-  Widget _buildPaneSurface({
-    required Widget child,
-    required bool translucent,
-    required AppBackgroundVisualProfile visualProfile,
-    bool showBorder = true,
-    bool showShadow = true,
-  }) {
-    final palette = context.omniPalette;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: backgroundSurfaceColor(
-          translucent: translucent,
-          baseColor: palette.surfacePrimary,
-          opacity: translucent ? 0.72 : 1,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: showBorder
-            ? Border.all(
-                color: translucent
-                    ? visualProfile.islandBorderColor
-                    : palette.borderSubtle,
-              )
-            : null,
-        boxShadow: showShadow
-            ? const [
-                BoxShadow(
-                  color: Color(0x121A2433),
-                  blurRadius: 28,
-                  offset: Offset(0, 12),
-                ),
-              ]
-            : null,
-      ),
-      child: ClipRRect(borderRadius: BorderRadius.circular(24), child: child),
-    );
-  }
-
   Widget _buildChatPaneShell({
     required BuildContext layoutContext,
     required BoxConstraints constraints,
@@ -1363,6 +1323,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         Column(
           children: [
             ChatAppBar(
+              usePadLayout:
+                  constraints.maxWidth >= OmniLayoutBreakpoints.medium,
               onMenuTap: _returnToConversationHome,
               title: _currentConversation?.title,
               actions: _chatHeaderActions(),
@@ -1724,7 +1686,9 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     required AppBackgroundVisualProfile visualProfile,
     required bool backgroundActive,
   }) {
-    const shellPadding = EdgeInsets.fromLTRB(8, 10, 8, 10);
+    const shellPadding = EdgeInsets.symmetric(
+      horizontal: _kHdPadShellHorizontalPadding,
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = math
@@ -1757,6 +1721,15 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
             : layout.rightWidth;
         final resized = _hdPadLastLayoutWidth != availableWidth;
         _hdPadLastLayoutWidth = availableWidth;
+        if (resized && _isHdPadPaneDragging) {
+          // A rotation or split-window resize may remove the drag recognizer
+          // before it receives a pointer-up. The pane owner closes that UI
+          // transaction here and saves the last accepted widths.
+          _resetHdPadPaneDragState();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _persistHdPadPanePreferences();
+          });
+        }
         final leftCollapseThreshold = _resolveHdPadPaneCollapseThreshold(
           availableWidth: availableWidth,
           minPaneWidth: HdPadPaneLayoutResolver.minLeftWidth,
@@ -1772,58 +1745,66 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
             ? Duration.zero
             : const Duration(milliseconds: 280);
         const paneCurve = Curves.easeInOutCubic;
-        return Padding(
-          padding: shellPadding,
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: paneDuration,
-                curve: paneCurve,
-                width: layout.leftWidth,
-                child: ClipRect(
-                  child: OverflowBox(
-                    alignment: Alignment.centerLeft,
-                    minWidth: leftContentWidth,
-                    maxWidth: leftContentWidth,
-                    child: SizedBox(
-                      width: leftContentWidth,
-                      child: _ChatPaneVisibility(
-                        hidden: leftHidden,
-                        child: AnimatedSlide(
-                          duration: paneDuration,
-                          curve: Curves.easeInOutCubic,
-                          offset: leftHidden
-                              ? const Offset(-0.08, 0)
-                              : Offset.zero,
-                          child: _buildPaneSurface(
-                            translucent: backgroundActive,
-                            visualProfile: visualProfile,
-                            child: HomeDrawer(
-                              key: _embeddedDrawerKey,
-                              homePage: true,
-                              conversationSidebar: true,
-                              selectedThreadTarget:
-                                  _currentConversationId == null
-                                  ? null
-                                  : ConversationThreadTarget.existing(
-                                      conversationId: _currentConversationId,
-                                      mode:
-                                          _currentConversation?.mode ??
-                                          _conversationModeForPageMode(
-                                            _activeMode,
-                                          ),
-                                    ),
-                              active: !leftHidden,
-                              embedded: true,
-                              closeOnNavigate: false,
-                              onSearchFocusChanged:
-                                  _handleHomeDrawerSearchFocusChanged,
-                              searchFieldKey: _embeddedDrawerSearchFieldKey,
-                              newConversationMode: _conversationModeForPageMode(
-                                _activeMode,
+        return ColoredBox(
+          // The panes share one canvas, including a single tint over wallpaper.
+          // Their content stays clipped while resizing, without separate cards.
+          color: backgroundActive
+              ? backgroundSurfaceColor(
+                  translucent: true,
+                  baseColor: context.omniPalette.surfacePrimary,
+                  opacity: 0.72,
+                )
+              : context.omniPalette.pageBackground,
+          child: Padding(
+            padding: shellPadding,
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: paneDuration,
+                  curve: paneCurve,
+                  width: layout.leftWidth,
+                  child: ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.centerLeft,
+                      minWidth: leftContentWidth,
+                      maxWidth: leftContentWidth,
+                      child: SizedBox(
+                        width: leftContentWidth,
+                        child: _ChatPaneVisibility(
+                          hidden: leftHidden,
+                          child: AnimatedSlide(
+                            duration: paneDuration,
+                            curve: Curves.easeInOutCubic,
+                            offset: leftHidden
+                                ? const Offset(-0.08, 0)
+                                : Offset.zero,
+                            child: ClipRect(
+                              child: HomeDrawer(
+                                key: _embeddedDrawerKey,
+                                homePage: true,
+                                conversationSidebar: true,
+                                selectedThreadTarget:
+                                    _currentConversationId == null
+                                    ? null
+                                    : ConversationThreadTarget.existing(
+                                        conversationId: _currentConversationId,
+                                        mode:
+                                            _currentConversation?.mode ??
+                                            _conversationModeForPageMode(
+                                              _activeMode,
+                                            ),
+                                      ),
+                                active: !leftHidden,
+                                embedded: true,
+                                closeOnNavigate: false,
+                                onSearchFocusChanged:
+                                    _handleHomeDrawerSearchFocusChanged,
+                                searchFieldKey: _embeddedDrawerSearchFieldKey,
+                                newConversationMode:
+                                    _conversationModeForPageMode(_activeMode),
+                                onThreadTargetSelected:
+                                    _handleEmbeddedDrawerThreadTargetSelected,
                               ),
-                              onThreadTargetSelected:
-                                  _handleEmbeddedDrawerThreadTargetSelected,
                             ),
                           ),
                         ),
@@ -1831,149 +1812,171 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                     ),
                   ),
                 ),
-              ),
-              AnimatedContainer(
-                duration: paneDuration,
-                curve: paneCurve,
-                width: leftHidden ? 0 : HdPadPaneLayoutResolver.dividerHitWidth,
-                child: leftHidden
-                    ? const SizedBox.shrink()
-                    : _PaneResizeHandle(
-                        onDragStart: () {
-                          setState(() {
-                            _isHdPadPaneDragging = true;
-                            _hdPadPaneDragStartWidth = layout.leftWidth;
-                            _hdPadPaneDragDelta = 0;
-                          });
-                        },
-                        onDragUpdate: (delta) {
-                          _hdPadPaneDragDelta += delta;
-                          final nextWidth =
-                              (_hdPadPaneDragStartWidth ?? layout.leftWidth) +
-                              _hdPadPaneDragDelta;
-                          final shouldCollapse =
-                              nextWidth <= leftCollapseThreshold;
-                          setState(() {
+                AnimatedContainer(
+                  duration: paneDuration,
+                  curve: paneCurve,
+                  width: leftHidden
+                      ? 0
+                      : HdPadPaneLayoutResolver.dividerHitWidth,
+                  child: leftHidden
+                      ? const SizedBox.shrink()
+                      : ChatPaneResizeHandle(
+                          key: const ValueKey(
+                            'chat-conversation-resize-handle',
+                          ),
+                          label: LegacyTextLocalizer.isEnglish
+                              ? 'Conversation sidebar width'
+                              : '会话侧栏宽度',
+                          hint: LegacyTextLocalizer.isEnglish
+                              ? 'Drag or use arrow keys to resize. Double-tap or press Enter to collapse.'
+                              : '拖动或按左右方向键调整，双击或按回车收起',
+                          width: HdPadPaneLayoutResolver.dividerHitWidth,
+                          paneWidth: layout.leftWidth,
+                          viewportWidth: availableWidth,
+                          onCollapse: _toggleHdPadLeftPaneCollapsed,
+                          onDragStart: () {
+                            setState(() {
+                              _isHdPadPaneDragging = true;
+                              _hdPadPaneDragStartWidth = layout.leftWidth;
+                              _hdPadPaneDragDelta = 0;
+                            });
+                          },
+                          onDragUpdate: (delta) {
+                            _hdPadPaneDragDelta += delta;
+                            final nextWidth =
+                                (_hdPadPaneDragStartWidth ?? layout.leftWidth) +
+                                _hdPadPaneDragDelta;
+                            final shouldCollapse =
+                                nextWidth <= leftCollapseThreshold;
+                            setState(() {
+                              if (shouldCollapse) {
+                                _hdPadLeftPaneCollapsed = true;
+                                _resetHdPadPaneDragState();
+                              } else {
+                                _hdPadLeftPaneCollapsed = false;
+                                _hdPadLeftPaneWidth = nextWidth;
+                              }
+                            });
                             if (shouldCollapse) {
-                              _hdPadLeftPaneCollapsed = true;
-                              _resetHdPadPaneDragState();
-                            } else {
-                              _hdPadLeftPaneCollapsed = false;
-                              _hdPadLeftPaneWidth = nextWidth;
+                              _persistHdPadPanePreferences();
                             }
-                          });
-                          if (shouldCollapse) {
+                          },
+                          onDragEnd: () {
+                            setState(_resetHdPadPaneDragState);
                             _persistHdPadPanePreferences();
-                          }
-                        },
-                        onDragEnd: () {
-                          setState(_resetHdPadPaneDragState);
-                          _persistHdPadPanePreferences();
-                        },
-                      ),
-              ),
-              AnimatedContainer(
-                duration: paneDuration,
-                curve: paneCurve,
-                width: layout.centerWidth,
-                child: _buildPaneSurface(
-                  translucent: backgroundActive,
-                  visualProfile: visualProfile,
-                  child: LayoutBuilder(
-                    builder: (context, paneConstraints) {
-                      return _buildChatPaneShell(
-                        layoutContext: context,
-                        constraints: paneConstraints,
-                        backgroundConfig: backgroundConfig,
-                        visualProfile: visualProfile,
-                        backgroundActive: backgroundActive,
-                        conversationBody: _buildModeMessagePage(
-                          _primaryChatMessagePageMode,
-                          backgroundConfig,
-                          visualProfile,
+                          },
                         ),
-                        hideWorkspaceOverlays: false,
-                        showMenuButton: true,
-                        showSurfaceSwitcher: false,
-                        showWorkspacePaneButton: true,
-                        onConversationPaneTap: _toggleHdPadLeftPaneCollapsed,
-                        conversationPaneVisible: !leftHidden,
-                        workspacePaneVisible: !rightHidden,
-                        onWorkspacePaneTap: _toggleHdPadRightPaneCollapsed,
-                      );
-                    },
+                ),
+                AnimatedContainer(
+                  duration: paneDuration,
+                  curve: paneCurve,
+                  width: layout.centerWidth,
+                  child: ClipRect(
+                    child: LayoutBuilder(
+                      builder: (context, paneConstraints) {
+                        return _buildChatPaneShell(
+                          layoutContext: context,
+                          constraints: paneConstraints,
+                          backgroundConfig: backgroundConfig,
+                          visualProfile: visualProfile,
+                          backgroundActive: backgroundActive,
+                          conversationBody: _buildModeMessagePage(
+                            _primaryChatMessagePageMode,
+                            backgroundConfig,
+                            visualProfile,
+                          ),
+                          hideWorkspaceOverlays: false,
+                          showMenuButton: true,
+                          showSurfaceSwitcher: false,
+                          showWorkspacePaneButton: true,
+                          onConversationPaneTap: _toggleHdPadLeftPaneCollapsed,
+                          conversationPaneVisible: !leftHidden,
+                          workspacePaneVisible: !rightHidden,
+                          onWorkspacePaneTap: _toggleHdPadRightPaneCollapsed,
+                        );
+                      },
+                    ),
                   ),
                 ),
-              ),
-              AnimatedContainer(
-                duration: paneDuration,
-                curve: paneCurve,
-                width: rightHidden
-                    ? 0
-                    : HdPadPaneLayoutResolver.dividerHitWidth,
-                child: rightHidden
-                    ? const SizedBox.shrink()
-                    : _PaneResizeHandle(
-                        onDragStart: () {
-                          setState(() {
-                            _isHdPadPaneDragging = true;
-                            _hdPadPaneDragStartWidth = layout.rightWidth;
-                            _hdPadPaneDragDelta = 0;
-                          });
-                        },
-                        onDragUpdate: (delta) {
-                          _hdPadPaneDragDelta += delta;
-                          final nextWidth =
-                              (_hdPadPaneDragStartWidth ?? layout.rightWidth) -
-                              _hdPadPaneDragDelta;
-                          final shouldCollapse =
-                              nextWidth <= rightCollapseThreshold;
-                          setState(() {
+                AnimatedContainer(
+                  duration: paneDuration,
+                  curve: paneCurve,
+                  width: rightHidden
+                      ? 0
+                      : HdPadPaneLayoutResolver.dividerHitWidth,
+                  child: rightHidden
+                      ? const SizedBox.shrink()
+                      : ChatPaneResizeHandle(
+                          key: const ValueKey('chat-workspace-resize-handle'),
+                          label: LegacyTextLocalizer.isEnglish
+                              ? 'Workspace width'
+                              : '工作区宽度',
+                          hint: LegacyTextLocalizer.isEnglish
+                              ? 'Drag or use arrow keys to resize. Double-tap or press Enter to collapse.'
+                              : '拖动或按左右方向键调整，双击或按回车收起',
+                          width: HdPadPaneLayoutResolver.dividerHitWidth,
+                          paneWidth: layout.rightWidth,
+                          viewportWidth: availableWidth,
+                          leadingPane: false,
+                          onCollapse: _toggleHdPadRightPaneCollapsed,
+                          onDragStart: () {
+                            setState(() {
+                              _isHdPadPaneDragging = true;
+                              _hdPadPaneDragStartWidth = layout.rightWidth;
+                              _hdPadPaneDragDelta = 0;
+                            });
+                          },
+                          onDragUpdate: (delta) {
+                            _hdPadPaneDragDelta += delta;
+                            final nextWidth =
+                                (_hdPadPaneDragStartWidth ??
+                                    layout.rightWidth) -
+                                _hdPadPaneDragDelta;
+                            final shouldCollapse =
+                                nextWidth <= rightCollapseThreshold;
+                            setState(() {
+                              if (shouldCollapse) {
+                                _hdPadRightPaneCollapsed = true;
+                                _resetHdPadPaneDragState();
+                              } else {
+                                _hdPadRightPaneCollapsed = false;
+                                _hdPadRightPaneWidth = nextWidth;
+                              }
+                            });
                             if (shouldCollapse) {
-                              _hdPadRightPaneCollapsed = true;
-                              _resetHdPadPaneDragState();
-                            } else {
-                              _hdPadRightPaneCollapsed = false;
-                              _hdPadRightPaneWidth = nextWidth;
+                              _persistHdPadPanePreferences();
                             }
-                          });
-                          if (shouldCollapse) {
+                          },
+                          onDragEnd: () {
+                            setState(_resetHdPadPaneDragState);
                             _persistHdPadPanePreferences();
-                          }
-                        },
-                        onDragEnd: () {
-                          setState(_resetHdPadPaneDragState);
-                          _persistHdPadPanePreferences();
-                        },
-                      ),
-              ),
-              AnimatedContainer(
-                duration: paneDuration,
-                curve: paneCurve,
-                width: layout.rightWidth,
-                child: ClipRect(
-                  child: OverflowBox(
-                    alignment: Alignment.centerRight,
-                    minWidth: rightContentWidth,
-                    maxWidth: rightContentWidth,
-                    child: SizedBox(
-                      width: rightContentWidth,
-                      child: _ChatPaneVisibility(
-                        hidden: rightHidden,
-                        child: AnimatedSlide(
-                          duration: paneDuration,
-                          curve: Curves.easeInOutCubic,
-                          offset: rightHidden
-                              ? const Offset(0.08, 0)
-                              : Offset.zero,
-                          child: _buildPaneSurface(
-                            translucent: backgroundActive,
-                            visualProfile: visualProfile,
-                            showBorder: false,
-                            showShadow: false,
-                            child: _buildHdPadWorkspacePane(
-                              backgroundActive: backgroundActive,
-                              visualProfile: visualProfile,
+                          },
+                        ),
+                ),
+                AnimatedContainer(
+                  duration: paneDuration,
+                  curve: paneCurve,
+                  width: layout.rightWidth,
+                  child: ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.centerRight,
+                      minWidth: rightContentWidth,
+                      maxWidth: rightContentWidth,
+                      child: SizedBox(
+                        width: rightContentWidth,
+                        child: _ChatPaneVisibility(
+                          hidden: rightHidden,
+                          child: AnimatedSlide(
+                            duration: paneDuration,
+                            curve: Curves.easeInOutCubic,
+                            offset: rightHidden
+                                ? const Offset(0.08, 0)
+                                : Offset.zero,
+                            child: ClipRect(
+                              child: _buildHdPadWorkspacePane(
+                                backgroundActive: backgroundActive,
+                                visualProfile: visualProfile,
+                              ),
                             ),
                           ),
                         ),
@@ -1981,8 +1984,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -1991,7 +1994,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
 
   ChatKeyboardLayoutMetrics _resolveKeyboardLayout(MediaQueryData mediaQuery) {
     final bottomInset = mediaQuery.viewInsets.bottom;
-    _emptyGreetingKeyboardLiftTracker.update(bottomInset);
     final viewPaddingBottom = mediaQuery.viewPadding.bottom;
     final activeMessageListInputFocused = _isMessageListInputFocusedForMode(
       _activeMode,
@@ -2005,6 +2007,11 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                 activeMessageListInputFocused,
             bottomInset: bottomInset,
           );
+    // A keyboard owned by sidebar search must not move the chat greeting.
+    // Feeding zero also clears its motion state before focus returns to chat.
+    _emptyGreetingKeyboardLiftTracker.update(
+      shouldLiftComposerForKeyboard ? bottomInset : 0,
+    );
     final composerKeyboardMetrics = _composerKeyboardMetricsTracker.update(
       shouldLiftComposerForKeyboard: shouldLiftComposerForKeyboard,
       bottomInset: bottomInset,
@@ -2055,7 +2062,11 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
   }) {
     final workspaceVisible =
         isChatWorkspace &&
-        _currentPadLayout(availableWidth: availableWidth - 16).rightWidth > 0;
+        _currentPadLayout(
+              availableWidth:
+                  availableWidth - _kHdPadShellHorizontalPadding * 2,
+            ).rightWidth >
+            0;
     final chatPage = ChatKeyboardLayout(
       changes: _chatKeyboardLayoutChanges,
       resolve: _resolveKeyboardLayout,

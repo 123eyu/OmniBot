@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
+import 'package:ui/utils/ui.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ui/features/home/pages/authorize/accessibility_permission_prompt.dart';
@@ -552,17 +554,23 @@ class _OmniFlowExecutionCenterPageState
           ),
         ],
       ),
-      body: Column(
-        children: [
-          TabBar(
-            controller: _tabController,
-            tabs: [
-              Tab(text: _text(context, '复用指令', 'Functions')),
-              Tab(text: _text(context, '运行记录', 'Run Logs')),
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: OmniContentWidth(
+          child: Column(
+            children: [
+              TabBar(
+                controller: _tabController,
+                tabs: [
+                  Tab(text: _text(context, '复用指令', 'Functions')),
+                  Tab(text: _text(context, '运行记录', 'Run Logs')),
+                ],
+              ),
+              Expanded(child: _buildBody()),
             ],
           ),
-          Expanded(child: _buildBody()),
-        ],
+        ),
       ),
     );
   }
@@ -692,7 +700,10 @@ class _FunctionsTab extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: edgeToEdgeScrollPadding(
+          context,
+          const EdgeInsets.symmetric(vertical: 6),
+        ),
         itemCount: functions.length + (hasMore ? 1 : 0),
         separatorBuilder: (_, __) =>
             const Divider(height: 1, indent: 16, endIndent: 16),
@@ -849,7 +860,10 @@ class _RunLogsTab extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: edgeToEdgeScrollPadding(
+          context,
+          const EdgeInsets.symmetric(vertical: 6),
+        ),
         itemCount: runLogs.length + (hasMore ? 1 : 0),
         separatorBuilder: (_, __) =>
             const Divider(height: 1, indent: 16, endIndent: 16),
@@ -1112,8 +1126,8 @@ class _MessageState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
+      child: SingleChildScrollView(
+        padding: edgeToEdgeScrollPadding(context, const EdgeInsets.all(32)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

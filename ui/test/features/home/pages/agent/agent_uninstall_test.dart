@@ -227,10 +227,10 @@ void main() {
       expect(uninstallCalls, 0);
       expect(find.byKey(const Key('agent-uninstall-pi-acp')), findsNothing);
       expect(find.byKey(const Key('agent-check-pi-acp')), findsNothing);
-      final navigation = tester.widget<InkWell>(
+      final navigation = tester.widget<IconButton>(
         find.byKey(const Key('agent-navigation-pi-acp')),
       );
-      expect(navigation.onTap, isNull);
+      expect(navigation.onPressed, isNull);
       final checkUpdates = tester.widget<InkWell>(
         find.byKey(const Key('agent-check-updates')),
       );

@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:ui/widgets/common_app_bar.dart';
+import 'package:ui/widgets/omni_adaptive_layout.dart';
+import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/omni_glass_floating_action_button.dart';
 import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/theme/theme_context.dart';
@@ -160,6 +163,7 @@ class _RunLogDetailPageState extends State<RunLogDetailPage> {
           ),
         ],
       ),
+      floatingActionButtonLocation: const _RunLogActionLocation(),
       floatingActionButton: _runLog == null
           ? null
           : OmniGlassFloatingActionButton(
@@ -198,7 +202,11 @@ class _RunLogDetailPageState extends State<RunLogDetailPage> {
                 ),
               ),
             ),
-      body: _buildBody(),
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: OmniContentWidth(child: _buildBody()),
+      ),
     );
   }
 
@@ -218,7 +226,10 @@ class _RunLogDetailPageState extends State<RunLogDetailPage> {
     final steps = _mapList(runLog['steps']);
     final metrics = RunLogMetrics.fromPayload(runLog);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      padding: edgeToEdgeScrollPadding(
+        context,
+        const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      ),
       children: [
         RunLogOverviewPanel(
           payload: runLog,
@@ -259,6 +270,26 @@ class _RunLogDetailPageState extends State<RunLogDetailPage> {
               ),
             ),
       ],
+    );
+  }
+}
+
+/// Align the action to the readable column while retaining Scaffold's keyboard
+/// and system-navigation avoidance on the vertical axis.
+class _RunLogActionLocation extends FloatingActionButtonLocation {
+  const _RunLogActionLocation();
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry geometry) {
+    final offset = FloatingActionButtonLocation.endFloat.getOffset(geometry);
+    final availableWidth =
+        geometry.scaffoldSize.width -
+        geometry.minInsets.left -
+        geometry.minInsets.right;
+    final columnInset = math.max(0.0, (availableWidth - 840) / 2);
+    return offset.translate(
+      geometry.textDirection == TextDirection.ltr ? -columnInset : columnInset,
+      0,
     );
   }
 }
