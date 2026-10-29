@@ -139,6 +139,110 @@ Future<void> setContextMenuScreen(WidgetTester tester, Size size) async {
 }
 
 void main() {
+  const previewContent = SizedBox(
+    height: 74,
+    child: Center(child: Text('Focused conversation')),
+  );
+  final focusedPreview = find.byKey(
+    const ValueKey('conversation-context-preview'),
+  );
+
+  for (final (size, anchor) in const [
+    (Size(1069, 668), Rect.fromLTWH(160, 100, 840, 74)),
+    (Size(768, 1024), Rect.fromLTWH(24, 100, 720, 74)),
+  ]) {
+    testWidgets('wide preview retains its row width on $size', (tester) async {
+      await setContextMenuScreen(tester, size);
+      final harness = ContextMenuTestHarness();
+      await tester.pumpWidget(harness.app());
+      harness.open(anchor: anchor, preview: previewContent);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(
+        tester.getRect(focusedPreview).width,
+        inInclusiveRange(anchor.width * .97, anchor.width),
+        reason: 'The lifted row keeps its width throughout the press motion.',
+      );
+      await tester.pumpAndSettle();
+      final preview = tester.getRect(focusedPreview);
+      final menu = tester.getRect(contextMenuPanel);
+      expect(preview.width, closeTo(anchor.width, .01));
+      expect(preview.left, anchor.left);
+      expect(preview.height, 74);
+      expect(menu.width, inInclusiveRange(160, 280));
+      expect(menu.left, anchor.left);
+      expect(menu.top, 180);
+      harness.dismiss();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        tester.getRect(focusedPreview).width,
+        inInclusiveRange(anchor.width * .97, anchor.width),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('wide preview clamps separately from the action menu', (
+    tester,
+  ) async {
+    await setContextMenuScreen(tester, const Size(1069, 668));
+    final harness = ContextMenuTestHarness();
+    await tester.pumpWidget(harness.app());
+    // A captured row may extend beyond the window after its bounds change.
+    harness.open(
+      anchor: const Rect.fromLTWH(800, 100, 600, 74),
+      preview: previewContent,
+    );
+    await tester.pumpAndSettle();
+    final preview = tester.getRect(focusedPreview);
+    final menu = tester.getRect(contextMenuPanel);
+    expect(preview.width, 600);
+    expect(preview.left, 453);
+    expect(preview.right, 1053);
+    // Keep the independent menu's existing alignment and compact width.
+    expect(menu.left, 685);
+    expect(menu.width, inInclusiveRange(160, 280));
+    harness.dismiss();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an open wide preview adapts to a narrower window', (
+    tester,
+  ) async {
+    await setContextMenuScreen(tester, const Size(1069, 668));
+    final harness = ContextMenuTestHarness();
+    await tester.pumpWidget(harness.app());
+    harness.open(
+      anchor: const Rect.fromLTWH(160, 100, 840, 74),
+      preview: previewContent,
+    );
+    await tester.pumpAndSettle();
+    final menuOwner = tester.element(find.byType(ConversationContextMenu));
+    for (final size in const [Size(668, 1069), Size(540, 900)]) {
+      tester.view.physicalSize = size;
+      await tester.pumpAndSettle();
+      expect(
+        tester.element(find.byType(ConversationContextMenu)),
+        same(menuOwner),
+      );
+      final preview = tester.getRect(focusedPreview);
+      final menu = tester.getRect(contextMenuPanel);
+      expect(preview.width, size.width - 32);
+      expect(preview.left, 16);
+      expect(preview.right, size.width - 16);
+      expect(menu.left, greaterThanOrEqualTo(24));
+      expect(menu.right, lessThanOrEqualTo(size.width - 24));
+      expect(menu.width, inInclusiveRange(160, 280));
+      expect(tester.takeException(), isNull);
+    }
+    harness.dismiss();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   for (final (anchorTop, menuTop) in [(100.0, 180.0), (700.0, 524.0)]) {
     testWidgets(
       'independent menu retains former action position at y=$anchorTop',

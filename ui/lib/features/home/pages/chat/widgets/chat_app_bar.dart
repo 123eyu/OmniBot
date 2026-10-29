@@ -41,9 +41,6 @@ class ChatAppBar extends StatelessWidget {
   final String? title;
   final List<ChatAppBarAction> actions;
   final Key? tutorialActionsAnchorKey;
-  final VoidCallback? onPetTap;
-  final bool isPetOpening;
-  final bool isPetShowing;
   final VoidCallback? onPrimaryModeTap;
   final ChatSurfaceMode activeMode;
   final ValueChanged<ChatSurfaceMode> onModeChanged;
@@ -83,9 +80,6 @@ class ChatAppBar extends StatelessWidget {
     this.title,
     this.actions = const [],
     this.tutorialActionsAnchorKey,
-    this.onPetTap,
-    this.isPetOpening = false,
-    this.isPetShowing = false,
     this.onPrimaryModeTap,
     required this.activeMode,
     required this.onModeChanged,
@@ -181,16 +175,6 @@ class ChatAppBar extends StatelessWidget {
           icon: LucideIcons.messagesSquare,
           onSelected: (_) => onPrimaryModeTap!(),
         ),
-      if (onPetTap != null)
-        ChatAppBarAction(
-          label: isPetShowing
-              ? (english ? 'Hide pet' : '收起宠物')
-              : (english ? 'Show pet' : '唤起宠物'),
-          icon: LucideIcons.pawPrint,
-          onSelected: (_) {
-            if (!isPetOpening) onPetTap!();
-          },
-        ),
       if (showAppUpdateIndicator && onAppUpdateTap != null)
         ChatAppBarAction(
           label: appUpdateTooltip ?? (english ? 'Check for updates' : '检查更新'),
@@ -200,13 +184,15 @@ class ChatAppBar extends StatelessWidget {
     ];
     final tapTarget = glassPopupAnchorFromContext(anchorContext);
     if (tapTarget == null) return;
-    // Preserve the padded touch target, but align the menu to the visible
-    // circle rather than its extra invisible hit area.
-    final anchor = Rect.fromCenter(
-      center: tapTarget.center,
-      width: _navigationButtonSize,
-      height: _navigationButtonSize,
-    );
+    // Pad menus capture their shared capsule. Phone menus retain the visible
+    // circle inside the padded touch target.
+    final anchor = usePadLayout || onConversationPaneTap != null
+        ? tapTarget
+        : Rect.fromCenter(
+            center: tapTarget.center,
+            width: _navigationButtonSize,
+            height: _navigationButtonSize,
+          );
     final selected = await showOmniMenu<int>(
       context: anchorContext,
       sourceContext: anchorContext,
@@ -247,11 +233,7 @@ class ChatAppBar extends StatelessWidget {
     final selected = await showOmniMenu<int>(
       context: anchorContext,
       sourceContext: anchorContext,
-      anchor: Rect.fromCenter(
-        center: tapTarget.center,
-        width: _navigationButtonSize,
-        height: _navigationButtonSize,
-      ),
+      anchor: tapTarget,
       requestFocus: true,
       items: [
         if (onConversationPaneTap != null)
@@ -340,28 +322,36 @@ class ChatAppBar extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    if (showMenuButton) ...[
-                      KeyedSubtree(
-                        key: tutorialMenuAnchorKey,
-                        child: OmniCircleButton(
-                          key: const ValueKey('chat-app-bar-menu-button'),
-                          icon: LucideIcons.chevronLeft,
-                          size: _navigationButtonSize,
-                          tapTargetSize: MaterialTapTargetSize.padded,
-                          tooltip: english ? 'Back to conversations' : '返回会话列表',
-                          foregroundColor: palette.textPrimary,
-                          onPressed: onMenuTap,
+                    if (showMenuButton ||
+                        (directPaneControls && hasConversationPane)) ...[
+                      FlClashToolbarButtonGroup(
+                        key: const ValueKey('chat-app-bar-leading-group'),
+                        buttonSize: 48,
+                        iconSize: OmniCircleButton.defaultIconSize,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (showMenuButton)
+                              KeyedSubtree(
+                                key: tutorialMenuAnchorKey,
+                                child: IconButton(
+                                  key: const ValueKey(
+                                    'chat-app-bar-menu-button',
+                                  ),
+                                  icon: const Icon(LucideIcons.chevronLeft),
+                                  tooltip: english
+                                      ? 'Back to conversations'
+                                      : '返回会话列表',
+                                  onPressed: onMenuTap,
+                                ),
+                              ),
+                            if (directPaneControls && hasConversationPane)
+                              _buildPadPaneButton(context, conversation: true),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 12),
                     ],
-                    if (directPaneControls && hasConversationPane) ...[
-                      _buildPadPaneButton(context, conversation: true),
-                      const SizedBox(width: 4),
-                    ],
-                    if (showMenuButton ||
-                        (directPaneControls && hasConversationPane))
-                      const SizedBox(width: 8),
                     Expanded(
                       child: KeyedSubtree(
                         key: tutorialModeAnchorKey,
@@ -444,36 +434,48 @@ class ChatAppBar extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    if (directPaneControls) ...[
-                      if (hasWorkspacePane) ...[
-                        _buildPadPaneButton(context, conversation: false),
-                        const SizedBox(width: 4),
-                      ],
-                    ] else if (hasPaneControls) ...[
-                      OmniCircleButton.popup(
-                        key: const ValueKey('chat-app-bar-layout-button'),
-                        icon: LucideIcons.panelsTopLeft,
-                        size: _navigationButtonSize,
-                        tapTargetSize: MaterialTapTargetSize.padded,
-                        tooltip: english ? 'Panel layout' : '面板布局',
-                        foregroundColor:
-                            conversationPaneVisible || workspacePaneVisible
-                            ? palette.accentPrimary
-                            : palette.textPrimary,
-                        onOpen: _openLayoutMenu,
-                      ),
-                      const SizedBox(width: 4),
-                    ],
-                    KeyedSubtree(
-                      key: tutorialActionsAnchorKey,
-                      child: OmniCircleButton.popup(
-                        key: const ValueKey('chat-app-bar-more-button'),
-                        icon: LucideIcons.ellipsis,
-                        size: _navigationButtonSize,
-                        tapTargetSize: MaterialTapTargetSize.padded,
-                        tooltip: english ? 'Conversation options' : '对话选项',
-                        foregroundColor: palette.textPrimary,
-                        onOpen: _openActionsMenu,
+                    FlClashToolbarButtonGroup(
+                      key: const ValueKey('chat-app-bar-trailing-group'),
+                      buttonSize: 48,
+                      iconSize: OmniCircleButton.defaultIconSize,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (directPaneControls && hasWorkspacePane)
+                            _buildPadPaneButton(context, conversation: false)
+                          else if (!directPaneControls && hasPaneControls)
+                            Builder(
+                              builder: (anchorContext) => IconButton(
+                                key: const ValueKey(
+                                  'chat-app-bar-layout-button',
+                                ),
+                                icon: const Icon(LucideIcons.panelsTopLeft),
+                                tooltip: english ? 'Panel layout' : '面板布局',
+                                style: IconButton.styleFrom(
+                                  foregroundColor:
+                                      conversationPaneVisible ||
+                                          workspacePaneVisible
+                                      ? palette.accentPrimary
+                                      : palette.textPrimary,
+                                ),
+                                onPressed: () => _openLayoutMenu(anchorContext),
+                              ),
+                            ),
+                          KeyedSubtree(
+                            key: tutorialActionsAnchorKey,
+                            child: Builder(
+                              builder: (anchorContext) => IconButton(
+                                key: const ValueKey('chat-app-bar-more-button'),
+                                icon: const Icon(LucideIcons.ellipsis),
+                                tooltip: english
+                                    ? 'Conversation options'
+                                    : '对话选项',
+                                onPressed: () =>
+                                    _openActionsMenu(anchorContext),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -498,22 +500,26 @@ class ChatAppBar extends StatelessWidget {
         ? _conversationPaneLabel(english)
         : _workspacePaneLabel(english);
     final shortcut = conversation ? 'Ctrl+B' : 'Ctrl+E';
-    return Semantics(
-      toggled: visible,
-      child: OmniCircleButton(
-        key: ValueKey(
-          conversation
-              ? 'chat-app-bar-sidebar-button'
-              : 'chat-app-bar-workspace-button',
+    return MergeSemantics(
+      child: Semantics(
+        toggled: visible,
+        child: IconButton(
+          key: ValueKey(
+            conversation
+                ? 'chat-app-bar-sidebar-button'
+                : 'chat-app-bar-workspace-button',
+          ),
+          icon: Icon(
+            conversation ? LucideIcons.panelLeft : LucideIcons.panelRight,
+          ),
+          tooltip: '$label ($shortcut)',
+          style: IconButton.styleFrom(
+            foregroundColor: visible
+                ? context.omniPalette.accentPrimary
+                : context.omniPalette.textPrimary,
+          ),
+          onPressed: conversation ? onConversationPaneTap : onWorkspacePaneTap,
         ),
-        icon: conversation ? LucideIcons.panelLeft : LucideIcons.panelRight,
-        size: _navigationButtonSize,
-        tapTargetSize: MaterialTapTargetSize.padded,
-        tooltip: '$label ($shortcut)',
-        foregroundColor: visible
-            ? context.omniPalette.accentPrimary
-            : context.omniPalette.textPrimary,
-        onPressed: conversation ? onConversationPaneTap : onWorkspacePaneTap,
       ),
     );
   }

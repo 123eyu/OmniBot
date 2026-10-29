@@ -36,6 +36,11 @@ import 'package:ui/services/conversation_history_service.dart';
 import 'package:ui/services/conversation_service.dart';
 import 'package:ui/services/omni_plugin_service.dart';
 import 'package:ui/services/omnibot_resource_service.dart';
+import 'package:ui/services/overlay_service.dart';
+import 'package:ui/services/permission_registry.dart';
+import 'package:ui/services/permission_service.dart';
+import 'package:ui/features/home/pages/authorize/authorize_page_args.dart';
+import 'package:ui/features/home/pages/chat/widgets/pet_overlay_permission_sheet.dart';
 import 'package:ui/services/scheduled_task_storage_service.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_colors.dart';
@@ -58,6 +63,7 @@ part 'home_drawer_header_footer.dart';
 part 'home_drawer_home.dart';
 part 'home_drawer_image_previews.dart';
 part 'home_drawer_models.dart';
+part 'home_drawer_pet.dart';
 part 'home_drawer_search.dart';
 part 'home_drawer_selection.dart';
 
@@ -215,6 +221,8 @@ class HomeDrawerState extends ConsumerState<HomeDrawer>
   bool _isSearching = false;
   bool _homeSearchVisible = false;
   final _homeMenuRevision = ValueNotifier<int>(0);
+  bool _isPetOverlayOpening = false;
+  bool _isPetOverlayShowing = false;
   List<OmniPluginActionItem> _homeMenuWebQuickActions = const [];
   int _webQuickActionsRequest = 0;
   _HomeConversationFilter _homeFilter = _HomeConversationFilter.xiaowan;
@@ -253,8 +261,12 @@ class HomeDrawerState extends ConsumerState<HomeDrawer>
     if (widget.conversationSidebar) _homeFilter = _HomeConversationFilter.all;
     if (widget.homePage) {
       unawaited(AppUpdateService.initialize());
+      unawaited(_syncPetOverlayState());
       _homeAppLifecycleListener = AppLifecycleListener(
-        onResume: () => unawaited(AppUpdateService.refreshIfNeeded()),
+        onResume: () {
+          unawaited(AppUpdateService.refreshIfNeeded());
+          unawaited(_syncPetOverlayState());
+        },
       );
     }
     _runtimeCoordinator.ensureInitialized();
@@ -315,6 +327,7 @@ class HomeDrawerState extends ConsumerState<HomeDrawer>
     super.didUpdateWidget(oldWidget);
     if (widget.homePage && widget.active && !oldWidget.active) {
       unawaited(_loadHomeAgentCatalog());
+      unawaited(_syncPetOverlayState());
     }
   }
 

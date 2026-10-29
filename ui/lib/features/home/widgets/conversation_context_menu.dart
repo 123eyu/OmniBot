@@ -208,7 +208,9 @@ class _ConversationFocusLayer extends StatelessWidget {
       builder: (context, constraints) {
         final width = math.max(
           0.0,
-          math.min(anchor.width, math.min(360.0, constraints.maxWidth - 48)),
+          // The lifted row keeps its own layout; only the independent action
+          // menu has a compact width. Narrow windows may still constrain it.
+          math.min(anchor.width, constraints.maxWidth - 32),
         );
         return AnimatedBuilder(
           animation: animation,
@@ -339,7 +341,10 @@ class _ConversationFocusLayout extends MultiChildLayoutDelegate {
     );
     positionChild('menu', menuPosition);
     final destination = Offset(
-      menuPosition.dx,
+      menuPosition.dx.clamp(
+        16.0,
+        math.max(16.0, size.width - 16 - previewSize.width),
+      ),
       menuPosition.dy - gap - previewSize.height,
     );
     positionChild('preview', Offset.lerp(anchor.topLeft, destination, lift)!);

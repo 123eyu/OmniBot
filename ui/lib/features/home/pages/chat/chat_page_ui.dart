@@ -1,6 +1,5 @@
 part of 'chat_page.dart';
 
-const int _kDefaultContextTokenThreshold = 128000;
 const double _kChatMessageBottomSafeSpacing = 12.0;
 const double _kSlashCommandDrawerRadius = 18.0;
 const double _kSlashCommandDrawerHandleWidth = 36.0;
@@ -1328,11 +1327,6 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               onMenuTap: _returnToConversationHome,
               title: _currentConversation?.title,
               actions: _chatHeaderActions(),
-              onPetTap: () {
-                unawaited(_handlePetOverlayTap());
-              },
-              isPetOpening: _isPetOverlayOpening,
-              isPetShowing: _isPetOverlayShowing,
               onPrimaryModeTap:
                   _activeMode == ChatPageMode.agent && _activeAcpAgentId != null
                   ? () => GoRouterManager.push(

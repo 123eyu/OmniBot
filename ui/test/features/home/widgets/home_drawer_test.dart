@@ -24,6 +24,8 @@ import 'package:ui/services/app_update_service.dart';
 import 'package:ui/services/scheduled_task_storage_service.dart';
 import 'package:ui/services/assists_core_service.dart';
 import 'package:ui/services/storage_service.dart';
+import 'package:ui/services/special_permission.dart';
+import 'package:ui/features/home/pages/authorize/widgets/permission_prompt_sheet.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
@@ -75,6 +77,10 @@ void main() {
     'cn.com.omnimind.bot/AgentRuntimeEvents',
   );
   const appUpdateChannel = MethodChannel('cn.com.omnimind.bot/app_update');
+  const overlayChannel = MethodChannel('cn.com.omnimind.bot/overlay');
+  late bool petShowing;
+  late bool overlayGranted;
+  late List<String> overlayCalls;
   late List<Map<String, Object?>> nativeConversations;
   late List<Map<String, Object?>> nativeAgents;
   late List<String> agentMethods;
@@ -92,6 +98,29 @@ void main() {
         AppUpdateDownloadSource.worker;
     nativeUpdateStatus = null;
     updateCalls = [];
+    petShowing = false;
+    overlayGranted = true;
+    overlayCalls = [];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(overlayChannel, (call) async {
+          overlayCalls.add(call.method);
+          switch (call.method) {
+            case 'isPetOverlayShowing':
+              return petShowing;
+            case 'showPetOverlay':
+              petShowing = true;
+              return true;
+            case 'hidePetOverlay':
+              petShowing = false;
+              return true;
+          }
+          return null;
+        });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(spePermission, (call) async {
+          if (call.method == 'isOverlayPermission') return overlayGranted;
+          return null;
+        });
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(appUpdateChannel, (call) async {
           updateCalls.add(call);
@@ -166,6 +195,10 @@ void main() {
 
   tearDown(() {
     AppUpdateService.statusNotifier.value = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(overlayChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(spePermission, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(appUpdateChannel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -725,6 +758,66 @@ void main() {
     expect(find.byType(CustomSlidableAction), findsNothing);
     expect(find.byType(TextField), findsOneWidget);
   });
+
+  for (final size in const [Size(1069, 668), Size(668, 1069)]) {
+    testWidgets(
+      'Pad $size keeps the full row width throughout its context menu',
+      (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        nativeConversations = [selectionRow(1, '平板长消息条')];
+        await pumpSelectionHome(tester);
+        final source = find.byKey(const ValueKey('home-source-row-agent:1'));
+        final sourceVisibility = find.byKey(
+          const ValueKey('home-context-source-visibility-agent:1'),
+        );
+        final preview = find.byKey(
+          const ValueKey('conversation-context-preview'),
+        );
+        final original = tester.getRect(source);
+        expect(original.width, greaterThan(360));
+
+        void expectFullWidth() {
+          expect(tester.getSize(preview).width, closeTo(original.width, .01));
+          final box = tester.renderObject<RenderBox>(preview);
+          final paintedWidth =
+              box.localToGlobal(Offset(box.size.width, 0)).dx -
+              box.localToGlobal(Offset.zero).dx;
+          expect(
+            paintedWidth,
+            inInclusiveRange(original.width * .969, original.width * 1.001),
+          );
+          expect(tester.getRect(source), original);
+          expect(tester.widget<Opacity>(sourceVisibility).opacity, 0);
+        }
+
+        await tester.longPress(find.text('平板长消息条'));
+        await tester.pump();
+        for (final milliseconds in [40, 120, 300]) {
+          await tester.pump(Duration(milliseconds: milliseconds));
+          expectFullWidth();
+        }
+        expect(
+          tester
+              .getSize(
+                find.byKey(const ValueKey('conversation-context-actions')),
+              )
+              .width,
+          lessThanOrEqualTo(280),
+        );
+        await tester.binding.handlePopRoute();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expectFullWidth();
+        await tester.pumpAndSettle();
+        expect(preview, findsNothing);
+        expect(tester.widget<Opacity>(sourceVisibility).opacity, 1);
+        expect(tester.getRect(source), original);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   for (final scheduledParent in [false, true]) {
     testWidgets(
@@ -2284,7 +2377,7 @@ void main() {
         find.byWidgetPredicate(
           (widget) => widget is PopupMenuItem<VoidCallback>,
         ),
-        findsNWidgets(5),
+        findsNWidgets(6),
       );
       expect(find.text('设置'), findsNothing);
       expect(find.text('轨迹'), findsNothing);
@@ -2507,6 +2600,94 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('home menu toggles the pet through the existing overlay owner', (
+    tester,
+  ) async {
+    await pumpSelectionHome(tester);
+    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('唤起宠物'), findsOneWidget);
+    await tester.tap(find.text('唤起宠物'));
+    await tester.pumpAndSettle();
+    expect(petShowing, isTrue);
+    expect(
+      overlayCalls.where((method) => method == 'showPetOverlay').length,
+      1,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('收起宠物'), findsOneWidget);
+    expect(find.text('唤起宠物'), findsNothing);
+    await tester.tap(find.text('收起宠物'));
+    await tester.pumpAndSettle();
+    expect(petShowing, isFalse);
+    expect(
+      overlayCalls.where((method) => method == 'hidePetOverlay').length,
+      1,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home menu refreshes a pet hidden outside the app', (
+    tester,
+  ) async {
+    petShowing = true;
+    await pumpSelectionHome(tester);
+    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('收起宠物'), findsOneWidget);
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    petShowing = false;
+    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('唤起宠物'), findsOneWidget);
+    expect(find.text('收起宠物'), findsNothing);
+    expect(overlayCalls, isNot(contains('showPetOverlay')));
+    expect(overlayCalls, isNot(contains('hidePetOverlay')));
+  });
+
+  testWidgets('home pet action keeps permission gating and permits retry', (
+    tester,
+  ) async {
+    overlayGranted = false;
+    await pumpSelectionHome(tester);
+    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('唤起宠物'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PermissionPromptSheet), findsOneWidget);
+    expect(overlayCalls, isNot(contains('showPetOverlay')));
+    expect(
+      tester
+          .widget<GestureDetector>(
+            find.byKey(
+              const ValueKey('pet-overlay-permission-continue-button'),
+            ),
+          )
+          .onTap,
+      isNull,
+    );
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+    expect(find.byType(PermissionPromptSheet), findsNothing);
+    expect(petShowing, isFalse);
+
+    overlayGranted = true;
+    await tester.tap(find.byKey(const ValueKey('home-menu-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('唤起宠物'));
+    await tester.pumpAndSettle();
+    expect(petShowing, isTrue);
+    expect(
+      overlayCalls.where((method) => method == 'showPetOverlay').length,
+      1,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('home search remains usable with a compact keyboard viewport', (
     tester,
   ) async {
@@ -2722,7 +2903,7 @@ void main() {
     expect(registryReads, initialRegistryReads + 1);
     expect(
       find.byWidgetPredicate((widget) => widget is PopupMenuItem<VoidCallback>),
-      findsNWidgets(5),
+      findsNWidgets(6),
     );
     await press.up();
     await tester.pumpAndSettle();
@@ -2737,7 +2918,7 @@ void main() {
     );
     expect(
       find.byWidgetPredicate((widget) => widget is PopupMenuItem<VoidCallback>),
-      findsNWidgets(5),
+      findsNWidgets(6),
     );
     await tester.tapAt(const Offset(4, 4));
     await tester.pumpAndSettle();
@@ -2751,7 +2932,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.byWidgetPredicate((widget) => widget is PopupMenuItem<VoidCallback>),
-      findsNWidgets(5),
+      findsNWidgets(6),
     );
     expect(registryReads, initialRegistryReads + 2);
     expect(tester.takeException(), isNull);

@@ -450,6 +450,13 @@ extension _HomeDrawerHome on HomeDrawerState {
         assetPath: 'assets/home/archive_icon.svg',
         onTap: () => _navigateTo('/home/archived_conversations'),
       ),
+      _DrawerShortcutAction(
+        label: _isPetOverlayShowing
+            ? LegacyTextLocalizer.localize('收起宠物')
+            : LegacyTextLocalizer.localize('唤起宠物'),
+        icon: LucideIcons.pawPrint,
+        onTap: () => unawaited(_handlePetOverlayTap()),
+      ),
       ..._shortcutActions,
       if (webQuickActions.isNotEmpty)
         _DrawerShortcutAction(
@@ -472,6 +479,7 @@ extension _HomeDrawerHome on HomeDrawerState {
         // Show the cached actions on pointer down, then refresh the already-open
         // menu. Plugin I/O must not hold the source button's opening animation.
         unawaited(_refreshHomeMenuWebQuickActions());
+        unawaited(_syncPetOverlayState());
       },
       onSelected: (action) {
         if (mounted) action();

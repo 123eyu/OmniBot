@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ import 'package:ui/theme/theme_context.dart';
 import 'package:ui/services/app_background_service.dart';
 import 'package:ui/widgets/omni_circle_button.dart';
 import 'package:ui/widgets/flclash/popup.dart';
+import 'package:ui/widgets/flclash/search_header.dart';
 
 class _SvgTestAssetBundle extends CachingAssetBundle {
   final _bytes = Uint8List.fromList(
@@ -34,7 +36,6 @@ Widget _app({
     ChatAcpAgentModeOption(id: 'na-cloud', name: 'Na'),
   ],
   VoidCallback? onBack,
-  VoidCallback? onPet,
   VoidCallback? onTerminal,
   VoidCallback? onBrowser,
   VoidCallback? onEnvironment,
@@ -76,7 +77,6 @@ Widget _app({
             showSurfaceSwitcher: onSidebar == null,
             conversationPaneVisible: sidebarVisible,
             workspacePaneVisible: workspaceVisible,
-            onPetTap: onPet,
             onTerminalTap: onTerminal ?? () {},
             onBrowserTap: onBrowser ?? () {},
             onTerminalEnvironmentTap: (_) => onEnvironment?.call(),
@@ -138,7 +138,14 @@ void main() {
         findsNothing,
       );
       expect(tester.getRect(more).left - tester.getRect(subtitle).right, 12);
-      expect(find.byType(OmniCircleButton), findsNWidgets(2));
+      expect(find.byType(OmniCircleButton), findsNothing);
+      expect(find.byType(FlClashToolbarButtonGroup), findsNWidgets(2));
+      for (final side in ['leading', 'trailing']) {
+        expect(
+          tester.getSize(find.byKey(ValueKey('chat-app-bar-$side-group'))),
+          const Size.square(48),
+        );
+      }
       await tester.tap(find.byKey(const ValueKey('chat-app-bar-menu-button')));
       expect(backs, 1);
       await _openActions(tester);
@@ -167,6 +174,7 @@ void main() {
       findsNothing,
     );
     expect(find.byType(OmniCircleButton), findsNWidgets(2));
+    expect(find.byType(FlClashToolbarButtonGroup), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -188,7 +196,18 @@ void main() {
     );
     await tester.pumpAndSettle();
     final layout = find.byKey(const ValueKey('chat-app-bar-layout-button'));
+    final more = find.byKey(const ValueKey('chat-app-bar-more-button'));
+    final trailing = find.byKey(const ValueKey('chat-app-bar-trailing-group'));
     expect(tester.getSize(layout), const Size.square(48));
+    expect(tester.getSize(more), const Size.square(48));
+    expect(tester.getSize(trailing), const Size(96, 48));
+    expect(tester.getRect(layout).right, tester.getRect(more).left);
+    expect(tester.getRect(trailing).left, tester.getRect(layout).left);
+    expect(tester.getRect(trailing).right, tester.getRect(more).right);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('chat-app-bar-leading-group'))),
+      const Size.square(48),
+    );
     expect(
       find.byKey(const ValueKey('chat-app-bar-sidebar-button')),
       findsNothing,
@@ -203,6 +222,10 @@ void main() {
     );
     await tester.tap(layout);
     await tester.pumpAndSettle();
+    final transition = tester.widget<FlClashPopupTransition>(
+      find.byType(FlClashPopupTransition),
+    );
+    expect(transition.anchor, tester.getRect(trailing));
     expect(find.text('Hide conversations'), findsOneWidget);
     expect(find.text('Show workspace'), findsOneWidget);
     expect(find.text('Ctrl+B'), findsOneWidget);
@@ -228,6 +251,7 @@ void main() {
     var sidebarTaps = 0;
     var workspaceTaps = 0;
     var backTaps = 0;
+    final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
       _app(
         onBack: () => backTaps++,
@@ -235,10 +259,27 @@ void main() {
         onWorkspace: () => workspaceTaps++,
         sidebarVisible: true,
         workspaceVisible: true,
+        buttonDensity: VisualDensity.compact,
       ),
     );
     await tester.pumpAndSettle();
     final appBar = tester.element(find.byType(ChatAppBar));
+    expect(find.byType(OmniCircleButton), findsNothing);
+    expect(find.byType(FlClashToolbarButtonGroup), findsNWidgets(2));
+    for (final pair in const [
+      ('leading', 'menu', 'sidebar'),
+      ('trailing', 'workspace', 'more'),
+    ]) {
+      final group = find.byKey(ValueKey('chat-app-bar-${pair.$1}-group'));
+      final first = find.byKey(ValueKey('chat-app-bar-${pair.$2}-button'));
+      final second = find.byKey(ValueKey('chat-app-bar-${pair.$3}-button'));
+      expect(tester.getSize(group), const Size(96, 48));
+      expect(tester.getSize(first), const Size.square(48));
+      expect(tester.getSize(second), const Size.square(48));
+      expect(tester.getRect(first).right, tester.getRect(second).left);
+      expect(tester.getRect(group).left, tester.getRect(first).left);
+      expect(tester.getRect(group).right, tester.getRect(second).right);
+    }
     expect(
       find.byKey(const ValueKey('chat-app-bar-layout-button')),
       findsNothing,
@@ -246,14 +287,24 @@ void main() {
     for (final key in ['sidebar', 'workspace']) {
       final control = find.byKey(ValueKey('chat-app-bar-$key-button'));
       expect(tester.getSize(control), const Size.square(48));
+      expect(
+        tester.getSemantics(control).flagsCollection.isToggled,
+        Tristate.isTrue,
+      );
       await tester.tap(control);
+      expect(backTaps, 0);
+      expect(sidebarTaps, 1);
+      expect(workspaceTaps, key == 'workspace' ? 1 : 0);
     }
+    semantics.dispose();
     expect(sidebarTaps, 1);
     expect(workspaceTaps, 1);
     expect(find.byTooltip('Hide conversations (Ctrl+B)'), findsOneWidget);
     expect(find.byTooltip('Hide workspace (Ctrl+E)'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('chat-app-bar-menu-button')));
     expect(backTaps, 1);
+    expect(sidebarTaps, 1);
+    expect(workspaceTaps, 1);
     tester.view.physicalSize = const Size(420, 900);
     await tester.pumpAndSettle();
     expect(tester.element(find.byType(ChatAppBar)), same(appBar));
@@ -388,6 +439,57 @@ void main() {
     }
     expect(workspaceTaps, 2);
   });
+
+  for (final width in [420.0, 720.0]) {
+    testWidgets(
+      'Pad menu captures and returns to its complete $width capsule',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        var terminals = 0;
+        var workspaceTaps = 0;
+        await tester.pumpWidget(
+          _app(
+            onSidebar: () {},
+            onWorkspace: () => workspaceTaps++,
+            onTerminal: () => terminals++,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final group = find.byKey(const ValueKey('chat-app-bar-trailing-group'));
+        final trigger = find.byKey(const ValueKey('chat-app-bar-more-button'));
+        final groupBounds = tester.getRect(group);
+        final triggerBounds = tester.getRect(trigger);
+        expect(groupBounds.size, const Size(96, 48));
+        expect(triggerBounds.size, const Size.square(48));
+        // The two segments have separate actions even at the shared edge.
+        await tester.tapAt(triggerBounds.centerLeft + const Offset(1, 0));
+        await tester.pumpAndSettle();
+        expect(workspaceTaps, 0);
+        final transition = tester.widget<FlClashPopupTransition>(
+          find.byType(FlClashPopupTransition),
+        );
+        expect(transition.anchor, groupBounds);
+        expect(transition.source!.shape, isA<RoundedSuperellipseBorder>());
+        final snapshot = transition.source!.image.value!;
+        expect(snapshot.width / tester.view.devicePixelRatio, 96);
+        expect(snapshot.height / tester.view.devicePixelRatio, 48);
+
+        await tester.tap(find.text('Terminal'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(terminals, 0);
+        await tester.pumpAndSettle();
+        expect(terminals, 1);
+        expect(workspaceTaps, 0);
+        expect(tester.getRect(group), groupBounds);
+        expect(tester.getRect(trigger), triggerBounds);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets('phone header keeps the compact navigation controls', (
     tester,
@@ -646,7 +748,6 @@ void main() {
       final invoked = <String>[];
       await tester.pumpWidget(
         _app(
-          onPet: () => invoked.add('pet'),
           onTerminal: () => invoked.add('terminal'),
           onBrowser: () => invoked.add('browser'),
           onEnvironment: () => invoked.add('environment'),
@@ -668,11 +769,12 @@ void main() {
         'Terminal': 'terminal',
         'Environment variables': 'environment',
         'Browser': 'browser',
-        'Show pet': 'pet',
         'Check for updates': 'update',
       }.entries) {
         expect(find.text(entry.key), findsNothing);
         await _openActions(tester);
+        expect(find.text('Show pet'), findsNothing);
+        expect(find.text('Hide pet'), findsNothing);
         await tester.ensureVisible(find.text(entry.key));
         await tester.tap(find.text(entry.key));
         await tester.pumpAndSettle();
@@ -683,7 +785,6 @@ void main() {
         'terminal',
         'environment',
         'browser',
-        'pet',
         'update',
       ]);
     },
