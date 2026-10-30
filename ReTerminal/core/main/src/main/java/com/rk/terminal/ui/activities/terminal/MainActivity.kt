@@ -29,7 +29,9 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import top.yukonga.miuix.kmp.nav.core.rememberNavController
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.rk.terminal.service.SessionService
 import com.rk.libcommons.OMNIBOT_SETUP_SESSION_ID
 import com.rk.terminal.ui.navHosts.MainActivityNavHost
@@ -55,16 +57,19 @@ class MainActivity : ComponentActivity() {
                 setContent {
                     KarbonTheme {
                         Surface {
-                            val navController = rememberNavController<MainActivityRoutes>(MainActivityRoutes.MainScreen)
+                            val navController = rememberNavController()
                             MainActivityNavHost(navController = navController, mainActivity = this@MainActivity)
 
-                            val currentRoute = navController.backStack.lastOrNull()
+                            val currentEntry by navController.currentBackStackEntryAsState()
+                            val currentDestination = currentEntry?.destination
 
                             val focusManager = LocalFocusManager.current
                             val keyboardController = LocalSoftwareKeyboardController.current
 
-                            LaunchedEffect(currentRoute) {
-                                if (currentRoute != MainActivityRoutes.MainScreen) {
+                            LaunchedEffect(currentDestination) {
+                                if (currentDestination != null &&
+                                    !currentDestination.hasRoute<MainActivityRoutes.MainScreen>()
+                                ) {
                                     // 1️⃣ Clear Compose focus
                                     focusManager.clearFocus(force = true)
 
