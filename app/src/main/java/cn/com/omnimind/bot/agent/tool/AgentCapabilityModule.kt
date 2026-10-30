@@ -14,6 +14,7 @@ import cn.com.omnimind.bot.agent.tool.handlers.MemoryToolHandler
 import cn.com.omnimind.bot.agent.tool.handlers.PrivilegedToolHandler
 import cn.com.omnimind.bot.agent.tool.handlers.SharedHelper
 import cn.com.omnimind.bot.agent.tool.handlers.SkillsToolHandler
+import cn.com.omnimind.bot.agent.tool.handlers.StickerToolHandler
 import cn.com.omnimind.bot.agent.tool.handlers.SubagentToolHandler
 import cn.com.omnimind.bot.agent.tool.handlers.SystemToolHandler
 import cn.com.omnimind.bot.agent.tool.handlers.TerminalToolHandler
@@ -71,6 +72,7 @@ class BuiltInAgentCapabilityModule(
         terminalHandler,
         BrowserToolHandler(helper, workspaceManager),
         ImageGenerationToolHandler(helper, workspaceManager),
+        StickerToolHandler(helper, workspaceManager),
         FileToolHandler(helper, workspaceManager),
         SkillsToolHandler(helper, workspaceManager),
         SystemToolHandler(helper, scheduleToolBridge, workspaceManager),

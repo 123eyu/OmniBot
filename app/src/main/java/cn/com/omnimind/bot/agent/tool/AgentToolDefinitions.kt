@@ -160,6 +160,13 @@ object AgentToolDefinitions {
         "修改日程" to "Update Calendar Event",
         "删除日程" to "Delete Calendar Event",
         "音乐播放控制" to "Music Playback Control",
+        "搜索聊天表情包" to "Find Chat Sticker",
+        "按简短情绪或动作关键词搜索并下载一张经过格式校验的聊天表情包，支持静态图片与 GIF。适合自然的玩笑、庆祝或鼓励场景，也可响应用户明确的表情包请求。返回图片尚未发送；合适时在最终回复中原样引用返回的 artifact.renderMarkdown 一次。不要上传用户原话或隐私，不要把搜索当作已发送，失败时继续文字回复，不要循环重试。" to
+            "Search by a short emotion or action keyword and download one format-validated chat sticker, static or GIF. Use for natural playful, celebratory, or encouraging moments, or an explicit sticker request. The returned image has not been sent; when appropriate, copy its artifact.renderMarkdown exactly once into the final reply. Do not submit user messages or private information, treat a search as a sent image, or retry in a loop on failure; continue with text instead.",
+        "简短的情绪或动作关键词，如“开心”“鼓掌”“加油”，最多 24 个字符。只传检索词，不传用户原话、姓名、联系方式或其他隐私。" to
+            "A short emotion or action keyword, such as happy, applause, or encouragement, at most 24 characters. Send only the search term, never user messages, names, contact details, or other private information.",
+        "图片类型：auto 接受静态图或 GIF，static 仅静态图，gif 仅 GIF；默认 auto。" to
+            "Image type: auto accepts static images or GIF, static accepts only static images, and gif accepts only GIF. Defaults to auto.",
         "检索记忆" to "Search Memory",
         "写入当日记忆" to "Write Daily Memory",
         "沉淀长期记忆" to "Upsert Long-Term Memory",
@@ -1371,6 +1378,44 @@ object AgentToolDefinitions {
         }
     }
 
+    val stickerSearchTool: JsonObject = buildJsonObject {
+        put("type", "function")
+        putJsonObject("function") {
+            put("name", "sticker_search")
+            put("displayName", "搜索聊天表情包")
+            put("toolType", "workspace")
+            put(
+                "description",
+                "按简短情绪或动作关键词搜索并下载一张经过格式校验的聊天表情包，支持静态图片与 GIF。适合自然的玩笑、庆祝或鼓励场景，也可响应用户明确的表情包请求。返回图片尚未发送；合适时在最终回复中原样引用返回的 artifact.renderMarkdown 一次。不要上传用户原话或隐私，不要把搜索当作已发送，失败时继续文字回复，不要循环重试。"
+            )
+            putJsonObject("parameters") {
+                put("type", "object")
+                put("additionalProperties", false)
+                putJsonObject("properties") {
+                    putJsonObject("keyword") {
+                        put("type", "string")
+                        put("minLength", 1)
+                        put("maxLength", 24)
+                        put("description", "简短的情绪或动作关键词，如“开心”“鼓掌”“加油”，最多 24 个字符。只传检索词，不传用户原话、姓名、联系方式或其他隐私。")
+                    }
+                    putJsonObject("format") {
+                        put("type", "string")
+                        put("description", "图片类型：auto 接受静态图或 GIF，static 仅静态图，gif 仅 GIF；默认 auto。")
+                        put("default", "auto")
+                        putJsonArray("enum") {
+                            add("auto")
+                            add("static")
+                            add("gif")
+                        }
+                    }
+                }
+                putJsonArray("required") {
+                    add("keyword")
+                }
+            }
+        }
+    }
+
     val fileEditTool: JsonObject = buildJsonObject {
         put("type", "function")
         putJsonObject("function") {
@@ -2220,6 +2265,7 @@ object AgentToolDefinitions {
         fileReadTool,
         fileWriteTool,
         imageGenerateTool,
+        stickerSearchTool,
         fileEditTool,
         fileListTool,
         fileSearchTool,

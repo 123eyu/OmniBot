@@ -2752,6 +2752,7 @@ object HttpController {
             ?: throw IllegalArgumentException("Invalid apiBase for Anthropic")
         val url = buildAnthropicMessagesUrl(base)
         val requestBody = requestJson.toRequestBody("application/json".toMediaType())
+            .asSingleAttemptInferenceBody()
         val request = buildAnthropicRequestBuilder(
             url = url,
             requestBody = requestBody,
@@ -2789,6 +2790,11 @@ object HttpController {
     // on Request, and share only the transport across Provider calls.
     private val openAIStreamingClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            // The Agent transport owns bounded inference retries. OkHttp must
+            // not independently replay POSTs outside that budget/output gate.
+            .retryOnConnectionFailure(false)
+            .followRedirects(false)
+            .followSslRedirects(false)
             .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(0, java.util.concurrent.TimeUnit.SECONDS)
             .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
@@ -2806,6 +2812,9 @@ object HttpController {
     // ten-second read deadline to a user-requested refresh.
     private val providerModelsClient: OkHttpClient by lazy {
         openAIStreamingClient.newBuilder()
+            .retryOnConnectionFailure(true)
+            .followRedirects(true)
+            .followSslRedirects(true)
             .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
             .build()
     }
@@ -2845,7 +2854,7 @@ object HttpController {
             .header("Authorization", "Bearer $accessToken")
         return if (payload == null) builder.get().build() else builder
             .header("Accept", "text/event-stream")
-            .post(completionJson.toStreamingRequestBody(payload))
+            .post(completionJson.toStreamingRequestBody(payload).asSingleAttemptInferenceBody())
             .build()
     }
 
@@ -3641,6 +3650,7 @@ object HttpController {
             )
         }
         val requestBody = requestJson.toRequestBody("application/json".toMediaType())
+            .asSingleAttemptInferenceBody()
         val url = buildOpenAIInferenceUrl(base, normalizedWireApi)
         val request = buildOpenAIRequestBuilder(
             url = url,
@@ -3737,6 +3747,7 @@ object HttpController {
             )
         }
         val httpBody = completionJson.toStreamingRequestBody(preparedRequest)
+            .asSingleAttemptInferenceBody()
         val url = buildOpenAIInferenceUrl(base, normalizedWireApi)
         val request = if (resolved.oauthProfileId != null) {
             chatGptRequest(resolved.oauthProfileId, preparedRequest)
