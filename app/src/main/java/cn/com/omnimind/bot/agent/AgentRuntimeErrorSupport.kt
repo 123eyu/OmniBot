@@ -144,12 +144,15 @@ internal object AgentRuntimeErrorSupport {
                         val root = Json.parseToJsonElement(cause.responseBody.orEmpty()) as? JsonObject
                         val detail = root?.get("error") as? JsonObject
                         (detail?.get("code") as? JsonPrimitive)?.content
+                            ?: (detail?.get("type") as? JsonPrimitive)?.content
+                            ?: (root?.get("code") as? JsonPrimitive)?.content
                     }.getOrNull()
                 }
                 else -> continue
             }
             when (code?.lowercase()) {
-                "insufficient_quota", "quota_exceeded", "quota_exhausted" -> return PROVIDER_QUOTA_EXCEEDED
+                "insufficient_quota", "quota_exceeded", "quota_exhausted",
+                "insufficient_balance", "billing_hard_limit_reached" -> return PROVIDER_QUOTA_EXCEEDED
                 "rate_limit_exceeded", "rate_limit_error" -> return PROVIDER_RATE_LIMITED
                 "authentication_error", "invalid_api_key" -> return PROVIDER_AUTHENTICATION_FAILED
                 "model_not_found" -> return PROVIDER_MODEL_UNAVAILABLE
