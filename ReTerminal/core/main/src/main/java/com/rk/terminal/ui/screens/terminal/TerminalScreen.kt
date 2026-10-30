@@ -71,7 +71,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.view.WindowCompat
 import androidx.core.widget.doOnTextChanged
-import top.yukonga.miuix.kmp.nav.core.NavController
+import androidx.navigation.NavHostController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import com.rk.components.compose.preferences.base.PreferenceGroup
@@ -163,7 +163,7 @@ var showHorizontalToolbar = mutableStateOf(Settings.toolbar)
 fun TerminalScreen(
     modifier: Modifier = Modifier,
     mainActivityActivity: MainActivity,
-    navController: NavController
+    navController: NavHostController
 ) {
     val context = LocalContext.current
     val isDarkMode = isSystemInDarkTheme()
@@ -317,8 +317,8 @@ fun TerminalScreen(
                             Row {
                                 val keyboardController = LocalSoftwareKeyboardController.current
                                 IconButton(onClick = {
-                                    if (navController.backStack.lastOrNull() != MainActivityRoutes.Settings) {
-                                        navController.push(MainActivityRoutes.Settings)
+                                    navController.navigate(MainActivityRoutes.Settings) {
+                                        launchSingleTop = true
                                     }
                                     keyboardController?.hide()
                                 }) {

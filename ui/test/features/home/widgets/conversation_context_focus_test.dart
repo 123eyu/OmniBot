@@ -70,13 +70,13 @@ void main() {
     (
       'normal row',
       const Rect.fromLTWH(16, 100, 358, 74),
-      const Rect.fromLTWH(24, 92, 342, 74),
+      const Rect.fromLTWH(16, 92, 358, 74),
       const Offset(24, 180),
     ),
     (
       'bottom row',
       const Rect.fromLTWH(16, 700, 358, 74),
-      const Rect.fromLTWH(24, 436, 342, 74),
+      const Rect.fromLTWH(16, 436, 358, 74),
       const Offset(24, 524),
     ),
     (
@@ -176,14 +176,19 @@ void main() {
         await setContextMenuScreen(tester, const Size(390, 844));
         final harness = ContextMenuTestHarness();
         await tester.pumpWidget(harness.app());
-        harness.open(preview: _preview());
+        const anchor = Rect.fromLTWH(16, 100, 358, 74);
+        harness.open(anchor: anchor, preview: _preview());
         await tester.pump();
-        expect(_paintedPreview(tester).width, closeTo(342 * 0.97, 0.001));
+        // The preview keeps its source row width; only the actions are compact.
+        expect(
+          _paintedPreview(tester).width,
+          closeTo(anchor.width * 0.97, 0.001),
+        );
         await tester.pump(Duration(milliseconds: openMilliseconds));
         final openingBounds = _paintedPreview(tester);
         final openingVeil = _scrimAlpha(tester);
-        expect(openingBounds.width, greaterThan(342 * 0.97));
-        expect(openingBounds.width, lessThanOrEqualTo(342));
+        expect(openingBounds.width, greaterThan(anchor.width * 0.97));
+        expect(openingBounds.width, lessThanOrEqualTo(anchor.width));
 
         harness.dismiss();
         await tester.pump();
@@ -270,9 +275,11 @@ void main() {
       final preview = _paintedPreview(tester);
       final actions = tester.getRect(contextMenuPanel);
       expect(preview.top, greaterThanOrEqualTo(36));
-      expect(preview.left, greaterThanOrEqualTo(24));
-      expect(preview.right, lessThanOrEqualTo(296));
+      expect(preview.left, greaterThanOrEqualTo(16));
+      expect(preview.right, lessThanOrEqualTo(304));
       expect(preview.bottom, lessThan(actions.top));
+      expect(actions.left, greaterThanOrEqualTo(24));
+      expect(actions.right, lessThanOrEqualTo(296));
       expect(actions.bottom, lessThanOrEqualTo(288));
       await tester.drag(find.text('Pin'), const Offset(0, -480));
       await tester.pumpAndSettle();
@@ -297,7 +304,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(harness.route.transitionDuration, Duration.zero);
       expect(harness.route.reverseTransitionDuration, Duration.zero);
-      expect(_paintedPreview(tester), const Rect.fromLTWH(24, 92, 342, 74));
+      expect(_paintedPreview(tester), const Rect.fromLTWH(16, 92, 358, 74));
       expect(_scrimAlpha(tester), closeTo(0.12, 0.001));
       expect(LiquidGlassHost.debugHeldCaptures, 2);
 

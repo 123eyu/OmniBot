@@ -1,3 +1,4 @@
+import 'package:ui/widgets/navigation/page_route.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
@@ -354,7 +355,7 @@ class MessageBubble extends StatelessWidget {
                 ? null
                 : () {
                     Navigator.of(context).push(
-                      MaterialPageRoute<void>(
+                      OmniPageRoute<void>(
                         builder: (_) => CodexRemoteFilePreviewPage(
                           agentId: 'na-cloud',
                           sessionId: item['sessionId'] as String?,

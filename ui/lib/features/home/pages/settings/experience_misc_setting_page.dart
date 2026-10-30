@@ -4,7 +4,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/widgets/omni_adaptive_layout.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/features/home/state/habitual_hand_controller.dart';
-import 'package:ui/features/home/state/predictive_back_controller.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/models/chat_startup_behavior.dart';
 import 'package:ui/models/habitual_hand.dart';
@@ -241,20 +240,10 @@ class _ExperienceMiscSettingPageState
     }
   }
 
-  Future<void> _onPredictiveBackChanged(bool value) async {
-    final saved = await ref
-        .read(predictiveBackEnabledProvider.notifier)
-        .setEnabled(value);
-    if (!saved && mounted) {
-      showToast(context.l10n.settingsSaveFailed, type: ToastType.error);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
     final habitualHand = ref.watch(habitualHandProvider);
-    final predictiveBackEnabled = ref.watch(predictiveBackEnabledProvider);
     final isEnglish = Localizations.localeOf(context).languageCode == 'en';
     final sections = [
       _SettingSection(
@@ -340,17 +329,6 @@ class _ExperienceMiscSettingPageState
       _SettingSection(
         label: isEnglish ? 'Interaction & System' : '交互与系统',
         items: [
-          // 所有系统版本可见:低版本系统无预测返回事件,开关关闭时行为与旧版一致
-          _SettingItem(
-            icon: Icons.swipe_left_rounded,
-            title: context.l10n.settingsPredictiveBackTitle,
-            subtitle: context.l10n.settingsPredictiveBackSubtitle,
-            onTap: () => _onPredictiveBackChanged(!predictiveBackEnabled),
-            trailing: OmniSettingsSwitch(
-              value: predictiveBackEnabled,
-              onToggle: _onPredictiveBackChanged,
-            ),
-          ),
           _SettingItem(
             icon: LucideIcons.vibrate,
             title: context.l10n.settingsVibrationTitle,

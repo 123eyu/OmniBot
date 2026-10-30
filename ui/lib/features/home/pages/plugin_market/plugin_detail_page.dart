@@ -183,28 +183,23 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    return PopScope(
-      // The route already uses PredictiveBackGestureWrapper. It must remain
-      // poppable so Android can hand gesture progress to that transition.
-      canPop: true,
-      child: Scaffold(
-        backgroundColor: palette.pageBackground,
-        appBar: CommonAppBar(
-          title: context.l10n.pluginDetailTitle,
-          primary: true,
-          onBackPressed: () => context.pop(_changed),
-        ),
-        body: OmniContentWidth(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _plugin == null
-              ? _buildUnavailable()
-              : _buildDetails(_plugin!),
-        ),
-        bottomNavigationBar: _plugin == null
-            ? null
-            : _buildBottomActions(_plugin!),
+    return Scaffold(
+      backgroundColor: palette.pageBackground,
+      appBar: CommonAppBar(
+        title: context.l10n.pluginDetailTitle,
+        primary: true,
+        onBackPressed: () => context.pop(_changed),
       ),
+      body: OmniContentWidth(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _plugin == null
+            ? _buildUnavailable()
+            : _buildDetails(_plugin!),
+      ),
+      bottomNavigationBar: _plugin == null
+          ? null
+          : _buildBottomActions(_plugin!),
     );
   }
 

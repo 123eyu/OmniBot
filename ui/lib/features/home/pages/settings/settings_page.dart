@@ -12,7 +12,7 @@ import 'package:ui/services/workspace_memory_service.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/omni_root_toolbar.dart';
-import 'package:ui/widgets/flclash/open_container.dart';
+import 'package:ui/widgets/navigation/open_container.dart';
 import 'package:ui/widgets/flclash/page_activity.dart';
 import 'package:ui/widgets/settings_detail_sheet.dart';
 import 'package:ui/widgets/settings_ui.dart';
@@ -458,10 +458,8 @@ class _SettingsPageState extends State<SettingsPage> with FlClashPageLoadMixin {
     );
     final route = item.route;
     if (route == null) return buildTile(item.onTap);
-    // FlClash's ListItem.open captures ItemPosition before reparenting its
-    // DecorationListItem. Carry this row's own surface and group corners too:
-    // the parent OmniSettingsGroup stays behind while the row is in the route.
-    // Upstream intentionally leaves OpenContainer.closedShape/closedColor null;
+    // Carry the row surface and group corners into the destination; the
+    // parent OmniSettingsGroup stays behind. Keep the container defaults:
     // the expanding rectangle has page color, with the shaped row inside it.
     final index = section.items.indexOf(item);
     final rowShape = RoundedRectangleBorder(
@@ -472,7 +470,7 @@ class _SettingsPageState extends State<SettingsPage> with FlClashPageLoadMixin {
             : Radius.zero,
       ),
     );
-    return FlClashOpenContainer(
+    return OmniOpenContainer(
       key: ValueKey('settings-open-$route'),
       closedBuilder: (rowContext, open) => Material(
         color: rowContext.omniPalette.surfacePrimary,
@@ -482,7 +480,7 @@ class _SettingsPageState extends State<SettingsPage> with FlClashPageLoadMixin {
       ),
       onOpen: (source) => GoRouterManager.pushForResult<Object?>(
         route,
-        extra: {flClashContainerExtraKey: source},
+        extra: {omniContainerExtraKey: source},
       ),
       onClosed: (_) => item.onReturned?.call(),
     );

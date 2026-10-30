@@ -1,5 +1,3 @@
-import 'package:ui/widgets/predictive_back_route.dart';
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -9,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:ui/l10n/app_locale_controller.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
-import 'package:ui/features/home/state/predictive_back_controller.dart';
 import 'package:ui/services/omnibot_resource_service.dart';
 import 'package:ui/services/models_dev_catalog_service.dart';
 import 'package:ui/services/app_background_service.dart';
@@ -189,29 +186,14 @@ class _MyAppState extends ConsumerState<MyApp> {
     final widgetBuildStart = DateTime.now();
     final themeMode = ref.watch(appThemeModeProvider).materialThemeMode;
     final resolvedLocale = ref.watch(appResolvedLocaleProvider);
-    final predictiveBackEnabled = ref.watch(predictiveBackEnabledProvider);
     final glass = ref.watch(liquidGlassSettingsProvider);
-    // Imperative Material routes share the GoRouter motion and geometry.
-    final pageTransitionsTheme = PageTransitionsTheme(
-      builders: {
-        TargetPlatform.android: predictiveBackEnabled
-            ? const MiuixPageTransitionsBuilder()
-            : const FadeForwardsPageTransitionsBuilder(),
-      },
-    );
-    final lightTheme = AppTheme.lightTheme.copyWith(
-      pageTransitionsTheme: pageTransitionsTheme,
-    );
-    final darkTheme = AppTheme.darkTheme.copyWith(
-      pageTransitionsTheme: pageTransitionsTheme,
-    );
     LegacyTextLocalizer.setResolvedLocale(resolvedLocale.locale);
     final widget = MaterialApp.router(
       debugShowCheckedModeBanner: false,
       onGenerateTitle: (context) =>
           AppLocalizations.of(context)?.appName ?? 'Omnibot',
-      theme: lightTheme,
-      darkTheme: darkTheme,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
       themeAnimationCurve: Curves.easeInOutCubic,
       themeAnimationDuration: const Duration(milliseconds: 220),

@@ -1,3 +1,4 @@
+import 'package:ui/widgets/navigation/page_route.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -210,7 +211,7 @@ class CodexRemoteWorkspaceBrowserState
   }) async {
     final workspaceOwner = _listing?.workspaceOwner;
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      OmniPageRoute<void>(
         builder: (_) => CodexRemoteFilePreviewPage(
           agentId: widget.agentId,
           workspaceOwner: workspaceOwner,

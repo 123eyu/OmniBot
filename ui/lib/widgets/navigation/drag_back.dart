@@ -1,15 +1,9 @@
-// Adapted from FlClash 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7,
-// lib/ui/drag_back.dart. The detector, linear slide, velocity/distance decision
-// and 350 ms fastEaseInToSlowEaseOut settle are retained for pointer drags.
-// Android system back uses Navigator's ordinary pop, as in the source: it
-// contracts OpenContainer to its row instead of turning into a pointer slide.
-// See docs/third-party/flclash-NOTICE.md.
+// Third-party attribution and license details are in docs/third-party/.
 // SPDX-License-Identifier: GPL-3.0-only
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
-import 'package:ui/services/storage_service.dart';
 
 const double _flingVelocity = 1.0;
 const Duration _settleDuration = Duration(milliseconds: 350);
@@ -34,13 +28,8 @@ mixin DragBackRouteMixin<T> on ModalRoute<T> {
   @protected
   bool get reduceDragBackMotion => false;
 
-  bool get _dragBackEnabled =>
-      defaultTargetPlatform != TargetPlatform.android ||
-      StorageService.isPredictiveBackEnabled();
-
   @override
   bool get popGestureEnabled =>
-      _dragBackEnabled &&
       !_exitingNextRoutes.any(
         (route) => !(route.animation?.isDismissed ?? true),
       ) &&

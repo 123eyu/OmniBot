@@ -1,5 +1,5 @@
+import 'package:ui/widgets/navigation/page_route.dart';
 import 'package:ui/widgets/omni_adaptive_layout.dart';
-import 'package:ui/widgets/predictive_back_route.dart';
 
 import 'dart:async';
 
@@ -265,7 +265,7 @@ class _RemoteCodexSettingPageState extends State<RemoteCodexSettingPage> {
 
   Future<void> _scanQr() async {
     final result = await Navigator.of(context).push<CodexBridgeQrScanResult>(
-      PredictiveBackMaterialPageRoute(
+      OmniPageRoute(
         builder: (_) => const CodexBridgeQrScannerPage(),
         fullscreenDialog: true,
       ),

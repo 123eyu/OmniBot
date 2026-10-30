@@ -1,5 +1,4 @@
-// Adapted from FlClash 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7,
-// lib/ui/keyboard_inset_hold.dart. See docs/third-party/flclash-NOTICE.md.
+// Third-party attribution and license details are in docs/third-party/.
 // SPDX-License-Identifier: GPL-3.0-only
 
 import 'package:flutter/widgets.dart';
@@ -10,17 +9,16 @@ typedef _BottomInset = ({double viewInset, double padding});
 /// tab, which is still laid out, offstage or not, and would otherwise resize
 /// with every frame of a keyboard it cannot use. It catches up once the
 /// keyboard comes down to it or the focus moves inside.
-class FlClashKeyboardInsetHold extends StatefulWidget {
-  const FlClashKeyboardInsetHold({super.key, required this.child});
+class KeyboardInsetHold extends StatefulWidget {
+  const KeyboardInsetHold({super.key, required this.child});
 
   final Widget child;
 
   @override
-  State<FlClashKeyboardInsetHold> createState() =>
-      _FlClashKeyboardInsetHoldState();
+  State<KeyboardInsetHold> createState() => _KeyboardInsetHoldState();
 }
 
-class _FlClashKeyboardInsetHoldState extends State<FlClashKeyboardInsetHold> {
+class _KeyboardInsetHoldState extends State<KeyboardInsetHold> {
   _BottomInset? _shown;
   _BottomInset? _held;
   FocusNode? _enclosingFocus;

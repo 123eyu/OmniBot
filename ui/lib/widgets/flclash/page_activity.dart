@@ -9,7 +9,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 
-import 'route_activation.dart';
+import 'package:ui/widgets/navigation/route_activation.dart';
 
 /// The tab animation is the single owner of this UI scheduling boundary.
 /// No timer estimates its duration, and unrequested tabs are never warmed.
@@ -119,7 +119,7 @@ class _PageLoad {
 mixin FlClashPageLoadMixin<T extends StatefulWidget> on State<T> {
   final _pageLoads = <Object, _PageLoad>{};
   final _pageDisposed = Completer<void>();
-  final _routeActivation = FlClashRouteActivation();
+  final _routeActivation = RouteActivation();
 
   @override
   void didChangeDependencies() {

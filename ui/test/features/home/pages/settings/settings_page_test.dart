@@ -17,7 +17,7 @@ import 'package:ui/features/home/pages/settings/settings_page.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme.dart';
-import 'package:ui/widgets/flclash/open_container.dart';
+import 'package:ui/widgets/navigation/open_container.dart';
 
 class _SvgTestAssetBundle extends CachingAssetBundle {
   static final Uint8List _svgBytes = Uint8List.fromList(
@@ -257,7 +257,7 @@ void main() {
     final sourceRect = tester.getRect(
       find.ancestor(
         of: find.text('杂项'),
-        matching: find.byType(FlClashOpenContainer),
+        matching: find.byType(OmniOpenContainer),
       ),
     );
     await tester.tap(find.text('杂项'));
@@ -285,9 +285,8 @@ void main() {
           ),
           (_) {},
         );
-    // The actual settings source is itself a PredictiveBackPage. Its observer
-    // must not claim the container destination's native gesture or replace the
-    // Tools return with the old whole-page slide.
+    // The ordinary page beneath a container must not claim system progress
+    // or replace the container's return to its source row.
     await back('startBackGesture', {
       'touchOffset': <double>[799, 300],
       'progress': 0.0,
@@ -347,7 +346,7 @@ void main() {
             GoRoute(
               path: path,
               pageBuilder: (_, state) =>
-                  (state.extra! as Map)[flClashContainerExtraKey]
+                  (state.extra! as Map)[omniContainerExtraKey]
                       .createPage<Object?>(
                         key: state.pageKey,
                         child: const Scaffold(body: Text('Row destination')),

@@ -16,8 +16,8 @@ import 'logging_observer.dart';
 import 'package:ui/services/method_channel_service.dart';
 import 'package:ui/constants/storage_keys.dart';
 import 'package:ui/services/storage_service.dart';
-import 'package:ui/widgets/predictive_back_route.dart';
-import 'package:ui/widgets/flclash/open_container.dart';
+import 'package:ui/widgets/navigation/page_route.dart';
+import 'package:ui/widgets/navigation/open_container.dart';
 
 class RouteOptions {
   final bool noAnim;
@@ -89,10 +89,10 @@ class GoRouterManager {
     return (options: options, data: map.isEmpty ? null : map);
   }
 
-  static Page<dynamic> _buildPage({
+  static Page<dynamic> buildPage({
     required LocalKey key,
     required Widget child,
-    required RouteOptions options,
+    RouteOptions options = const RouteOptions(),
     String? name,
   }) {
     if (options.noAnim) {
@@ -107,37 +107,8 @@ class GoRouterManager {
         },
       );
     } else {
-      return PredictiveBackPage(
-        key: key,
-        child: child,
-        name: name,
-        fallbackBuilder: (context, animation, secondaryAnimation, child) =>
-            FadeTransition(opacity: animation, child: child),
-      );
+      return OmniPage(key: key, name: name, child: child);
     }
-  }
-
-  /// Overlay-style stack transition:
-  /// the incoming page stays above the previous page and covers it while
-  /// sliding in, and slides out above it on pop.
-  static Page<dynamic> buildActivitySlidePage({
-    required LocalKey key,
-    required Widget child,
-    String? name,
-  }) {
-    return PredictiveBackPage(
-      key: key,
-      child: child,
-      name: name,
-      fallbackDuration: const Duration(milliseconds: 300),
-      fallbackBuilder: (context, animation, secondaryAnimation, child) =>
-          CupertinoPageTransition(
-            primaryRouteAnimation: animation,
-            secondaryRouteAnimation: secondaryAnimation,
-            linearTransition: false,
-            child: child,
-          ),
-    );
   }
 
   static GoRoute _wrapRoute(GoRoute route) {
@@ -151,7 +122,7 @@ class GoRouterManager {
       pageBuilder: (context, state) {
         final parsed = _parseExtra(state.extra);
         final source = parsed.data is Map
-            ? (parsed.data as Map)[flClashContainerExtraKey]
+            ? (parsed.data as Map)[omniContainerExtraKey]
             : null;
 
         Widget child;
@@ -159,11 +130,11 @@ class GoRouterManager {
           child = route.builder!(context, state);
         } else if (route.pageBuilder != null) {
           final page = route.pageBuilder!(context, state);
-          if (source is! FlClashContainerSource) return page;
+          if (source is! OmniContainerSource) return page;
           // Preserve each destination's existing route builder. The source
           // supplies presentation geometry, never a second navigation stack.
           final content = switch (page) {
-            PredictiveBackPage page => page.child,
+            OmniPage page => page.child,
             CustomTransitionPage page => page.child,
             MaterialPage page => page.child,
             CupertinoPage page => page.child,
@@ -175,14 +146,14 @@ class GoRouterManager {
           child = const SizedBox.shrink();
         }
 
-        if (source is FlClashContainerSource && !parsed.options.noAnim) {
+        if (source is OmniContainerSource && !parsed.options.noAnim) {
           return source.createPage(
             key: state.pageKey,
             name: route.name,
             child: child,
           );
         }
-        return _buildPage(
+        return buildPage(
           key: state.pageKey,
           child: child,
           options: parsed.options,
@@ -255,7 +226,7 @@ class GoRouterManager {
             final child = _isSubEngine
                 ? const SizedBox.shrink()
                 : const MainNavigationPage();
-            return _buildPage(
+            return buildPage(
               key: state.pageKey,
               child: child,
               options: parsed.options,
