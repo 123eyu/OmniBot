@@ -8,7 +8,6 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.text.TextUtils
 import android.view.Gravity
@@ -36,7 +35,6 @@ import cn.com.omnimind.baselib.i18n.AppLocaleManager
 import cn.com.omnimind.bot.R
 import cn.com.omnimind.bot.resource.ResourceFileIntents
 import cn.com.omnimind.bot.ui.components.FlClashPopupMenu
-import cn.com.omnimind.bot.util.PredictiveBackGate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -112,26 +110,8 @@ class HtmlPreviewActivity : ComponentActivity() {
             return
         }
         source = file
-        PredictiveBackGate.install(this)
-        configureTransitions()
         buildContent(intent.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() } ?: file.name)
         createWebView(savedInstanceState?.getBundle(WEB_STATE))
-    }
-
-    private fun configureTransitions() {
-        if (!PredictiveBackGate.isPredictiveBackEnabled(this)) return
-        // Reuse the existing native terminal transition resources. Flutter's
-        // route animation and back stack are not involved in this activity.
-        if (Build.VERSION.SDK_INT >= 34) {
-            overrideActivityTransition(OVERRIDE_TRANSITION_OPEN,
-                com.rk.terminal.R.anim.slide_in_right, com.rk.terminal.R.anim.slide_out_left)
-            overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE,
-                com.rk.terminal.R.anim.slide_in_left, com.rk.terminal.R.anim.slide_out_right)
-        } else {
-            @Suppress("DEPRECATION")
-            overridePendingTransition(com.rk.terminal.R.anim.slide_in_right,
-                com.rk.terminal.R.anim.slide_out_left)
-        }
     }
 
     private fun buildContent(title: String) {
@@ -361,15 +341,6 @@ class HtmlPreviewActivity : ComponentActivity() {
             view.destroy()
         }
         super.onDestroy()
-    }
-
-    override fun finish() {
-        super.finish()
-        if (Build.VERSION.SDK_INT < 34 && PredictiveBackGate.isPredictiveBackEnabled(this)) {
-            @Suppress("DEPRECATION")
-            overridePendingTransition(com.rk.terminal.R.anim.slide_in_left,
-                com.rk.terminal.R.anim.slide_out_right)
-        }
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()

@@ -10,10 +10,9 @@ import 'package:ui/services/storage_service.dart';
 import 'package:ui/features/home/pages/tools/tools_page.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/theme/app_theme.dart';
-import 'package:ui/widgets/flclash/open_container.dart';
+import 'package:ui/widgets/navigation/open_container.dart';
 import 'package:ui/widgets/flclash/page_activity.dart';
-import 'package:ui/widgets/flclash/drag_back.dart';
-import 'package:ui/widgets/predictive_back_route.dart';
+import 'package:ui/widgets/navigation/drag_back.dart';
 
 void main() {
   setUp(() async {
@@ -270,7 +269,7 @@ void main() {
     (tester) async {
       final harness = _Harness();
       await tester.pumpWidget(harness.app);
-      final source = tester.getRect(find.byType(FlClashOpenContainer));
+      final source = tester.getRect(find.byType(OmniOpenContainer));
       final full = Offset.zero & tester.getSize(find.byType(MaterialApp));
       await tester.tap(find.text('Open settings'));
       await tester.pump();
@@ -302,7 +301,7 @@ void main() {
       expect(tester.getTopLeft(find.text('Detail')), beforePop);
       expect(fade().opacity.value, closeTo(0.5, 1e-6));
       await tester.pumpAndSettle();
-      expect(tester.getRect(find.byType(FlClashOpenContainer)), source);
+      expect(tester.getRect(find.byType(OmniOpenContainer)), source);
       await tester.tap(find.text('Open settings'));
       await tester.pumpAndSettle();
       harness.router.pop();
@@ -334,7 +333,7 @@ void main() {
       );
       await tester.pumpWidget(harness.app);
       await tester.pumpAndSettle();
-      final source = tester.getRect(find.byType(FlClashOpenContainer));
+      final source = tester.getRect(find.byType(OmniOpenContainer));
       final full = Offset.zero & tester.getSize(find.byType(MaterialApp));
       await tester.tap(find.text('Open settings'));
       await tester.pump();
@@ -372,7 +371,7 @@ void main() {
         closeTo(closing.top, 0.01),
       );
       await tester.pumpAndSettle();
-      expect(tester.getRect(find.byType(FlClashOpenContainer)), source);
+      expect(tester.getRect(find.byType(OmniOpenContainer)), source);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       harness.router.dispose();
@@ -408,13 +407,12 @@ void main() {
       try {
         final harness = _Harness();
         await tester.pumpWidget(harness.app);
-        final sourceRect = tester.getRect(find.byType(FlClashOpenContainer));
+        final sourceRect = tester.getRect(find.byType(OmniOpenContainer));
         await tester.tap(find.text('Open settings'));
         await tester.pumpAndSettle();
         final context = tester.element(find.text('Detail'));
         final route = ModalRoute.of(context)! as PageRoute<dynamic>;
         expect(route, isA<DragBackRouteMixin<dynamic>>());
-        expect(route, isNot(isA<PredictiveBackRouteMotion<dynamic>>()));
         final navigator = route.navigator!;
         expect(route.popGestureEnabled, isTrue);
         await _sendBackGesture(tester, 'startBackGesture', _backEvent(edge, 0));
@@ -424,7 +422,7 @@ void main() {
           _backEvent(edge, 0.35),
         );
         await tester.pump();
-        // FlClash has a pointer drag detector, not a system-back observer.
+        // Only the pointer detector drives a drag; system progress is inert.
         // An Android edge gesture must not switch _settled to the slide path.
         expect((route as DragBackRouteMixin).isDragBackActive, isFalse);
         expect(tester.getTopLeft(find.text('Detail')), Offset.zero);
@@ -472,50 +470,49 @@ void main() {
     });
   }
 
-  testWidgets(
-    'pointer drag follows the finger and uses upstream distance settle',
-    (tester) async {
-      final harness = _Harness();
-      await tester.pumpWidget(harness.app);
-      await tester.tap(find.text('Open settings'));
-      await tester.pumpAndSettle();
-      final route = ModalRoute.of(tester.element(find.text('Detail')))!;
-      final navigator = route.navigator!;
-      final gesture = await tester.startGesture(const Offset(50, 300));
-      await gesture.moveBy(const Offset(50, 0));
-      await gesture.moveBy(const Offset(100, 0));
-      await tester.pump();
-      final firstPosition = tester.getTopLeft(find.text('Detail')).dx;
-      await gesture.moveBy(const Offset(80, 0));
-      await tester.pump();
-      expect(
-        tester.getTopLeft(find.text('Detail')).dx - firstPosition,
-        closeTo(80, 0.01),
-      );
-      await tester.pump(const Duration(milliseconds: 600));
-      await gesture.up();
-      await tester.pumpAndSettle();
-      expect(harness.router.canPop(), isTrue);
-      expect(navigator.userGestureInProgress, isFalse);
+  testWidgets('pointer drag follows the finger and settles by distance', (
+    tester,
+  ) async {
+    final harness = _Harness();
+    await tester.pumpWidget(harness.app);
+    await tester.tap(find.text('Open settings'));
+    await tester.pumpAndSettle();
+    final route = ModalRoute.of(tester.element(find.text('Detail')))!;
+    final navigator = route.navigator!;
+    final gesture = await tester.startGesture(const Offset(50, 300));
+    await gesture.moveBy(const Offset(50, 0));
+    await gesture.moveBy(const Offset(100, 0));
+    await tester.pump();
+    final firstPosition = tester.getTopLeft(find.text('Detail')).dx;
+    await gesture.moveBy(const Offset(80, 0));
+    await tester.pump();
+    expect(
+      tester.getTopLeft(find.text('Detail')).dx - firstPosition,
+      closeTo(80, 0.01),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(harness.router.canPop(), isTrue);
+    expect(navigator.userGestureInProgress, isFalse);
 
-      final commit = await tester.startGesture(const Offset(50, 300));
-      await commit.moveBy(const Offset(50, 0));
-      await commit.moveBy(const Offset(500, 0));
-      await tester.pump(const Duration(milliseconds: 600));
-      await commit.up();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 349));
-      expect(route.animation!.isAnimating, isTrue);
-      await tester.pump(const Duration(milliseconds: 1));
-      await tester.pumpAndSettle();
-      expect(harness.router.canPop(), isFalse);
-      expect(navigator.userGestureInProgress, isFalse);
-      expect(find.text('Open settings'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      harness.router.dispose();
-    },
-  );
+    final commit = await tester.startGesture(const Offset(50, 300));
+    await commit.moveBy(const Offset(50, 0));
+    await commit.moveBy(const Offset(500, 0));
+    await tester.pump(const Duration(milliseconds: 600));
+    await commit.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 349));
+    expect(route.animation!.isAnimating, isTrue);
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pumpAndSettle();
+    expect(harness.router.canPop(), isFalse);
+    expect(navigator.userGestureInProgress, isFalse);
+    expect(find.text('Open settings'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    harness.router.dispose();
+  });
 
   testWidgets('system back button contracts to its row without a drag slide', (
     tester,
@@ -625,47 +622,6 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     harness.router.dispose();
     visibility.dispose();
-  });
-
-  testWidgets('disabling predictive back retains the programmatic container', (
-    tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    try {
-      await StorageService.setPredictiveBackEnabled(false);
-      final harness = _Harness();
-      await tester.pumpWidget(harness.app);
-      await tester.tap(find.text('Open settings'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      final route = ModalRoute.of(tester.element(find.text('Detail')))!;
-      expect(route.transitionDuration, const Duration(milliseconds: 300));
-      expect(route.animation!.isAnimating, isTrue);
-      await tester.pumpAndSettle();
-      expect(route.popGestureEnabled, isFalse);
-      await _sendBackGesture(
-        tester,
-        'startBackGesture',
-        _backEvent(SwipeEdge.left, 0),
-      );
-      await _sendBackGesture(
-        tester,
-        'updateBackGestureProgress',
-        _backEvent(SwipeEdge.left, 0.5),
-      );
-      await tester.pump();
-      expect((route as DragBackRouteMixin).isDragBackActive, isFalse);
-      expect(tester.getTopLeft(find.text('Detail')), Offset.zero);
-      await _sendBackGesture(tester, 'cancelBackGesture');
-      harness.router.pop();
-      await tester.pumpAndSettle();
-      expect(find.text('Open settings'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      harness.router.dispose();
-    } finally {
-      debugDefaultTargetPlatformOverride = null;
-    }
   });
 
   testWidgets('a departing nested route blocks the newly current container', (
@@ -810,7 +766,7 @@ class _Harness {
             body: (sourceHost ?? (child) => child)(
               Padding(
                 padding: const EdgeInsets.fromLTRB(22, 180, 22, 0),
-                child: FlClashOpenContainer(
+                child: OmniOpenContainer(
                   onOpen: (source) {
                     opens++;
                     return router.push<Object?>('/detail', extra: source);
@@ -832,7 +788,7 @@ class _Harness {
         GoRoute(
           path: '/detail',
           pageBuilder: (_, state) =>
-              (state.extra! as FlClashContainerSource).createPage<Object?>(
+              (state.extra! as OmniContainerSource).createPage<Object?>(
                 key: state.pageKey,
                 child: page ?? const Scaffold(body: Text('Detail')),
               ),

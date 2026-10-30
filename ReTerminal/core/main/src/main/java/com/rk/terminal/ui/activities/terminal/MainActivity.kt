@@ -37,7 +37,6 @@ import com.rk.terminal.ui.routes.MainActivityRoutes
 import com.rk.terminal.ui.screens.terminal.TerminalScreen
 import com.rk.terminal.ui.screens.terminal.terminalView
 import com.rk.terminal.ui.theme.KarbonTheme
-import com.rk.terminal.util.PredictiveBackGate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
@@ -45,7 +44,6 @@ import java.io.File
 class MainActivity : ComponentActivity() {
     var sessionBinder:SessionService.SessionBinder? = null
     var isBound = false
-
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -78,12 +76,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
-
                         }
                     }
                 }
             }
-
 
         }
 
@@ -116,7 +112,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-
     private var denied = 1
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -138,44 +133,13 @@ class MainActivity : ComponentActivity() {
     var isKeyboardVisible = false
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        PredictiveBackGate.install(this)
         enableEdgeToEdge()
         requestPermission()
-
-        // Cross-activity transitions matching the main app's page style
-        // (full-width slide in, 25% parallax on the covered page).
-        // On API 34+ these participate in the predictive back gesture.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
-            PredictiveBackGate.isPredictiveBackEnabled(this)
-        ) {
-            overrideActivityTransition(
-                OVERRIDE_TRANSITION_OPEN,
-                com.rk.terminal.R.anim.slide_in_right,
-                com.rk.terminal.R.anim.slide_out_left,
-            )
-            overrideActivityTransition(
-                OVERRIDE_TRANSITION_CLOSE,
-                com.rk.terminal.R.anim.slide_in_left,
-                com.rk.terminal.R.anim.slide_out_right,
-            )
-        }
 
         if (intent.hasExtra("awake_intent")){
             moveTaskToBack(true)
         }
 
-    }
-
-    override fun finish() {
-        super.finish()
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
-            PredictiveBackGate.isPredictiveBackEnabled(this)
-        ) {
-            overridePendingTransition(
-                com.rk.terminal.R.anim.slide_in_left,
-                com.rk.terminal.R.anim.slide_out_right,
-            )
-        }
     }
 
     var wasKeyboardOpen = false
@@ -197,7 +161,6 @@ class MainActivity : ComponentActivity() {
 
             isKeyboardVisible = isVisible
         }
-
 
         if (wasKeyboardOpen && !isKeyboardVisible){
             terminalView.get()?.let {

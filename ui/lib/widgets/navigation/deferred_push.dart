@@ -1,5 +1,4 @@
-// Adapted from FlClash 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7,
-// lib/ui/deferred_push.dart. See docs/third-party/flclash-NOTICE.md.
+// Third-party attribution and license details are in docs/third-party/.
 // SPDX-License-Identifier: GPL-3.0-only
 
 import 'package:flutter/scheduler.dart';

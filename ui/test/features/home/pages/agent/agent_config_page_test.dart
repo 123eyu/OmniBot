@@ -8,8 +8,7 @@ import 'package:ui/services/model_provider_config_service.dart';
 import 'package:ui/services/models_dev_catalog_service.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme.dart';
-import 'package:ui/widgets/predictive_back_gesture_wrapper.dart';
-import 'package:ui/widgets/predictive_back_route.dart';
+import 'package:ui/widgets/navigation/page_route.dart';
 
 Future<void> _sendBackGesture(
   WidgetTester tester,
@@ -488,7 +487,7 @@ void main() {
   });
 
   testWidgets(
-    'built-in Agent config allows predictive back to drive its route',
+    'built-in Agent config uses ordinary system back without a second transition',
     (tester) async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
@@ -513,15 +512,10 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      await StorageService.setPredictiveBackEnabled(true);
 
       await tester.pumpWidget(
         MaterialApp(
-          theme: AppTheme.lightTheme.copyWith(
-            pageTransitionsTheme: const PageTransitionsTheme(
-              builders: {TargetPlatform.android: MiuixPageTransitionsBuilder()},
-            ),
-          ),
+          theme: AppTheme.lightTheme,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
@@ -529,7 +523,7 @@ void main() {
             body: Builder(
               builder: (context) => TextButton(
                 onPressed: () => Navigator.of(context).push(
-                  PredictiveBackMaterialPageRoute<void>(
+                  OmniPageRoute<void>(
                     builder: (_) => const AgentConfigPage(agentId: 'codex-acp'),
                   ),
                 ),
@@ -554,7 +548,7 @@ void main() {
       });
       await tester.pump();
 
-      expect(route.popGestureInProgress, isTrue);
+      expect(route.popGestureInProgress, isFalse);
       await _sendBackGesture(
         tester,
         'updateBackGestureProgress',
@@ -565,20 +559,20 @@ void main() {
         },
       );
       await tester.pump();
-      expect(route.animation!.value, closeTo(0.6, 0.001));
-      final transition = tester.widget<PredictiveBackPageTransition>(
-        find.ancestor(
-          of: find.byType(AgentConfigPage),
-          matching: find.byType(PredictiveBackPageTransition),
-        ),
-      );
-      expect(transition.animation.value, closeTo(0.6, 0.001));
-
+      expect(route.animation!.value, 1);
       await _sendBackGesture(tester, 'cancelBackGesture');
       await tester.pumpAndSettle();
       expect(find.byType(AgentConfigPage), findsOneWidget);
       expect(route.animation!.value, 1);
       expect(route.popGestureInProgress, isFalse);
+      await _sendBackGesture(tester, 'startBackGesture', <String, dynamic>{
+        'touchOffset': <double>[0.0, 300.0],
+        'progress': 0.0,
+        'swipeEdge': 0,
+      });
+      await _sendBackGesture(tester, 'commitBackGesture');
+      await tester.pumpAndSettle();
+      expect(route.isActive, isFalse);
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );

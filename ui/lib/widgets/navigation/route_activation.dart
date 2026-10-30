@@ -5,15 +5,14 @@ import 'package:flutter/widgets.dart';
 
 /// Read-only activity from a route which keeps the page below stationary.
 /// Its secondaryAnimation intentionally cannot report an overlay's return.
-abstract interface class FlClashRouteLoadActivity {
+abstract interface class RouteLoadActivity {
   Listenable get routeLoadActivity;
   bool get hasDepartingRoute;
 }
 
 /// Observes Navigator's existing departing route, without owning navigation or
-/// creating a second animation clock. Used by the FlClash container route.
-mixin FlClashRouteLoadActivityMixin<T> on ModalRoute<T>
-    implements FlClashRouteLoadActivity {
+/// creating a second animation clock. Used by the container route.
+mixin RouteLoadActivityMixin<T> on ModalRoute<T> implements RouteLoadActivity {
   final _departingRoutes = <TransitionRoute<dynamic>>{};
   final _routeLoadActivity = ValueNotifier(0);
   bool _activityDisposed = false;
@@ -51,7 +50,7 @@ mixin FlClashRouteLoadActivityMixin<T> on ModalRoute<T>
 
 /// A UI-work gate attached by State.didChangeDependencies. ModalRoute remains
 /// the owner of route identity, currentness, animation and cancellation.
-class FlClashRouteActivation extends ChangeNotifier {
+class RouteActivation extends ChangeNotifier {
   ModalRoute<dynamic>? _route;
   bool _bound = false;
   bool _left = false;
@@ -67,8 +66,8 @@ class FlClashRouteActivation extends ChangeNotifier {
         (route.animation?.isCompleted ?? true) &&
         (route.secondaryAnimation?.isDismissed ?? true) &&
         !(route.navigator?.userGestureInProgress ?? false) &&
-        !(route is FlClashRouteLoadActivity &&
-            (route as FlClashRouteLoadActivity).hasDepartingRoute);
+        !(route is RouteLoadActivity &&
+            (route as RouteLoadActivity).hasDepartingRoute);
   }
 
   void bind(ModalRoute<dynamic>? route) {
@@ -82,10 +81,8 @@ class FlClashRouteActivation extends ChangeNotifier {
       route?.animation?.addStatusListener(_statusChanged);
       route?.secondaryAnimation?.addStatusListener(_statusChanged);
       route?.navigator?.userGestureInProgressNotifier.addListener(_changed);
-      if (route is FlClashRouteLoadActivity) {
-        (route as FlClashRouteLoadActivity).routeLoadActivity.addListener(
-          _changed,
-        );
+      if (route is RouteLoadActivity) {
+        (route as RouteLoadActivity).routeLoadActivity.addListener(_changed);
       }
       route?.popped.then((_) {
         if (_disposed || !identical(_route, route)) return;
@@ -134,7 +131,7 @@ class FlClashRouteActivation extends ChangeNotifier {
       if (!ready) continue;
       _landingPending = false;
       developer.Timeline.instantSync(
-        'FlClashRoute.loadReady',
+        'OmniRoute.loadReady',
         arguments: {'route': _route?.settings.name ?? 'unrouted'},
       );
       return true;
@@ -147,10 +144,8 @@ class FlClashRouteActivation extends ChangeNotifier {
     route?.animation?.removeStatusListener(_statusChanged);
     route?.secondaryAnimation?.removeStatusListener(_statusChanged);
     route?.navigator?.userGestureInProgressNotifier.removeListener(_changed);
-    if (route is FlClashRouteLoadActivity) {
-      (route as FlClashRouteLoadActivity).routeLoadActivity.removeListener(
-        _changed,
-      );
+    if (route is RouteLoadActivity) {
+      (route as RouteLoadActivity).routeLoadActivity.removeListener(_changed);
     }
   }
 

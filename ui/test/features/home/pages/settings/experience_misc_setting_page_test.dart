@@ -32,48 +32,39 @@ void main() {
         .setMockMethodCallHandler(assistChannel, null);
   });
 
-  testWidgets('misc entries use the expected home and predictive back icons', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(800, 1600);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    addTearDown(tester.view.resetPhysicalSize);
+  testWidgets(
+    'misc settings retain home entry and remove the retired back toggle',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(800, 1600);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          locale: const Locale('zh'),
-          theme: AppTheme.lightTheme,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: const ExperienceMiscSettingPage(),
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            locale: const Locale('zh'),
+            theme: AppTheme.lightTheme,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const ExperienceMiscSettingPage(),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('首页设置'), findsOneWidget);
-    expect(find.byIcon(LucideIcons.house), findsOneWidget);
+      expect(find.text('首页设置'), findsOneWidget);
+      expect(find.byIcon(LucideIcons.house), findsOneWidget);
 
-    final predictiveBackTitle = find.text('预测性返回手势');
-    await tester.scrollUntilVisible(
-      predictiveBackTitle,
-      400,
-      scrollable: find.byType(Scrollable).first,
-    );
-    final predictiveBackTile = find.ancestor(
-      of: predictiveBackTitle,
-      matching: find.byType(InkWell),
-    );
-    expect(
-      find.descendant(
-        of: predictiveBackTile,
-        matching: find.byIcon(Icons.swipe_left_rounded),
-      ),
-      findsOneWidget,
-    );
-  });
+      await tester.scrollUntilVisible(
+        find.text('振动反馈'),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('预测性返回手势'), findsNothing);
+      expect(find.byIcon(Icons.swipe_left_rounded), findsNothing);
+    },
+  );
 
   testWidgets('recent seven-day conversations switch defaults to disabled', (
     tester,

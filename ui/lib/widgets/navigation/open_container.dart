@@ -1,9 +1,4 @@
-// Adapted from chen08209/FlClash, commit
-// 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7, lib/ui/open_container.dart.
-// The rectangle/paint-only container transform, timing and fade intervals are
-// retained. GoRouter owns navigation; only pointer drags use the upstream
-// DragBackRouteMixin. System back contracts to the source row, as upstream.
-// See docs/third-party/flclash-NOTICE.md.
+// Third-party attribution and license details are in docs/third-party/.
 // SPDX-License-Identifier: GPL-3.0-only
 
 import 'package:flutter/material.dart';
@@ -17,7 +12,7 @@ import 'drag_back.dart';
 import 'keyboard_inset_hold.dart';
 import 'route_activation.dart';
 
-const flClashContainerExtraKey = '_flclashContainer';
+const omniContainerExtraKey = '_omniContainer';
 
 typedef CloseContainerActionCallback<S> = void Function({S? returnValue});
 typedef OpenContainerBuilder<S> = Widget Function(
@@ -31,8 +26,8 @@ typedef CloseContainerBuilder = Widget Function(
 
 /// A list-row origin carried through GoRouter's existing route admission.
 /// It owns only transition geometry; Navigator owns route identity and results.
-class FlClashContainerSource {
-  FlClashContainerSource._(
+class OmniContainerSource {
+  OmniContainerSource._(
     this._hideableKey,
     this._closedBuilderKey, {
     required this.closedColor,
@@ -51,7 +46,7 @@ class FlClashContainerSource {
     LocalKey? key,
     String? name,
     Object? arguments,
-  }) => _FlClashContainerPage<T>(
+  }) => _OmniContainerPage<T>(
     source: this,
     child: child,
     key: key,
@@ -60,8 +55,8 @@ class FlClashContainerSource {
   );
 }
 
-class _FlClashContainerPage<T> extends Page<T> {
-  const _FlClashContainerPage({
+class _OmniContainerPage<T> extends Page<T> {
+  const _OmniContainerPage({
     required this.source,
     required this.child,
     super.key,
@@ -69,7 +64,7 @@ class _FlClashContainerPage<T> extends Page<T> {
     super.arguments,
   });
 
-  final FlClashContainerSource source;
+  final OmniContainerSource source;
   final Widget child;
 
   @override
@@ -85,9 +80,9 @@ class _FlClashContainerPage<T> extends Page<T> {
   );
 }
 
-/// FlClash's mobile ListItem.open container, with application-owned routing.
-class FlClashOpenContainer extends StatefulWidget {
-  const FlClashOpenContainer({
+/// Expands a source row into a page while the application owns navigation.
+class OmniOpenContainer extends StatefulWidget {
+  const OmniOpenContainer({
     super.key,
     this.closedColor,
     this.closedShape,
@@ -101,14 +96,14 @@ class FlClashOpenContainer extends StatefulWidget {
   final ShapeBorder? closedShape;
   final ValueChanged<Object?>? onClosed;
   final CloseContainerBuilder closedBuilder;
-  final Future<Object?> Function(FlClashContainerSource source) onOpen;
+  final Future<Object?> Function(OmniContainerSource source) onOpen;
   final Clip clipBehavior;
 
   @override
-  State<FlClashOpenContainer> createState() => _FlClashOpenContainerState();
+  State<OmniOpenContainer> createState() => _OmniOpenContainerState();
 }
 
-class _FlClashOpenContainerState extends State<FlClashOpenContainer> {
+class _OmniOpenContainerState extends State<OmniOpenContainer> {
   final _hideableKey = GlobalKey<_HideableState>();
   final _closedBuilderKey = GlobalKey();
   bool _opening = false;
@@ -118,7 +113,7 @@ class _FlClashOpenContainerState extends State<FlClashOpenContainer> {
     _opening = true;
     try {
       final data = await widget.onOpen(
-        FlClashContainerSource._(
+        OmniContainerSource._(
           _hideableKey,
           _closedBuilderKey,
           closedColor: widget.closedColor,
@@ -202,7 +197,7 @@ class _OpenContainerRoute<T> extends PageRoute<T>
     with
         DragBackRouteMixin<T>,
         DeferredPushRouteMixin<T>,
-        FlClashRouteLoadActivityMixin<T> {
+        RouteLoadActivityMixin<T> {
   _OpenContainerRoute({
     required this.closedColor,
     required ShapeBorder? closedShape,
@@ -348,9 +343,8 @@ class _OpenContainerRoute<T> extends PageRoute<T>
   }
 
   void _takeMeasurements({bool delayForSourceRoute = false}) {
-    // Unlike upstream's direct Navigator.push, GoRouter may put the destination
-    // on an ancestor navigator. Measure in the navigator that owns THIS route,
-    // on both push and pop, rather than the source's nearest nested navigator.
+    // GoRouter may place the destination on an ancestor navigator. Both push
+    // and pop must measure in this route owner, even for a nested source row.
     final navigatorBox = navigator?.context.findRenderObject();
     if (navigatorBox is! RenderBox) return;
 
@@ -411,7 +405,7 @@ class _OpenContainerRoute<T> extends PageRoute<T>
           type: MaterialType.transparency,
           child: Builder(
             builder: (BuildContext context) {
-              return FlClashKeyboardInsetHold(
+              return KeyboardInsetHold(
                 child: openBuilder(context, closeContainer),
               );
             },

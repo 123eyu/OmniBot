@@ -1,3 +1,4 @@
+import 'package:ui/widgets/navigation/page_route.dart';
 import 'dart:async';
 
 import 'package:ui/widgets/omni_adaptive_layout.dart';
@@ -518,7 +519,7 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
         return;
       }
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(
+        OmniPageRoute<void>(
           builder: (_) => _AgentSessionWorkspacePage(
             title: session.cwdLabel.isNotEmpty
                 ? session.cwdLabel
